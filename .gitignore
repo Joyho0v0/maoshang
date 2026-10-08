@@ -1,0 +1,5 @@
+# Temporary Chrome profiles used for local browser smoke checks.
+.browser-check*/
+
+# Regenerate platform-specific dependencies on the remote Linux host.
+**/node_modules/

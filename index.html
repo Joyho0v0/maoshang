@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <meta name="description" content="Autoflow 汽车出口 CRM 交互原型" />
+    <title>Autoflow · 汽车出口 CRM</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar" id="sidebar">
+        <a class="brand" href="#dashboard"><span class="brand-sign">A</span><span>autoflow<small>EXPORT CRM</small></span></a>
+        <div class="role-switcher">
+          <label for="role-select">演示身份</label>
+          <select id="role-select">
+            <option value="super">超管 · 林可</option>
+          </select>
+        </div>
+        <nav id="navigation" aria-label="主菜单"></nav>
+        <div class="account"><span class="initial">林</span><span><strong id="account-name">林可</strong><small id="account-role">超管 · 总部</small></span><button aria-label="退出">↗</button></div>
+      </aside>
+      <main id="main-content" tabindex="-1">
+        <header class="topbar"><button class="menu-button" id="menu-button" aria-label="打开菜单">☰</button><div class="crumb" id="crumb">工作台 / 总览</div><div class="top-controls"><span class="world-time">Dubai <b id="dubai-time">--:--</b> UTC+4</span><button class="bell" aria-label="待办提醒">♧<i></i></button><button class="primary" data-action="new-order">＋ 新建订单</button></div></header>
+        <section class="view active" id="dashboard"></section>
+        <section class="view" id="orders"></section>
+        <section class="view" id="customers"></section>
+        <section class="view" id="products"></section>
+         <section class="view" id="payments"></section>
+         <section class="view" id="documents"></section>
+         <section class="view" id="quotes"></section>
+         <section class="view" id="contracts"></section>
+         <section class="view" id="commercial-invoices"></section>
+         <section class="view" id="invoices"></section>
+        <section class="view" id="tasks"></section>
+        <section class="view" id="organization"></section>
+      </main>
+    </div>
+    <div class="drawer-backdrop" id="drawer-backdrop"></div>
+    <div class="modal-wrap" id="modal-wrap" aria-hidden="true"><div class="modal" id="modal"></div></div>
+    <div class="toast" id="toast"></div>
+<script src="./app.js?v=20260817-relative-paths-r10"></script>
+  </body>
+</html>

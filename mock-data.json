@@ -1,0 +1,698 @@
+{
+  "accounts": [
+    {
+      "id": "acct-super-lin",
+      "name": "林可",
+      "accountType": "超管",
+      "group": "总部",
+      "email": "lin.ke@autoflow.cn",
+      "modules": [
+        "CRM",
+        "库存",
+        "发票",
+        "权限管理"
+      ],
+      "dataScopes": [
+        "全部业务分组"
+      ],
+      "status": "正常"
+    },
+    {
+      "id": "acct-1786953171056",
+      "name": "小美秘书",
+      "accountType": "跨业务团队",
+      "group": "跨团队",
+      "email": "未填写邮箱",
+      "modules": [
+        "CRM",
+        "库存"
+      ],
+      "dataScopes": [],
+      "status": "正常"
+    },
+    {
+      "id": "acct-1786954135780",
+      "name": "小陈",
+      "accountType": "跨业务团队",
+      "group": "跨团队",
+      "email": "未填写邮箱",
+      "modules": [
+        "CRM",
+        "库存"
+      ],
+      "dataScopes": [
+        "华东团队",
+        "华南团队",
+        "华北团队"
+      ],
+      "status": "正常"
+    },
+    {
+      "id": "acct-1786954182673",
+      "name": "老刘",
+      "accountType": "业务分组组长",
+      "group": "华东团队",
+      "email": "未填写邮箱",
+      "modules": [
+        "CRM",
+        "库存"
+      ],
+      "dataScopes": [
+        "华东团队"
+      ],
+      "status": "正常"
+    },
+    {
+      "id": "acct-1786954207524",
+      "name": "老方",
+      "accountType": "业务分组组长",
+      "group": "华南团队",
+      "email": "未填写邮箱",
+      "modules": [
+        "CRM",
+        "库存"
+      ],
+      "dataScopes": [
+        "华南团队"
+      ],
+      "status": "正常"
+    },
+    {
+      "id": "acct-1786954232892",
+      "name": "老夏",
+      "accountType": "业务分组组长",
+      "group": "华北团队",
+      "email": "未填写邮箱",
+      "modules": [
+        "CRM",
+        "库存"
+      ],
+      "dataScopes": [
+        "华北团队"
+      ],
+      "status": "正常"
+    },
+    {
+      "id": "acct-1786954258272",
+      "name": "小刘",
+      "accountType": "普通销售",
+      "group": "华东团队",
+      "email": "未填写邮箱",
+      "modules": [
+        "CRM",
+        "库存"
+      ],
+      "dataScopes": [
+        "华东团队"
+      ],
+      "status": "正常"
+    },
+    {
+      "id": "acct-1786954284607",
+      "name": "小方",
+      "accountType": "普通销售",
+      "group": "华南团队",
+      "email": "未填写邮箱",
+      "modules": [
+        "CRM",
+        "库存"
+      ],
+      "dataScopes": [
+        "华南团队"
+      ],
+      "status": "正常"
+    },
+    {
+      "id": "acct-1786954300031",
+      "name": "小夏",
+      "accountType": "普通销售",
+      "group": "华北团队",
+      "email": "未填写邮箱",
+      "modules": [
+        "CRM",
+        "库存"
+      ],
+      "dataScopes": [
+        "华北团队"
+      ],
+      "status": "正常"
+    },
+    {
+      "id": "acct-1786954536586",
+      "name": "大陈",
+      "accountType": "跨业务团队",
+      "group": "跨团队",
+      "email": "未填写邮箱",
+      "modules": [
+        "CRM",
+        "库存",
+        "发票"
+      ],
+      "dataScopes": [
+        "华东团队",
+        "华南团队"
+      ],
+      "status": "正常"
+    }
+  ],
+  "customers": [
+    {
+      "id": "customer-1786958740543",
+      "name": "一号商家",
+      "company": "sda",
+      "type": "B端 · 商家型",
+      "country": "das",
+      "zone": "UTC+8 · Shanghai",
+      "contacts": [
+        [
+          "Ins",
+          "dasfg"
+        ]
+      ],
+      "note": "抠搜",
+      "owner": "小方",
+      "group": "华南团队",
+      "orders": [
+        "AF-2026-3523"
+      ],
+      "approvalStatus": "已启用",
+      "createdAt": "2026/8/17 17:25:40",
+      "reviewNote": "",
+      "reviewedBy": "老方"
+    },
+    {
+      "id": "customer-1786958836086",
+      "name": "二号商家",
+      "company": "dsaf",
+      "type": "B端 · 商家型",
+      "country": "dasfa",
+      "zone": "UTC+8 · Shanghai",
+      "contacts": [
+        [
+          "Ins",
+          "asfga"
+        ]
+      ],
+      "note": "大气",
+      "owner": "小方",
+      "group": "华南团队",
+      "orders": [],
+      "approvalStatus": "已启用",
+      "createdAt": "2026/8/17 17:27:16",
+      "reviewNote": "",
+      "reviewedBy": "老方"
+    },
+    {
+      "id": "customer-1786959603742",
+      "name": "三号商家",
+      "company": "dasf",
+      "type": "B端 · 商家型",
+      "country": "asf",
+      "zone": "UTC+4 · Dubai",
+      "contacts": [
+        [
+          "Ins",
+          "as"
+        ]
+      ],
+      "note": "",
+      "owner": "小方",
+      "group": "华南团队",
+      "orders": [],
+      "approvalStatus": "待审核",
+      "createdAt": "2026/8/17 17:40:03"
+    },
+    {
+      "id": "customer-1786959730819",
+      "name": "一号客户",
+      "company": "个人客户",
+      "type": "C端 · 个人型",
+      "country": "dasf",
+      "zone": "UTC+4 · Dubai",
+      "contacts": [
+        [
+          "Ins",
+          "dsaf"
+        ]
+      ],
+      "note": "",
+      "owner": "小夏",
+      "group": "华北团队",
+      "orders": [
+        "AF-2026-6241",
+        "AF-2026-4589"
+      ],
+      "approvalStatus": "已启用",
+      "createdAt": "2026/8/17 17:42:10",
+      "reviewNote": "",
+      "reviewedBy": "老夏"
+    },
+    {
+      "id": "customer-1786960214258",
+      "name": "二号客户",
+      "company": "das",
+      "type": "C端 · 个人型",
+      "country": "da",
+      "zone": "UTC+4 · Dubai",
+      "contacts": [
+        [
+          "Ins",
+          "das"
+        ]
+      ],
+      "note": "",
+      "owner": "小夏",
+      "group": "华北团队",
+      "orders": [],
+      "approvalStatus": "待审核",
+      "createdAt": "2026/8/17 17:50:14"
+    }
+  ],
+  "orders": [
+    {
+      "id": "AF-2026-3523",
+      "customer": "一号商家",
+      "company": "sda",
+      "car": "吉利 博越L",
+      "owner": "小方",
+      "group": "华南团队",
+      "stage": "初步交涉",
+      "total": 6055555,
+      "internalCost": 500000,
+      "baseCost": 500000,
+      "updated": "刚刚",
+      "type": "整车订单",
+      "items": [
+        {
+          "name": "吉利 博越L",
+          "internalPrice": 500000,
+          "quotedPrice": 6055555
+        }
+      ]
+    },
+    {
+      "id": "AF-2026-6241",
+      "customer": "一号客户",
+      "company": "个人客户",
+      "car": "吉利 博越L",
+      "owner": "小夏",
+      "group": "华北团队",
+      "stage": "初步交涉",
+      "total": 6.666666666666666E+39,
+      "internalCost": 500000,
+      "baseCost": 500000,
+      "updated": "刚刚",
+      "type": "整车订单",
+      "items": [
+        {
+          "name": "吉利 博越L",
+          "internalPrice": 500000,
+          "quotedPrice": 6.666666666666666E+39
+        }
+      ]
+    },
+    {
+      "id": "AF-2026-4589",
+      "customer": "一号客户",
+      "company": "个人客户",
+      "car": "比亚迪 宋PLUS DM-i",
+      "owner": "小夏",
+      "group": "华北团队",
+      "stage": "初步交涉",
+      "total": 969241,
+      "internalCost": 535000,
+      "baseCost": 535000,
+      "updated": "刚刚",
+      "type": "整车订单",
+      "items": [
+        {
+          "name": "比亚迪 宋PLUS DM-i",
+          "internalPrice": 535000,
+          "quotedPrice": 969241
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-customer-1786958740548",
+      "type": "customer-review",
+      "title": "审核客户资料：一号商家",
+      "detail": "sda · 华南团队 · 由 小方 提交",
+      "group": "华南团队",
+      "owner": "小方",
+      "assignee": "老方",
+      "customerId": "customer-1786958740543",
+      "status": "已完成",
+      "createdAt": "2026/8/17 17:25:40",
+      "result": "通过",
+      "reviewedAt": "2026/8/17 18:09:12"
+    },
+    {
+      "id": "task-customer-1786958836086",
+      "type": "customer-review",
+      "title": "审核客户资料：二号商家",
+      "detail": "dsaf · 华南团队 · 由 小方 提交",
+      "group": "华南团队",
+      "owner": "小方",
+      "assignee": "老方",
+      "customerId": "customer-1786958836086",
+      "status": "已完成",
+      "createdAt": "2026/8/17 17:27:16",
+      "result": "通过",
+      "reviewedAt": "2026/8/17 18:14:04"
+    },
+    {
+      "id": "task-customer-1786959603743",
+      "type": "customer-review",
+      "title": "审核客户资料：三号商家",
+      "detail": "dasf · 华南团队 · 由 小方 提交",
+      "group": "华南团队",
+      "owner": "小方",
+      "assignee": "老方",
+      "customerId": "customer-1786959603742",
+      "status": "待处理",
+      "createdAt": "2026/8/17 17:40:03"
+    },
+    {
+      "id": "task-customer-1786959730819",
+      "type": "customer-review",
+      "title": "审核客户资料：一号客户",
+      "detail": "个人客户 · 华北团队 · 由 小夏 提交",
+      "group": "华北团队",
+      "owner": "小夏",
+      "assignee": "老夏",
+      "customerId": "customer-1786959730819",
+      "status": "已完成",
+      "createdAt": "2026/8/17 17:42:10",
+      "result": "通过",
+      "reviewedAt": "2026/8/17 18:26:05"
+    },
+    {
+      "id": "task-customer-1786960214260",
+      "type": "customer-review",
+      "title": "审核客户资料：二号客户",
+      "detail": "das · 华北团队 · 由 小夏 提交",
+      "group": "华北团队",
+      "owner": "小夏",
+      "assignee": "老夏",
+      "customerId": "customer-1786960214258",
+      "status": "待处理",
+      "createdAt": "2026/8/17 17:50:14"
+    },
+    {
+      "id": "task-order-1786961723523",
+      "type": "order-followup",
+      "title": "跟进订单报价：AF-2026-3523",
+      "detail": "一号商家 · 吉利 博越L",
+      "group": "华南团队",
+      "owner": "小方",
+      "status": "待处理",
+      "createdAt": "2026/8/17 18:15:23"
+    },
+    {
+      "id": "task-manual-1786962148199",
+      "type": "manual",
+      "title": "今天一定要好好吃一顿大餐",
+      "detail": "AF-2026-3523 · 手动创建",
+      "group": "华南团队",
+      "owner": "小方",
+      "status": "待处理",
+      "deadline": "2026-08-17T18:23",
+      "createdAt": "2026/8/17 18:22:28"
+    },
+    {
+      "id": "task-manual-1786962272521",
+      "type": "manual",
+      "title": "这顿大餐是超管创建的",
+      "detail": "AF-2026-3523 · 手动创建",
+      "group": "华南团队",
+      "owner": "小方",
+      "status": "待处理",
+      "deadline": "2026-08-17T18:26",
+      "createdAt": "2026/8/17 18:24:32"
+    },
+    {
+      "id": "task-order-1786962396241",
+      "type": "order-followup",
+      "title": "跟进订单报价：AF-2026-6241",
+      "detail": "一号客户 · 吉利 博越L",
+      "group": "华北团队",
+      "owner": "小夏",
+      "status": "待处理",
+      "createdAt": "2026/8/17 18:26:36"
+    },
+    {
+      "id": "task-manual-1786962487407",
+      "type": "manual",
+      "title": "小夏想吃冰淇淋",
+      "detail": "AF-2026-6241 · 手动创建",
+      "group": "华北团队",
+      "owner": "小夏",
+      "status": "待处理",
+      "deadline": "2026-08-17T19:29",
+      "createdAt": "2026/8/17 18:28:07"
+    },
+    {
+      "id": "task-order-1786962994589",
+      "type": "order-followup",
+      "title": "跟进订单报价：AF-2026-4589",
+      "detail": "一号客户 · 比亚迪 宋PLUS DM-i",
+      "group": "华北团队",
+      "owner": "小夏",
+      "status": "待处理",
+      "createdAt": "2026/8/17 18:36:34"
+    },
+    {
+      "id": "task-manual-1786963075120",
+      "type": "manual",
+      "title": "FOB",
+      "detail": "AF-2026-4589 · FOB 后进度待更新",
+      "group": "华北团队",
+      "owner": "小夏",
+      "status": "待处理",
+      "deadline": "",
+      "createdAt": "2026/8/17 18:37:55"
+    }
+  ],
+  "payments": [],
+  "products": [
+    [
+      "吉利 博越L",
+      "2025款 1.5TD DCT 星耀版",
+      "SUV",
+      "燃油",
+      500000,
+      "181Ps · 前驱"
+    ],
+    [
+      "比亚迪 宋PLUS DM-i",
+      "2025款 DM-i 160KM 旗舰型",
+      "SUV",
+      "插电混动",
+      535000,
+      "128km CLTC · 磷酸铁锂"
+    ],
+    [
+      "小鹏 G6",
+      "2025款 625 长续航 Max",
+      "SUV",
+      "纯电",
+      568000,
+      "625km CLTC · 后驱"
+    ],
+    [
+      "奇瑞 TIGGO 8 PRO",
+      "2025款 2.0T 两驱豪华版",
+      "SUV",
+      "燃油",
+      390000,
+      "254Ps · 7座"
+    ],
+    [
+      "理想 L6",
+      "2025款 Pro",
+      "中大型 SUV",
+      "增程式",
+      835000,
+      "212km CLTC · 四驱"
+    ],
+    [
+      "广汽传祺 M8",
+      "2025款 大师系列",
+      "MPV",
+      "燃油",
+      650000,
+      "2.0T · 7座"
+    ]
+  ],
+  "documents": {
+    "pi": {
+      "documentNo": "PI-20260815-001",
+      "date": "2026-08-15",
+      "currency": "USD",
+      "reference": "AF-2026-0088",
+      "validUntil": "2026-08-31",
+      "destination": "Dubai, UAE",
+      "seller": "Autoflow Export Co., Ltd.",
+      "sellerAddress": "Shanghai, China",
+      "buyer": "Al Noor Motors",
+      "buyerAddress": "Dubai, United Arab Emirates",
+      "contact": "Noura Al-Hassan",
+      "incoterm": "FOB",
+      "place": "Shanghai Port",
+      "payment": "30% T/T deposit, 70% balance before shipment",
+      "delivery": "30 days after deposit",
+      "packaging": "Standard export carton",
+      "origin": "China",
+      "bank": "Beneficiary: Autoflow Export Co., Ltd.\nBank: Bank of China, Shanghai Branch\nSWIFT: BKCHCNBJ300\nAccount No.: 012345678901",
+      "notes": "All goods are subject to final confirmation before shipment.",
+      "items": [
+        {
+          "name": "Geely Boyue L 2025",
+          "spec": "1.5TD DCT Xingyao",
+          "qty": 1,
+          "unit": "PCS",
+          "price": 74800
+        },
+        {
+          "name": "Headlamp assembly",
+          "spec": "Non-standard item",
+          "qty": 2,
+          "unit": "PCS",
+          "price": 600
+        }
+      ]
+    },
+    "qt": {
+      "documentNo": "QT-20260815-001",
+      "date": "2026-08-15",
+      "currency": "USD",
+      "reference": "AF-2026-0088",
+      "validUntil": "2026-08-31",
+      "destination": "Dubai, UAE",
+      "seller": "Autoflow Export Co., Ltd.",
+      "sellerAddress": "Shanghai, China",
+      "buyer": "Al Noor Motors",
+      "buyerAddress": "Dubai, United Arab Emirates",
+      "contact": "Noura Al-Hassan",
+      "incoterm": "FOB",
+      "place": "Shanghai Port",
+      "mode": "海运 / Sea",
+      "voyage": "",
+      "payment": "30% T/T deposit, 70% balance before shipment",
+      "delivery": "30 days after deposit",
+      "packaging": "Standard export carton",
+      "origin": "China",
+      "notes": "This quotation is valid until the date above. Prices are subject to final vehicle configuration confirmation.",
+      "items": [
+        {
+          "name": "Geely Boyue L 2025",
+          "spec": "1.5TD DCT Xingyao",
+          "qty": 1,
+          "unit": "PCS",
+          "price": 74800
+        },
+        {
+          "name": "Headlamp assembly",
+          "spec": "Non-standard item",
+          "qty": 2,
+          "unit": "PCS",
+          "price": 600
+        }
+      ]
+    },
+    "sc": {
+      "documentNo": "SC-20260815-001",
+      "date": "2026-08-15",
+      "currency": "USD",
+      "reference": "AF-2026-0088",
+      "validUntil": "2026-08-31",
+      "destination": "Dubai, UAE",
+      "seller": "Autoflow Export Co., Ltd.",
+      "sellerAddress": "Shanghai, China",
+      "sellerContact": "Lina Chen",
+      "sellerPhone": "+86 21 6688 1024",
+      "sellerEmail": "sales@autoflow.cn",
+      "buyer": "Al Noor Motors",
+      "buyerAddress": "Dubai, United Arab Emirates",
+      "contact": "Noura Al-Hassan",
+      "buyerPhone": "+971 50 666 8821",
+      "buyerEmail": "noura@alnoor.ae",
+      "incoterm": "FOB",
+      "place": "Shanghai Port",
+      "mode": "海运 / Sea",
+      "voyage": "",
+      "payment": "30% T/T deposit, 70% balance before shipment",
+      "delivery": "30 days after deposit",
+      "packaging": "Standard export carton",
+      "origin": "China",
+      "clauses": "Quality inspection, title transfer, force majeure, governing law and dispute resolution shall be subject to the signed sales contract.",
+      "notes": "This sales contract becomes effective after signed or stamped by both parties.",
+      "items": [
+        {
+          "name": "Geely Boyue L 2025",
+          "spec": "1.5TD DCT Xingyao",
+          "qty": 1,
+          "unit": "PCS",
+          "price": 74800
+        },
+        {
+          "name": "Headlamp assembly",
+          "spec": "Non-standard item",
+          "qty": 2,
+          "unit": "PCS",
+          "price": 600
+        }
+      ]
+    },
+    "ci": {
+      "documentNo": "CI-20260815-001",
+      "date": "2026-08-15",
+      "currency": "USD",
+      "reference": "SC-20260815-001",
+      "validUntil": "2026-08-31",
+      "destination": "Dubai, UAE",
+      "seller": "Autoflow Export Co., Ltd.",
+      "sellerAddress": "Shanghai, China",
+      "sellerContact": "Lina Chen",
+      "sellerPhone": "+86 21 6688 1024",
+      "sellerEmail": "sales@autoflow.cn",
+      "buyer": "Al Noor Motors",
+      "buyerAddress": "Dubai, United Arab Emirates",
+      "contact": "Noura Al-Hassan",
+      "buyerPhone": "+971 50 666 8821",
+      "buyerEmail": "noura@alnoor.ae",
+      "consignee": "Al Noor Motors Warehouse",
+      "consigneeAddress": "Jebel Ali Free Zone, Dubai",
+      "consigneeContact": "Noura Al-Hassan",
+      "consigneePhone": "+971 50 666 8821",
+      "consigneeEmail": "noura@alnoor.ae",
+      "incoterm": "FOB",
+      "place": "Shanghai Port",
+      "mode": "海运 / Sea",
+      "voyage": "",
+      "payment": "30% T/T deposit, 70% balance before shipment",
+      "delivery": "30 days after deposit",
+      "packaging": "Standard export carton",
+      "origin": "China",
+      "notes": "For customs clearance and collection. All descriptions and values shall be consistent with the shipment documents.",
+      "items": [
+        {
+          "name": "Geely Boyue L 2025",
+          "spec": "1.5TD DCT Xingyao",
+          "qty": 1,
+          "unit": "PCS",
+          "price": 74800
+        },
+        {
+          "name": "Headlamp assembly",
+          "spec": "Non-standard item",
+          "qty": 2,
+          "unit": "PCS",
+          "price": 600
+        }
+      ]
+    }
+  }
+}

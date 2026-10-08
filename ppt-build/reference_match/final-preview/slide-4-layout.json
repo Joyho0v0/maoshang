@@ -1,0 +1,1916 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/jyx0ra1s",
+    "id": "jyx0ra1s",
+    "slide": 4,
+    "layoutId": "/ppt/slideLayouts/slideLayout1.xml",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "/ppt/slideMasters/slideMaster1.xml",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "fontScheme": {
+      "name": "Office",
+      "majorFont": {
+        "latinTypeface": "Calibri Light",
+        "eastAsianTypeface": "Calibri Light",
+        "complexScriptTypeface": "Calibri Light"
+      },
+      "minorFont": {
+        "latinTypeface": "Calibri",
+        "eastAsianTypeface": "Calibri",
+        "complexScriptTypeface": "Calibri"
+      }
+    },
+    "typefaces": [
+      "Calibri",
+      "Calibri Light"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "/ppt/slideLayouts/slideLayout1.xml",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "/ppt/slideMasters/slideMaster1.xml",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "/ppt/slideMasters/slideMaster1.xml",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/uhgfi18j",
+      "id": "55",
+      "bbox": [
+        222,
+        524,
+        216,
+        105
+      ],
+      "contentType": "image/jpeg",
+      "imageCrop": {
+        "left": 0,
+        "top": 0.31768,
+        "right": 0,
+        "bottom": 0.31768
+      },
+      "asset": {
+        "assetId": "/ppt/media/image6.jpeg",
+        "contentType": "image/jpeg",
+        "byteLength": 604039
+      },
+      "fillImage": {
+        "assetId": "/ppt/media/image6.jpeg",
+        "contentType": "image/jpeg",
+        "byteLength": 604039
+      }
+    },
+    {
+      "order": 2,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/1kretwra",
+      "id": "56",
+      "bbox": [
+        472,
+        524,
+        216,
+        105
+      ],
+      "contentType": "image/jpeg",
+      "imageCrop": {
+        "left": 0,
+        "top": 0.30515,
+        "right": 0,
+        "bottom": 0.30515
+      },
+      "asset": {
+        "assetId": "/ppt/media/image7.jpeg",
+        "contentType": "image/jpeg",
+        "byteLength": 6118779
+      },
+      "fillImage": {
+        "assetId": "/ppt/media/image7.jpeg",
+        "contentType": "image/jpeg",
+        "byteLength": 6118779
+      }
+    },
+    {
+      "order": 3,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/gjixkbqp",
+      "id": "57",
+      "bbox": [
+        762,
+        524,
+        426,
+        105
+      ],
+      "contentType": "image/jpeg",
+      "imageCrop": {
+        "left": 0,
+        "top": 0.33568,
+        "right": 0,
+        "bottom": 0.33568
+      },
+      "asset": {
+        "assetId": "/ppt/media/image8.jpeg",
+        "contentType": "image/jpeg",
+        "byteLength": 379080
+      },
+      "fillImage": {
+        "assetId": "/ppt/media/image8.jpeg",
+        "contentType": "image/jpeg",
+        "byteLength": 379080
+      }
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wr694nm1",
+      "id": "58",
+      "name": "slide-title",
+      "bbox": [
+        38,
+        14,
+        720,
+        48
+      ],
+      "geometry": "rect",
+      "text": "2.1  研究思路",
+      "textPreview": "2.1  研究思路",
+      "resolvedFontSize": 34,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 34,
+        "typeface": "Calibri",
+        "color": "#0E5E9D",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "2.1  研究思路"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "2.1  研究思路",
+          "resolvedTextStyle": {
+            "fontSize": 34,
+            "color": "#0E5E9D",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "2.1  研究思路",
+              "fontSize": 34,
+              "color": "#0E5E9D",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/xsfqxs36",
+      "id": "59",
+      "name": "brand",
+      "bbox": [
+        1052,
+        18,
+        190,
+        35
+      ],
+      "geometry": "rect",
+      "text": "▣ 像素答辩",
+      "textPreview": "▣ 像素答辩",
+      "resolvedFontSize": 23,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 23,
+        "typeface": "Calibri",
+        "color": "#0A4F82",
+        "bold": true,
+        "alignment": "right",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "▣ 像素答辩"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "▣ 像素答辩",
+          "resolvedTextStyle": {
+            "fontSize": 23,
+            "color": "#0A4F82",
+            "bold": true,
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "▣ 像素答辩",
+              "fontSize": 23,
+              "color": "#0A4F82",
+              "bold": true,
+              "alignment": "right"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/do761ova",
+      "id": "60",
+      "name": "header-rule",
+      "bbox": [
+        0,
+        72,
+        1280,
+        7
+      ],
+      "geometry": "rect",
+      "fillColor": "#D7EDF9",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cnyp8jep",
+      "id": "61",
+      "name": "goal-band",
+      "bbox": [
+        40,
+        94,
+        1200,
+        62
+      ],
+      "geometry": "rect",
+      "fillColor": "#FDF6F6",
+      "lineColor": "#E8C7C7",
+      "lineWidth": 1
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bmpozed4",
+      "id": "62",
+      "name": "goal-label",
+      "bbox": [
+        40,
+        94,
+        158,
+        62
+      ],
+      "geometry": "rect",
+      "fillColor": "#A7121B",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qlg769wj",
+      "id": "63",
+      "name": "goal-arrow",
+      "bbox": [
+        185,
+        94,
+        42,
+        62
+      ],
+      "geometry": "rightArrow",
+      "fillColor": "#A7121B",
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lcr658v6",
+      "id": "64",
+      "name": "goal-label-text",
+      "bbox": [
+        50,
+        107,
+        125,
+        34
+      ],
+      "geometry": "rect",
+      "text": "课题目标",
+      "textPreview": "课题目标",
+      "resolvedFontSize": 25,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 25,
+        "typeface": "Calibri",
+        "color": "#FFFFFF",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "课题目标"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "课题目标",
+          "resolvedTextStyle": {
+            "fontSize": 25,
+            "color": "#FFFFFF",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "课题目标",
+              "fontSize": 25,
+              "color": "#FFFFFF",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0bipc3el",
+      "id": "65",
+      "name": "goal-copy",
+      "bbox": [
+        250,
+        103,
+        930,
+        40
+      ],
+      "geometry": "rect",
+      "text": "掌握基础数据，阐明“质-能-碳”耦合代谢规律，提出路径重构方法",
+      "textPreview": "掌握基础数据，阐明“质-能-碳”耦合代谢规律，提出路径重构方法",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "#9C1A21",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "掌握基础数据，阐明“质-能-碳”耦合代谢规律，提出路径重构方法"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "掌握基础数据，阐明“质-能-碳”耦合代谢规律，提出路径重构方法",
+          "resolvedTextStyle": {
+            "fontSize": 24,
+            "color": "#9C1A21",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "掌握基础数据，阐明“质-能-碳”耦合代谢规律，提出路径重构方法",
+              "fontSize": 24,
+              "color": "#9C1A21",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zq9o3ydg",
+      "id": "66",
+      "name": "question-shell",
+      "bbox": [
+        200,
+        180,
+        1040,
+        232
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#D5DEE2",
+      "lineWidth": 1
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/yp07atwv",
+      "id": "67",
+      "name": "question-label",
+      "bbox": [
+        40,
+        265,
+        150,
+        62
+      ],
+      "geometry": "rightArrow",
+      "fillColor": "#0A4F82",
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/9grq98vi",
+      "id": "68",
+      "name": "question-label-text",
+      "bbox": [
+        45,
+        278,
+        122,
+        30
+      ],
+      "geometry": "rect",
+      "text": "科学问题",
+      "textPreview": "科学问题",
+      "resolvedFontSize": 21,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 21,
+        "typeface": "Calibri",
+        "color": "#FFFFFF",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "科学问题"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "科学问题",
+          "resolvedTextStyle": {
+            "fontSize": 21,
+            "color": "#FFFFFF",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "科学问题",
+              "fontSize": 21,
+              "color": "#FFFFFF",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8fipg3ex",
+      "id": "69",
+      "name": "topic-0",
+      "bbox": [
+        214,
+        194,
+        175,
+        49
+      ],
+      "geometry": "rect",
+      "fillColor": "#FDFEFE",
+      "lineColor": "#8EB6C9",
+      "lineWidth": 1
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/6psve183",
+      "id": "70",
+      "name": "topic-text-0",
+      "bbox": [
+        220,
+        203,
+        163,
+        30
+      ],
+      "geometry": "rect",
+      "text": "动态性",
+      "textPreview": "动态性",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 22,
+        "typeface": "Calibri",
+        "color": "#0E5E9D",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "动态性"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "动态性",
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "color": "#0E5E9D",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "动态性",
+              "fontSize": 22,
+              "color": "#0E5E9D",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7a1cn6po",
+      "id": "71",
+      "name": "question-bar-0",
+      "bbox": [
+        402,
+        194,
+        830,
+        49
+      ],
+      "geometry": "rect",
+      "fillColor": "#F3F3F3",
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8badgbq9",
+      "id": "72",
+      "name": "question-text-0",
+      "bbox": [
+        425,
+        204,
+        780,
+        27
+      ],
+      "geometry": "rect",
+      "text": "如何在通信受限、拓扑动态变化的条件下实现分布式一致性感知？",
+      "textPreview": "如何在通信受限、拓扑动态变化的条件下实现分布式一致性感知？",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18,
+        "typeface": "Calibri",
+        "color": "#111111",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "如何在通信受限、拓扑动态变化的条件下实现分布式一致性感知？"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "如何在通信受限、拓扑动态变化的条件下实现分布式一致性感知？",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#111111",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "如何在通信受限、拓扑动态变化的条件下实现分布式一致性感知？",
+              "fontSize": 18,
+              "color": "#111111",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tcjupg7u",
+      "id": "73",
+      "name": "down-arrow-circle-0",
+      "bbox": [
+        289,
+        245,
+        23,
+        23
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#244F67",
+      "lineWidth": 1
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/udcvil8z",
+      "id": "74",
+      "name": "down-arrow-0",
+      "bbox": [
+        289,
+        243,
+        23,
+        23
+      ],
+      "geometry": "rect",
+      "text": "↓",
+      "textPreview": "↓",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 19,
+        "typeface": "Calibri",
+        "color": "#244F67",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "↓"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "↓",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "color": "#244F67",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "↓",
+              "fontSize": 19,
+              "color": "#244F67",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/velcrqpk",
+      "id": "75",
+      "name": "topic-1",
+      "bbox": [
+        214,
+        271,
+        175,
+        49
+      ],
+      "geometry": "rect",
+      "fillColor": "#FDFEFE",
+      "lineColor": "#8EB6C9",
+      "lineWidth": 1
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/gfudkvq5",
+      "id": "76",
+      "name": "topic-text-1",
+      "bbox": [
+        220,
+        280,
+        163,
+        30
+      ],
+      "geometry": "rect",
+      "text": "不确定性",
+      "textPreview": "不确定性",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 22,
+        "typeface": "Calibri",
+        "color": "#0E5E9D",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "不确定性"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "不确定性",
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "color": "#0E5E9D",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "不确定性",
+              "fontSize": 22,
+              "color": "#0E5E9D",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/hg3et07q",
+      "id": "77",
+      "name": "question-bar-1",
+      "bbox": [
+        402,
+        271,
+        830,
+        49
+      ],
+      "geometry": "rect",
+      "fillColor": "#F3F3F3",
+      "lineWidth": 0
+    },
+    {
+      "order": 24,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ihcvml8b",
+      "id": "78",
+      "name": "question-text-1",
+      "bbox": [
+        425,
+        281,
+        780,
+        27
+      ],
+      "geometry": "rect",
+      "text": "如何在高动态威胁环境中实现实时、鲁棒的任务分配？",
+      "textPreview": "如何在高动态威胁环境中实现实时、鲁棒的任务分配？",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18,
+        "typeface": "Calibri",
+        "color": "#111111",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "如何在高动态威胁环境中实现实时、鲁棒的任务分配？"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "如何在高动态威胁环境中实现实时、鲁棒的任务分配？",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#111111",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "如何在高动态威胁环境中实现实时、鲁棒的任务分配？",
+              "fontSize": 18,
+              "color": "#111111",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 25,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3ilwvqpw",
+      "id": "79",
+      "name": "down-arrow-circle-1",
+      "bbox": [
+        289,
+        322,
+        23,
+        23
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#244F67",
+      "lineWidth": 1
+    },
+    {
+      "order": 26,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/na18b2tc",
+      "id": "80",
+      "name": "down-arrow-1",
+      "bbox": [
+        289,
+        320,
+        23,
+        23
+      ],
+      "geometry": "rect",
+      "text": "↓",
+      "textPreview": "↓",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 19,
+        "typeface": "Calibri",
+        "color": "#244F67",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "↓"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "↓",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "color": "#244F67",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "↓",
+              "fontSize": 19,
+              "color": "#244F67",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 27,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/29srixcr",
+      "id": "81",
+      "name": "topic-2",
+      "bbox": [
+        214,
+        348,
+        175,
+        49
+      ],
+      "geometry": "rect",
+      "fillColor": "#FDFEFE",
+      "lineColor": "#8EB6C9",
+      "lineWidth": 1
+    },
+    {
+      "order": 28,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/pcjadsb2",
+      "id": "82",
+      "name": "topic-text-2",
+      "bbox": [
+        220,
+        357,
+        163,
+        30
+      ],
+      "geometry": "rect",
+      "text": "规模性",
+      "textPreview": "规模性",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 22,
+        "typeface": "Calibri",
+        "color": "#0E5E9D",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "规模性"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "规模性",
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "color": "#0E5E9D",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "规模性",
+              "fontSize": 22,
+              "color": "#0E5E9D",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 29,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/oba9k7uh",
+      "id": "83",
+      "name": "question-bar-2",
+      "bbox": [
+        402,
+        348,
+        830,
+        49
+      ],
+      "geometry": "rect",
+      "fillColor": "#F3F3F3",
+      "lineWidth": 0
+    },
+    {
+      "order": 30,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bylsf2t8",
+      "id": "84",
+      "name": "question-text-2",
+      "bbox": [
+        425,
+        358,
+        780,
+        27
+      ],
+      "geometry": "rect",
+      "text": "态势感知与任务分配如何形成闭环优化？",
+      "textPreview": "态势感知与任务分配如何形成闭环优化？",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18,
+        "typeface": "Calibri",
+        "color": "#111111",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "态势感知与任务分配如何形成闭环优化？"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "态势感知与任务分配如何形成闭环优化？",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#111111",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "态势感知与任务分配如何形成闭环优化？",
+              "fontSize": 18,
+              "color": "#111111",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 31,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/axsrmxcn",
+      "id": "85",
+      "name": "content-label",
+      "bbox": [
+        40,
+        550,
+        150,
+        62
+      ],
+      "geometry": "rightArrow",
+      "fillColor": "#0A4F82",
+      "lineWidth": 0
+    },
+    {
+      "order": 32,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/x03ahcbe",
+      "id": "86",
+      "name": "content-label-text",
+      "bbox": [
+        45,
+        563,
+        122,
+        30
+      ],
+      "geometry": "rect",
+      "text": "研究内容",
+      "textPreview": "研究内容",
+      "resolvedFontSize": 21,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 21,
+        "typeface": "Calibri",
+        "color": "#FFFFFF",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "研究内容"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "研究内容",
+          "resolvedTextStyle": {
+            "fontSize": 21,
+            "color": "#FFFFFF",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "研究内容",
+              "fontSize": 21,
+              "color": "#FFFFFF",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 33,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/czu9o7ut",
+      "id": "87",
+      "name": "content-band",
+      "bbox": [
+        200,
+        435,
+        1040,
+        48
+      ],
+      "geometry": "rect",
+      "fillColor": "#0E5E9D",
+      "lineWidth": 0
+    },
+    {
+      "order": 34,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/z2lsjmtk",
+      "id": "88",
+      "name": "content-one",
+      "bbox": [
+        250,
+        442,
+        430,
+        34
+      ],
+      "geometry": "rect",
+      "text": "①  通信受限下的分布式任务分配",
+      "textPreview": "①  通信受限下的分布式任务分配",
+      "resolvedFontSize": 23,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 23,
+        "typeface": "Calibri",
+        "color": "#FFFFFF",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "①  通信受限下的分布式任务分配"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "①  通信受限下的分布式任务分配",
+          "resolvedTextStyle": {
+            "fontSize": 23,
+            "color": "#FFFFFF",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "①  通信受限下的分布式任务分配",
+              "fontSize": 23,
+              "color": "#FFFFFF",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 35,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/y1crqhcz",
+      "id": "89",
+      "name": "content-two",
+      "bbox": [
+        810,
+        442,
+        380,
+        34
+      ],
+      "geometry": "rect",
+      "text": "②  动态任务插入与重分配",
+      "textPreview": "②  动态任务插入与重分配",
+      "resolvedFontSize": 23,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 23,
+        "typeface": "Calibri",
+        "color": "#FFFFFF",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "②  动态任务插入与重分配"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "②  动态任务插入与重分配",
+          "resolvedTextStyle": {
+            "fontSize": 23,
+            "color": "#FFFFFF",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "②  动态任务插入与重分配",
+              "fontSize": 23,
+              "color": "#FFFFFF",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 36,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/w7e9grqx",
+      "id": "90",
+      "name": "under-one",
+      "bbox": [
+        215,
+        494,
+        480,
+        2
+      ],
+      "geometry": "rect",
+      "fillColor": "#244F67",
+      "lineWidth": 0
+    },
+    {
+      "order": 37,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/h8nq9wri",
+      "id": "91",
+      "name": "under-two",
+      "bbox": [
+        747,
+        494,
+        480,
+        2
+      ],
+      "geometry": "rect",
+      "fillColor": "#244F67",
+      "lineWidth": 0
+    },
+    {
+      "order": 38,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/u5wreh8r",
+      "id": "92",
+      "name": "pointer-one",
+      "bbox": [
+        450,
+        494,
+        11,
+        8
+      ],
+      "geometry": "downArrow",
+      "fillColor": "#244F67",
+      "lineWidth": 0
+    },
+    {
+      "order": 39,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/v6587m9c",
+      "id": "93",
+      "name": "pointer-two",
+      "bbox": [
+        982,
+        494,
+        11,
+        8
+      ],
+      "geometry": "downArrow",
+      "fillColor": "#244F67",
+      "lineWidth": 0
+    },
+    {
+      "order": 40,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/83upc7q1",
+      "id": "94",
+      "name": "card-a",
+      "bbox": [
+        200,
+        507,
+        510,
+        173
+      ],
+      "geometry": "rect",
+      "fillColor": "#F8F8F8",
+      "lineWidth": 0
+    },
+    {
+      "order": 41,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/943q5crm",
+      "id": "95",
+      "name": "card-b",
+      "bbox": [
+        735,
+        507,
+        505,
+        173
+      ],
+      "geometry": "rect",
+      "fillColor": "#F8F8F8",
+      "lineWidth": 0
+    },
+    {
+      "order": 42,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/h4bidk3u",
+      "id": "96",
+      "bbox": [
+        215,
+        517,
+        235,
+        125
+      ],
+      "alt": "多艇协同场景",
+      "contentType": "image/jpeg",
+      "imageFit": "cover",
+      "asset": {
+        "assetId": "f127d8bb-9e96-4728-aeb5-c91719b1ef4f",
+        "contentType": "image/jpeg",
+        "byteLength": 604039
+      }
+    },
+    {
+      "order": 43,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/w3ih4f29",
+      "id": "97",
+      "bbox": [
+        464,
+        517,
+        230,
+        125
+      ],
+      "alt": "通信拓扑示意",
+      "contentType": "image/jpeg",
+      "imageFit": "cover",
+      "asset": {
+        "assetId": "dc3a020c-badf-4d1a-954d-9e964d4a3724",
+        "contentType": "image/jpeg",
+        "byteLength": 6118779
+      }
+    },
+    {
+      "order": 44,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/7y9g7als",
+      "id": "98",
+      "bbox": [
+        747,
+        517,
+        478,
+        125
+      ],
+      "alt": "算法流程图",
+      "contentType": "image/jpeg",
+      "imageFit": "cover",
+      "asset": {
+        "assetId": "a4f17c87-786f-4e0d-b210-c4524a90bccd",
+        "contentType": "image/jpeg",
+        "byteLength": 379080
+      }
+    },
+    {
+      "order": 45,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/l03q1cra",
+      "id": "99",
+      "name": "img-one-caption",
+      "bbox": [
+        215,
+        642,
+        235,
+        26
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineWidth": 0
+    },
+    {
+      "order": 46,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/yl0b2t47",
+      "id": "100",
+      "name": "img-two-caption",
+      "bbox": [
+        464,
+        642,
+        230,
+        26
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineWidth": 0
+    },
+    {
+      "order": 47,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/j6tsbyls",
+      "id": "101",
+      "name": "img-one-title",
+      "bbox": [
+        216,
+        645,
+        233,
+        20
+      ],
+      "geometry": "rect",
+      "text": "多艇协同场景",
+      "textPreview": "多艇协同场景",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 14,
+        "typeface": "Calibri",
+        "color": "#17364A",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "多艇协同场景"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "多艇协同场景",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "color": "#17364A",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "多艇协同场景",
+              "fontSize": 14,
+              "color": "#17364A",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 48,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/k72t43md",
+      "id": "102",
+      "name": "img-two-title",
+      "bbox": [
+        465,
+        645,
+        228,
+        20
+      ],
+      "geometry": "rect",
+      "text": "通信拓扑示意",
+      "textPreview": "通信拓扑示意",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 14,
+        "typeface": "Calibri",
+        "color": "#17364A",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "通信拓扑示意"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "通信拓扑示意",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "color": "#17364A",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "通信拓扑示意",
+              "fontSize": 14,
+              "color": "#17364A",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 49,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/l8bad83y",
+      "id": "103",
+      "name": "flow-title",
+      "bbox": [
+        747,
+        645,
+        478,
+        20
+      ],
+      "geometry": "rect",
+      "text": "算法流程图",
+      "textPreview": "算法流程图",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 14,
+        "typeface": "Calibri",
+        "color": "#17364A",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "算法流程图"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "算法流程图",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "color": "#17364A",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "算法流程图",
+              "fontSize": 14,
+              "color": "#17364A",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

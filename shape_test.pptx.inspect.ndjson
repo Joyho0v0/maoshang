@@ -1,0 +1,6 @@
+{"kind":"deck","id":"pr/5t84dx","name":"Deck"}
+{"kind":"layout","layoutId":"ad40b00c-d662-4302-8605-c5d92c01c5f3","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"7f26cc51-93b1-4a91-8112-83665a065da9","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/klho1f","slide":1,"title":"目标","textShapes":1}
+{"kind":"textbox","id":"sh/9wnmp4rq","slide":1,"text":"目标","textPreview":"目标","textChars":2,"textLines":1,"bbox":[50,50,150,50]}
+{"kind":"notes","id":"nt/klho1f","slide":1,"text":""}

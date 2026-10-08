@@ -1,0 +1,18 @@
+{
+  "orderTypes": ["整车订单", "配件订单", "混合订单"],
+  "orderStages": ["初步交涉", "选车/确认需求", "发送报价", "报价待跟进", "定金确认", "全款确认", "FOB 完成", "交付完成", "已暂停", "已流失"],
+  "energyTypes": ["燃油", "轻混（HEV）", "插电式混动（PHEV）", "纯电（BEV）", "增程式（EREV）", "氢燃料电池"],
+  "customerTypes": ["B端 · 商家型", "C端 · 个人型"],
+  "contactChannels": ["Ins", "Tiktok", "Whatsapp", "邮箱"],
+  "timezones": ["UTC+4 · Dubai", "UTC+3 · Riyadh", "UTC+8 · Beijing", "UTC+8 · Shanghai", "UTC+1 · Paris", "UTC+0 · London"],
+  "paymentTypes": ["定金", "尾款", "退款", "其他款项"],
+  "paymentReviewResults": ["确认收款", "驳回凭证", "待补充凭证"],
+  "taskReminderTypes": ["手动创建", "报价后 3 天未跟进", "付款日期临近", "付款已逾期", "客户当地工作时间", "FOB 后进度待更新", "客户资料待审核"],
+  "accountTypes": ["业务分组组长", "普通销售", "跨业务团队"],
+  "businessGroups": ["华东团队", "华南团队", "华北团队", "跨团队"],
+  "nonStandardCategories": ["整车特殊车源", "汽车配件", "车灯", "改装件", "其他"],
+  "currencies": ["CNY", "USD", "EUR", "AED", "SAR"],
+  "incoterms": ["EXW", "FOB", "CIF", "CFR", "DDP"],
+  "transportModes": ["海运 / Sea", "空运 / Air", "陆运 / Land", "铁路 / Rail"],
+  "units": ["PCS", "SET", "UNIT", "PAIR"]
+}
