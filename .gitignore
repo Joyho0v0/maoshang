@@ -1,0 +1,11 @@
+# Temporary Chrome profiles used for local browser smoke checks.
+.browser-check*/
+
+# Regenerate platform-specific dependencies on the remote Linux host.
+**/node_modules/
+
+# Unrelated presentation-generation artifacts created in this CRM workspace.
+/build_workflow_ppt/
+/ppt-build/
+/shape_test.pptx
+/shape_test.pptx.inspect.ndjson

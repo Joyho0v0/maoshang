@@ -1,0 +1,20 @@
+{
+  "accounts": [
+    {
+      "id": "acct-super-lin",
+      "name": "林可",
+      "accountType": "超管",
+      "group": "总部",
+      "email": "lin.ke@autoflow.cn",
+      "modules": ["CRM", "库存", "发票", "权限管理"],
+      "dataScopes": ["全部业务分组"],
+      "status": "正常"
+    }
+  ],
+  "customers": [],
+  "orders": [],
+  "tasks": [],
+  "payments": [],
+  "products": [],
+  "documents": {}
+}
