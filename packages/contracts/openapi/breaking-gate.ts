@@ -6,6 +6,15 @@ import { parse } from 'yaml';
 
 type RecordValue = Record<string, unknown>;
 
+export interface BreakingChange {
+  readonly jsonPath: string;
+  readonly reason: string;
+  readonly oldValue: unknown;
+  readonly newValue: unknown;
+  readonly affectedPaths: readonly string[];
+  readonly stableIdentity?: string;
+}
+
 export function assertNoBreakingChanges(previous: unknown, next: unknown, path = 'root'): void {
   if (!isRecord(previous) || !isRecord(next)) {
     if (JSON.stringify(previous) !== JSON.stringify(next)) throw new Error(`Breaking change at ${path}: value changed.`);
@@ -348,6 +357,314 @@ function compareSecurity(previous: unknown, next: unknown, path: string): void {
   }
   if (!Array.isArray(next)) throw new Error(`Breaking change at ${path}: security requirement was removed.`);
   if (JSON.stringify(previous) !== JSON.stringify(next)) throw new Error(`Breaking change at ${path}: security requirement changed.`);
+}
+
+/**
+ * Collect every compatibility failure in a normalized artifact.
+ *
+ * `assertNoBreakingChanges` deliberately remains fail-fast for the release
+ * gate. Inventory and review tooling must use this collector instead so a
+ * first failure in one response cannot hide sibling headers, schemas, or
+ * problem variants.
+ */
+export function collectBreakingChanges(previous: unknown, next: unknown, path = 'root'): BreakingChange[] {
+  const changes: BreakingChange[] = [];
+  collectValue(previous, next, path, changes);
+  return changes;
+}
+
+function collectValue(previous: unknown, next: unknown, path: string, changes: BreakingChange[]): void {
+  if (!isRecord(previous) || !isRecord(next)) {
+    if (JSON.stringify(previous) !== JSON.stringify(next)) addChange(changes, path, 'value changed.', previous, next);
+    return;
+  }
+
+  if (path === 'root' && (previous.openapi !== undefined || previous.paths !== undefined)) {
+    collectOpenApiDocument(previous, next, changes);
+    return;
+  }
+
+  collectCommonSchemaConstraints(previous, next, path, changes);
+  collectComposition(previous, next, path, changes);
+
+  const previousRequired = new Set(effectiveRequired(previous));
+  const nextRequired = new Set(effectiveRequired(next));
+  for (const field of previousRequired) {
+    if (!nextRequired.has(field)) addChange(changes, `${path}.${field}.required`, 'required field was removed.', true, false, field);
+  }
+  for (const field of nextRequired) {
+    if (!previousRequired.has(field)) addChange(changes, `${path}.${field}.required`, 'field became required.', false, true, field);
+  }
+
+  const previousProperties = effectiveProperties(previous);
+  const nextProperties = effectiveProperties(next);
+  for (const [property, previousSchema] of Object.entries(previousProperties)) {
+    const nextSchema = nextProperties[property];
+    if (nextSchema === undefined) {
+      addChange(changes, `${path}.${property}`, `property ${property} was removed.`, previousSchema, undefined, property);
+      continue;
+    }
+    collectValue(previousSchema, nextSchema, `${path}.${property}`, changes);
+  }
+
+  if (previous.items !== undefined) {
+    if (next.items === undefined) addChange(changes, `${path}.items`, 'items schema was removed.', previous.items, undefined, 'items');
+    else collectValue(previous.items, next.items, `${path}.items`, changes);
+  }
+
+  if (previous.parameters !== undefined) collectNamedCollection(previous.parameters, next.parameters, ['name', 'in'], `${path}.parameters`, changes);
+  if (previous.requestBody !== undefined) collectRequestBody(previous.requestBody, next.requestBody, `${path}.requestBody`, changes);
+  if (previous.responses !== undefined) collectResponses(previous.responses, next.responses, `${path}.responses`, changes);
+  if (previous.security !== undefined) collectSecurity(previous.security, next.security, `${path}.security`, changes);
+}
+
+function collectOpenApiDocument(previous: RecordValue, next: RecordValue, changes: BreakingChange[]): void {
+  const previousPaths = isRecord(previous.paths) ? previous.paths : {};
+  const nextPaths = isRecord(next.paths) ? next.paths : {};
+  for (const [route, previousPathItem] of Object.entries(previousPaths)) {
+    const nextPathItem = nextPaths[route];
+    if (!isRecord(nextPathItem)) {
+      addChange(changes, `root.paths.${route}`, `path ${route} was removed.`, previousPathItem, undefined, route);
+      continue;
+    }
+    collectPathItem(previousPathItem, nextPathItem, `root.paths.${route}`, changes);
+  }
+
+  const previousComponents = isRecord(previous.components) ? previous.components : {};
+  const nextComponents = isRecord(next.components) ? next.components : {};
+  for (const [section, previousSection] of Object.entries(previousComponents)) {
+    const nextSection = nextComponents[section];
+    if (!isRecord(previousSection)) continue;
+    if (!isRecord(nextSection)) {
+      addChange(changes, `root.components.${section}`, `component section ${section} was removed.`, previousSection, undefined, section);
+      continue;
+    }
+    for (const [name, previousValue] of Object.entries(previousSection)) {
+      const nextValue = nextSection[name];
+      if (nextValue === undefined) {
+        addChange(changes, `root.components.${section}.${name}`, `${name} was removed.`, previousValue, undefined, name);
+        continue;
+      }
+      collectValue(previousValue, nextValue, `root.components.${section}.${name}`, changes);
+    }
+  }
+
+  collectSecurity(previous.security, next.security, 'root.security', changes);
+}
+
+function collectPathItem(previous: unknown, next: RecordValue, path: string, changes: BreakingChange[]): void {
+  if (!isRecord(previous)) return;
+  for (const [method, previousOperation] of Object.entries(previous)) {
+    if (!['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace'].includes(method)) continue;
+    const nextOperation = next[method];
+    if (!isRecord(nextOperation)) {
+      addChange(changes, `${path}.${method}`, `${method.toUpperCase()} operation was removed.`, previousOperation, undefined, method);
+      continue;
+    }
+    collectOperation(previousOperation, nextOperation, `${path}.${method}`, changes);
+  }
+}
+
+function collectOperation(previous: unknown, next: RecordValue, path: string, changes: BreakingChange[]): void {
+  if (!isRecord(previous)) return;
+  if (previous.operationId !== undefined && previous.operationId !== next.operationId) {
+    addChange(changes, `${path}.operationId`, 'operationId changed.', previous.operationId, next.operationId, String(previous.operationId));
+  }
+  collectNamedCollection(previous.parameters, next.parameters, ['name', 'in'], `${path}.parameters`, changes);
+  collectRequestBody(previous.requestBody, next.requestBody, `${path}.requestBody`, changes);
+  collectResponses(previous.responses, next.responses, `${path}.responses`, changes);
+  collectSecurity(previous.security, next.security, `${path}.security`, changes);
+}
+
+function collectNamedCollection(previousValue: unknown, nextValue: unknown, identity: string[], path: string, changes: BreakingChange[]): void {
+  if (!Array.isArray(previousValue)) return;
+  const next = Array.isArray(nextValue) ? nextValue : [];
+  for (const previousEntry of previousValue) {
+    if (!isRecord(previousEntry)) continue;
+    const identityValue = identity.map((key) => `${key}=${String(previousEntry[key])}`).join(', ');
+    const entryPath = `${path}[${identityValue}]`;
+    const match = next.find((candidate) => isRecord(candidate) && identity.every((key) => candidate[key] === previousEntry[key]));
+    if (!isRecord(match)) {
+      addChange(changes, entryPath, 'named parameter was removed.', previousEntry, undefined, identityValue);
+      continue;
+    }
+    if (previousEntry.required === true && match.required !== true) addChange(changes, `${entryPath}.required`, 'required parameter was relaxed unexpectedly.', true, match.required ?? false, identityValue);
+    if (previousEntry.required !== true && match.required === true) addChange(changes, `${entryPath}.required`, 'optional parameter became required.', previousEntry.required ?? false, true, identityValue);
+    if (previousEntry.schema !== undefined) {
+      if (match.schema === undefined) addChange(changes, `${entryPath}.schema`, 'parameter schema was removed.', previousEntry.schema, undefined, identityValue);
+      else collectValue(previousEntry.schema, match.schema, `${entryPath}.schema`, changes);
+    }
+  }
+}
+
+function collectRequestBody(previous: unknown, next: unknown, path: string, changes: BreakingChange[]): void {
+  if (previous === undefined) return;
+  if (!isRecord(next)) {
+    addChange(changes, path, 'request body was removed.', previous, undefined, 'requestBody');
+    return;
+  }
+  if (isRecord(previous) && previous.required === true && next.required !== true) addChange(changes, `${path}.required`, 'required request body was relaxed unexpectedly.', true, next.required ?? false, 'requestBody');
+  if (isRecord(previous) && previous.required !== true && next.required === true) addChange(changes, `${path}.required`, 'request body became required.', previous.required ?? false, true, 'requestBody');
+  if (isRecord(previous) && isRecord(next)) collectContent(previous.content, next.content, `${path}.content`, changes);
+}
+
+function collectResponses(previous: unknown, next: unknown, path: string, changes: BreakingChange[]): void {
+  if (!isRecord(previous)) return;
+  if (!isRecord(next)) {
+    addChange(changes, path, 'responses were removed.', previous, undefined, 'responses');
+    return;
+  }
+  for (const [status, previousResponse] of Object.entries(previous)) {
+    const nextResponse = next[status];
+    const responsePath = `${path}.${status}`;
+    if (!isRecord(nextResponse)) {
+      addChange(changes, responsePath, `response ${status} was removed.`, previousResponse, undefined, status);
+      continue;
+    }
+    if (isRecord(previousResponse) && isRecord(nextResponse)) {
+      collectHeaders(previousResponse.headers, nextResponse.headers, `${responsePath}.headers`, changes);
+      collectContent(previousResponse.content, nextResponse.content, `${responsePath}.content`, changes);
+    }
+  }
+}
+
+function collectHeaders(previous: unknown, next: unknown, path: string, changes: BreakingChange[]): void {
+  if (!isRecord(previous)) return;
+  if (!isRecord(next)) {
+    addChange(changes, path, 'response headers were removed.', previous, undefined, 'headers');
+    return;
+  }
+  for (const [name, previousHeader] of Object.entries(previous)) {
+    const headerPath = `${path}.${name}`;
+    const nextHeader = next[name];
+    if (nextHeader === undefined) {
+      addChange(changes, headerPath, `header ${name} was removed.`, previousHeader, undefined, name);
+      continue;
+    }
+    collectValue(previousHeader, nextHeader, headerPath, changes);
+  }
+}
+
+function collectContent(previous: unknown, next: unknown, path: string, changes: BreakingChange[]): void {
+  if (!isRecord(previous)) return;
+  if (!isRecord(next)) {
+    addChange(changes, path, 'content was removed.', previous, undefined, 'content');
+    return;
+  }
+  for (const [mediaType, previousMedia] of Object.entries(previous)) {
+    const mediaPath = `${path}.${mediaType}`;
+    const nextMedia = next[mediaType];
+    if (!isRecord(nextMedia)) {
+      addChange(changes, mediaPath, `media type ${mediaType} was removed.`, previousMedia, undefined, mediaType);
+      continue;
+    }
+    if (isRecord(previousMedia) && isRecord(nextMedia) && previousMedia.schema !== undefined) {
+      if (nextMedia.schema === undefined) addChange(changes, `${mediaPath}.schema`, 'schema was removed.', previousMedia.schema, undefined, mediaType);
+      else collectValue(previousMedia.schema, nextMedia.schema, `${mediaPath}.schema`, changes);
+    }
+  }
+}
+
+function collectCommonSchemaConstraints(previous: RecordValue, next: RecordValue, path: string, changes: BreakingChange[]): void {
+  for (const key of ['type', 'format', 'pattern', 'const', 'minLength', 'maxLength', 'minimum', 'maximum', 'minItems', 'maxItems'] as const) {
+    const previousValue = inheritedConstraint(previous, key);
+    const nextValue = inheritedConstraint(next, key);
+    if (previousValue === undefined) {
+      if (nextValue !== undefined) addChange(changes, `${path}.${key}`, `candidate-only constraint ${key} narrowed the value space.`, undefined, nextValue, key);
+      continue;
+    }
+    if (nextValue === undefined) {
+      addChange(changes, `${path}.${key}`, `constraint ${key} was removed.`, previousValue, undefined, key);
+      continue;
+    }
+    const narrowed = key === 'maxLength' || key === 'maximum' || key === 'maxItems'
+      ? typeof previousValue === 'number' && typeof nextValue === 'number' && nextValue < previousValue
+      : key === 'minLength' || key === 'minimum' || key === 'minItems'
+        ? typeof previousValue === 'number' && typeof nextValue === 'number' && nextValue > previousValue
+        : JSON.stringify(previousValue) !== JSON.stringify(nextValue);
+    if (narrowed) addChange(changes, `${path}.${key}`, `constraint ${key} was narrowed.`, previousValue, nextValue, key);
+  }
+
+  if ((previous.additionalProperties === true || previous.additionalProperties === undefined) && next.additionalProperties === false) {
+    addChange(changes, `${path}.additionalProperties`, 'additional properties were disallowed.', previous.additionalProperties ?? true, false, 'additionalProperties');
+  }
+
+  const previousEnumValue = inheritedConstraint(previous, 'enum');
+  const previousEnum = arrayOfScalars(previousEnumValue);
+  const nextEnumValue = inheritedConstraint(next, 'enum');
+  if (previousEnumValue === undefined && nextEnumValue !== undefined) addChange(changes, `${path}.enum`, 'candidate-only enum narrowed the value space.', undefined, nextEnumValue, 'enum');
+  if (previousEnum.length > 0) {
+    const nextEnum = new Set(arrayOfScalars(nextEnumValue).map((value) => JSON.stringify(value)));
+    for (const value of previousEnum) {
+      if (!nextEnum.has(JSON.stringify(value))) addChange(changes, `${path}.enum`, `enum value ${String(value)} was removed.`, previousEnumValue, nextEnumValue, 'enum');
+    }
+  }
+}
+
+function collectComposition(previous: RecordValue, next: RecordValue, path: string, changes: BreakingChange[]): void {
+  for (const key of ['oneOf', 'anyOf', 'allOf'] as const) {
+    const previousOptions = previous[key];
+    const nextOptions = next[key];
+    if (!Array.isArray(previousOptions)) {
+      if (Array.isArray(nextOptions)) addChange(changes, `${path}.${key}`, `${key} was added as a candidate-only composition.`, undefined, nextOptions, key);
+      continue;
+    }
+    if (!Array.isArray(nextOptions)) {
+      if (key === 'allOf' && allOfFlattenedIntoWithoutThrowing(previous, next)) continue;
+      addChange(changes, `${path}.${key}`, `${key} was removed.`, previousOptions, undefined, key);
+      continue;
+    }
+    if (key === 'oneOf' && nextOptions.length > previousOptions.length) {
+      addChange(changes, `${path}.${key}`, 'oneOf option was added without a disjointness proof.', previousOptions, nextOptions, key);
+    }
+    if (nextOptions.length < previousOptions.length) {
+      for (let index = nextOptions.length; index < previousOptions.length; index += 1) {
+        addChange(changes, `${path}.${key}[${index}]`, `a ${key} option was removed.`, previousOptions[index], undefined, `${key}[${index}]`);
+      }
+    }
+    // When a composition's option count changes, the surviving branches do not
+    // have a stable positional correspondence. The composition-level record is
+    // the canonical change; descending into arbitrary branches would manufacture
+    // false old/new pairings (especially for Problem's typed oneOf matrix).
+    if (nextOptions.length !== previousOptions.length) continue;
+    for (let index = 0; index < previousOptions.length; index += 1) {
+      const previousOption = previousOptions[index];
+      const nextOption = nextOptions[index];
+      if (JSON.stringify(previousOption) === JSON.stringify(nextOption)) continue;
+      collectValue(previousOption, nextOption, `${path}.${key}[${index}]`, changes);
+    }
+  }
+}
+
+function collectSecurity(previous: unknown, next: unknown, path: string, changes: BreakingChange[]): void {
+  if (previous === undefined) {
+    if (next !== undefined) addChange(changes, path, 'security requirement was added.', undefined, next, 'security');
+    return;
+  }
+  if (!Array.isArray(next)) {
+    addChange(changes, path, 'security requirement was removed.', previous, next, 'security');
+    return;
+  }
+  if (JSON.stringify(previous) !== JSON.stringify(next)) addChange(changes, path, 'security requirement changed.', previous, next, 'security');
+}
+
+function allOfFlattenedIntoWithoutThrowing(previous: RecordValue, next: RecordValue): boolean {
+  try {
+    return allOfFlattenedInto(previous, next);
+  } catch {
+    return false;
+  }
+}
+
+function addChange(
+  changes: BreakingChange[],
+  jsonPath: string,
+  reason: string,
+  oldValue: unknown,
+  newValue: unknown,
+  stableIdentity?: string,
+): void {
+  changes.push({ jsonPath, reason, oldValue, newValue, affectedPaths: [jsonPath], ...(stableIdentity === undefined ? {} : { stableIdentity }) });
 }
 
 function arrayOfStrings(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []; }

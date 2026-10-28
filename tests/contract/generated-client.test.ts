@@ -58,6 +58,25 @@ describe('generated contract client', () => {
     }
   });
 
+  it('rejects an unknown Problem code at the generated client boundary instead of creating ApiProblemError', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const client = new GeneratedApiClient({
+      fetch: async () => new Response(JSON.stringify({
+        type: 'urn:autoflow:problem:unknown',
+        title: 'Unknown problem',
+        status: 401,
+        code: 'TOTALLY_UNKNOWN',
+        requestId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2',
+        retryable: false,
+        meta: null,
+      }), { status: 401, headers: { 'content-type': 'application/problem+json', 'x-request-id': 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2' } }),
+      validator: createContractValidator(document),
+    });
+
+    await expect(client.call('createSession', { headers: { 'X-CSRF-Token': 'csrf-token-value' }, body: { provider: 'LOCAL_PASSWORD' } }))
+      .rejects.toSatisfy((error: unknown) => error instanceof Error && !(error instanceof ApiProblemError) && /Invalid Problem response/.test(error.message));
+  });
+
   it('accepts a permission problem on a permission-capable mutation', async () => {
     const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
     const client = new GeneratedApiClient({

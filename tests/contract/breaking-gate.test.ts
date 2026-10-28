@@ -1,4 +1,4 @@
-import { assertNoBreakingChanges } from '../../packages/contracts/openapi/breaking-gate.js';
+import { assertNoBreakingChanges, collectBreakingChanges } from '../../packages/contracts/openapi/breaking-gate.js';
 
 describe('OpenAPI compatibility gate', () => {
   it('allows additive optional response fields', () => {
@@ -104,5 +104,57 @@ describe('OpenAPI compatibility gate', () => {
       { oneOf: [{ type: 'string' }] },
       { oneOf: [{ type: 'string' }, { const: 'A' }] },
     )).toThrow(/oneOf|overlap|option/);
+  });
+
+  it('collects every nested breaking path instead of stopping at the first operation failure', () => {
+    const previous = {
+      openapi: '3.1.0',
+      paths: {
+        '/records': {
+          post: {
+            parameters: [{ name: 'If-Match', in: 'header', required: false, schema: { type: 'string' } }],
+            requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['name'], properties: { name: { type: 'string' } } } } } },
+            responses: {
+              '201': {
+                headers: { Location: { required: true, schema: { type: 'string' } } },
+                content: { 'application/json': { schema: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } } },
+              },
+              '400': { content: { 'application/problem+json': { schema: { oneOf: [{ required: ['type'] }, { required: ['code'] }] } } } },
+            },
+          },
+        },
+      },
+    };
+    const next = {
+      openapi: '3.1.0',
+      paths: {
+        '/records': {
+          post: {
+            parameters: [{ name: 'If-Match', in: 'header', required: true, schema: { type: 'string' } }],
+            requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['name'], properties: {} } } } },
+            responses: {
+              '201': {
+                headers: {},
+                content: { 'application/json': { schema: { type: 'object', required: ['id', 'version'], properties: { id: { type: 'string' }, version: { type: 'integer' } } } } },
+              },
+              '400': { content: { 'application/problem+json': { schema: { oneOf: [{ required: ['type'] }] } } } },
+            },
+          },
+        },
+      },
+    };
+
+    const changes = collectBreakingChanges(previous, next);
+    const paths = changes.map((change) => change.jsonPath);
+    expect(paths).toEqual(expect.arrayContaining([
+      'root.paths./records.post.parameters[name=If-Match, in=header].required',
+      'root.paths./records.post.requestBody.content.application/json.schema.name',
+      'root.paths./records.post.responses.201.headers.Location',
+      'root.paths./records.post.responses.201.content.application/json.schema.version.required',
+      'root.paths./records.post.responses.400.content.application/problem+json.schema.oneOf[1]',
+    ]));
+    expect(changes.every((change) => change.affectedPaths.length > 0)).toBe(true);
+    expect(changes.find((change) => change.jsonPath.includes('If-Match'))?.oldValue).toEqual(false);
+    expect(changes.find((change) => change.jsonPath.includes('If-Match'))?.newValue).toEqual(true);
   });
 });
