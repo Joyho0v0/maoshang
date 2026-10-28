@@ -21,10 +21,10 @@ it('keeps the complete breaking inventory auditable and synchronized with both a
   expect(persisted.entries).toHaveLength(persisted.count);
   expect((inventory as { baseline: { digest: string } }).baseline.digest).toBe('9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25');
   expect((inventory as { candidate: { revision: string; sha256: string; generatedSha256: string; generatedClientSha256: string } }).candidate).toEqual({
-    revision: '9138ea8f5cf130c3664367e39cafc18812edaa55',
-    sha256: 'ed189686794ceae08890d3aa264c099c5239bd6d7ee8b5b0d401556c9257b287',
-    generatedSha256: 'b0be58f74d9118664e24d7df68c547235abdb3348fbbf894c6f4d7962c7a0831',
-    generatedClientSha256: 'c32e0e08f80a96ca893882d70ad13fd3a96c134fa97bef8a6346e383f0b527ab',
+    revision: 'd3753458288499e3adb2a9d211b9173f083abb7c',
+    sha256: 'b4fac2822bcc832c685e0ecb88e0d0dfe892b9ff4a43474fccaa6e1132466aa7',
+    generatedSha256: '68cb815b71aa121d22446a099885b4ab33e5e6fce88185bad2d10df797d5de13',
+    generatedClientSha256: 'a0279faeb08488204aef5375e6cff3c9c03c1b9682df2f920279961a2a6705e3',
     path: 'packages/contracts/openapi/openapi.yaml',
   });
   const comparator = inventory as typeof inventory & { comparator: { revision: string; sourceSha256: string; command: string } };
@@ -327,6 +327,18 @@ it('keeps the identity-keyed decision manifest in strict one-to-one lockstep', a
   expect(decisions.filter((decision) => decision.decision === 'pending')).toHaveLength(persisted.count - 30);
   expect(decisions.filter((decision) => decision.decision === 'pending').every((decision) => decision.approvalCommentIds.length === 0)).toBe(true);
   expect(decisions.filter((decision) => decision.decision !== 'pending').every((decision) => decision.approvalCommentIds.length > 0)).toBe(true);
+
+  const rejectedPaths = new Set(
+    Object.entries(manifest.decisions)
+      .filter(([, decision]) => decision.decision === 'reject')
+      .map(([identity]) => persisted.entries.find((entry) => entry.verification.comparatorIdentity === identity)?.jsonPath),
+  );
+  expect(rejectedPaths).toEqual(new Set([
+    'root.paths./files/upload-intents.post.responses.201.content.application/json.schema.id.required',
+    'root.paths./files/upload-intents.post.responses.201.content.application/json.schema.data.required',
+    'root.paths./files/{id}/download-intents.post.responses.201',
+    'root.paths./files/{id}/download-intents.post.responses.403.content.application/problem+json.schema.oneOf',
+  ]));
 });
 
 function digest(value: unknown): string {
