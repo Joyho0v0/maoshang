@@ -32,6 +32,7 @@ interface SourceOccurrence {
 
 const collectionContexts = new WeakMap<BreakingChange[], CollectionContext>();
 const activeComparisons = new WeakMap<BreakingChange[], WeakMap<object, WeakSet<object>>>();
+const activeContainmentComparisons = new WeakMap<object, WeakSet<object>>();
 
 export function assertNoBreakingChanges(previous: unknown, next: unknown, path = 'root'): void {
   const first = collectBreakingChanges(previous, next, path)[0];
@@ -39,7 +40,7 @@ export function assertNoBreakingChanges(previous: unknown, next: unknown, path =
 }
 
 function formatBreakingChange(change: BreakingChange): string {
-  return `Breaking change at ${change.jsonPath}: ${change.reason} old=${JSON.stringify(change.oldValue)} new=${JSON.stringify(change.newValue)}`;
+  return `Breaking change at ${change.jsonPath}: ${change.reason} old=${stableSerialize(change.oldValue)} new=${stableSerialize(change.newValue)}`;
 }
 function inheritedConstraint(schema: RecordValue, key: string): unknown {
   if (schema[key] !== undefined) return schema[key];
@@ -49,8 +50,8 @@ function inheritedConstraint(schema: RecordValue, key: string): unknown {
     .map((branch) => inheritedConstraint(branch, key))
     .filter((value) => value !== undefined);
   if (values.length === 0) return undefined;
-  const first = JSON.stringify(values[0]);
-  return values.every((value) => JSON.stringify(value) === first) ? values[0] : undefined;
+  const first = stableSerialize(values[0]);
+  return values.every((value) => stableSerialize(value) === first) ? values[0] : undefined;
 }
 
 function effectiveRequired(schema: RecordValue): string[] {
@@ -187,6 +188,21 @@ function schemaContainsCompatibleOption(candidate: unknown, previousOption: unkn
 }
 
 function hasBreakingChange(previous: unknown, next: unknown, path: string): boolean {
+  if (isRecord(previous) && isRecord(next)) {
+    const activeNext = activeContainmentComparisons.get(previous) ?? new WeakSet<object>();
+    if (activeNext.has(next)) return false;
+    activeNext.add(next);
+    activeContainmentComparisons.set(previous, activeNext);
+    try {
+      return hasBreakingChangeInternal(previous, next, path);
+    } finally {
+      activeNext.delete(next);
+    }
+  }
+  return hasBreakingChangeInternal(previous, next, path);
+}
+
+function hasBreakingChangeInternal(previous: unknown, next: unknown, path: string): boolean {
   const changes: BreakingChange[] = [];
   collectionLimits.set(changes, 1);
   collectValue(previous, next, path, changes);
@@ -203,12 +219,22 @@ function removeRedundantRequired(schema: RecordValue, redundantRequired: Set<str
   return copy;
 }
 
-function schemaContainsOption(candidate: unknown, previousOption: unknown): boolean {
-  if (JSON.stringify(candidate) === JSON.stringify(previousOption)) return true;
+function schemaContainsOption(
+  candidate: unknown,
+  previousOption: unknown,
+  visited = new WeakMap<object, WeakSet<object>>(),
+): boolean {
+  if (isRecord(candidate) && isRecord(previousOption)) {
+    const candidates = visited.get(candidate) ?? new WeakSet<object>();
+    if (candidates.has(previousOption)) return false;
+    candidates.add(previousOption);
+    visited.set(candidate, candidates);
+  }
+  if (stableSerialize(candidate) === stableSerialize(previousOption)) return true;
   if (!isRecord(candidate)) return false;
   for (const key of ['oneOf', 'anyOf', 'allOf'] as const) {
     const options = candidate[key];
-    if (Array.isArray(options) && options.some((option) => schemaContainsOption(option, previousOption))) return true;
+    if (Array.isArray(options) && options.some((option) => schemaContainsOption(option, previousOption, visited))) return true;
   }
   return false;
 }
@@ -278,8 +304,8 @@ function hasUnsupportedSchemaKeyword(value: unknown, assumeSchema = false, seen 
   return false;
 }
 
-function collectUnsupportedSchemaKeywords(previous: RecordValue, next: RecordValue, path: string, changes: BreakingChange[]): void {
-  if (!hasUnsupportedSchemaKeyword(previous) && !hasUnsupportedSchemaKeyword(next)) return;
+function collectUnsupportedSchemaKeywords(previous: RecordValue, next: RecordValue, path: string, changes: BreakingChange[], schemaContext: boolean): void {
+  if (!schemaContext && !hasUnsupportedSchemaKeyword(previous) && !hasUnsupportedSchemaKeyword(next)) return;
   const previousKeys = new Set(Object.keys(previous));
   const nextKeys = new Set(Object.keys(next));
   const keys = [...new Set([...previousKeys, ...nextKeys])].filter((key) => !supportedSchemaKeywords.has(key) && !key.startsWith('x-'));
@@ -455,10 +481,10 @@ export function collectBreakingChanges(previous: unknown, next: unknown, path = 
   return result;
 }
 
-function collectValue(previous: unknown, next: unknown, path: string, changes: BreakingChange[]): void {
+function collectValue(previous: unknown, next: unknown, path: string, changes: BreakingChange[], schemaContext = false): void {
   if (shouldStop(changes)) return;
   if (!isRecord(previous) || !isRecord(next)) {
-    if (JSON.stringify(previous) !== JSON.stringify(next)) addChange(changes, path, 'value changed.', previous, next);
+    if (stableSerialize(previous) !== stableSerialize(next)) addChange(changes, path, 'value changed.', previous, next);
     return;
   }
   const previousObject = previous as object;
@@ -470,13 +496,13 @@ function collectValue(previous: unknown, next: unknown, path: string, changes: B
   nextObjects.add(nextObject);
   pairs.set(previousObject, nextObjects);
   try {
-    collectValueObject(previous, next, path, changes);
+    collectValueObject(previous, next, path, changes, schemaContext);
   } finally {
     nextObjects.delete(nextObject);
   }
 }
 
-function collectValueObject(previous: RecordValue, next: RecordValue, path: string, changes: BreakingChange[]): void {
+function collectValueObject(previous: RecordValue, next: RecordValue, path: string, changes: BreakingChange[], schemaContext: boolean): void {
   if (shouldStop(changes)) return;
 
   if (path === 'root' && (previous.openapi !== undefined || previous.paths !== undefined)) {
@@ -484,7 +510,7 @@ function collectValueObject(previous: RecordValue, next: RecordValue, path: stri
     return;
   }
 
-  collectCommonSchemaConstraints(previous, next, path, changes);
+  collectCommonSchemaConstraints(previous, next, path, changes, schemaContext);
   if (shouldStop(changes)) return;
   collectComposition(previous, next, path, changes);
   if (shouldStop(changes)) return;
@@ -506,12 +532,14 @@ function collectValueObject(previous: RecordValue, next: RecordValue, path: stri
       addChange(changes, `${path}.${property}`, `property ${property} was removed.`, previousSchema, undefined, property);
       continue;
     }
-    collectValue(previousSchema, nextSchema, `${path}.${property}`, changes);
+    collectValue(previousSchema, nextSchema, `${path}.${property}`, changes, schemaContext);
   }
 
   if (previous.items !== undefined) {
     if (next.items === undefined) addChange(changes, `${path}.items`, 'items schema was removed.', previous.items, undefined, 'items');
-    else collectValue(previous.items, next.items, `${path}.items`, changes);
+    else collectValue(previous.items, next.items, `${path}.items`, changes, true);
+  } else if (next.items !== undefined) {
+    addChange(changes, `${path}.items`, 'candidate-only items schema narrowed the value space.', undefined, next.items, 'items', previous);
   }
 
   if (previous.parameters !== undefined) collectNamedCollection(previous.parameters, next.parameters, ['name', 'in'], `${path}.parameters`, changes);
@@ -547,7 +575,7 @@ function collectOpenApiDocument(previous: RecordValue, next: RecordValue, change
         addChange(changes, `root.components.${section}.${name}`, `${name} was removed.`, previousValue, undefined, name);
         continue;
       }
-      collectValue(previousValue, nextValue, `root.components.${section}.${name}`, changes);
+      collectValue(previousValue, nextValue, `root.components.${section}.${name}`, changes, section === 'schemas');
     }
   }
 
@@ -662,21 +690,21 @@ function collectContent(previous: unknown, next: unknown, path: string, changes:
     }
     if (isRecord(previousMedia) && isRecord(nextMedia) && previousMedia.schema !== undefined) {
       if (nextMedia.schema === undefined) addChange(changes, `${mediaPath}.schema`, 'schema was removed.', previousMedia.schema, undefined, mediaType);
-      else collectValue(previousMedia.schema, nextMedia.schema, `${mediaPath}.schema`, changes);
+      else collectValue(previousMedia.schema, nextMedia.schema, `${mediaPath}.schema`, changes, true);
     }
   }
 }
 
-function collectCommonSchemaConstraints(previous: RecordValue, next: RecordValue, path: string, changes: BreakingChange[]): void {
+function collectCommonSchemaConstraints(previous: RecordValue, next: RecordValue, path: string, changes: BreakingChange[], schemaContext: boolean): void {
   if (shouldStop(changes)) return;
-  collectUnsupportedSchemaKeywords(previous, next, path, changes);
+  collectUnsupportedSchemaKeywords(previous, next, path, changes, schemaContext);
   if (shouldStop(changes)) return;
   for (const key of [
     'type', 'format', 'pattern', 'const', 'minLength', 'maxLength', 'minimum', 'maximum',
     'exclusiveMinimum', 'exclusiveMaximum', 'minItems', 'maxItems', 'minProperties', 'maxProperties',
     'minContains', 'maxContains', 'contains', 'propertyNames', 'dependentRequired',
     'dependentSchemas', 'prefixItems', 'patternProperties', 'unevaluatedItems',
-    'unevaluatedProperties', 'not', 'if', 'then', 'else',
+    'unevaluatedProperties', 'not', 'if', 'then', 'else', 'uniqueItems', 'multipleOf',
   ] as const) {
     const previousValue = inheritedConstraint(previous, key);
     const nextValue = inheritedConstraint(next, key);
@@ -692,7 +720,7 @@ function collectCommonSchemaConstraints(previous: RecordValue, next: RecordValue
       ? typeof previousValue === 'number' && typeof nextValue === 'number' && nextValue < previousValue
       : key === 'minLength' || key === 'minimum' || key === 'exclusiveMinimum' || key === 'minItems' || key === 'minProperties' || key === 'minContains'
         ? typeof previousValue === 'number' && typeof nextValue === 'number' && nextValue > previousValue
-        : JSON.stringify(previousValue) !== JSON.stringify(nextValue);
+        : stableSerialize(previousValue) !== stableSerialize(nextValue);
     if (narrowed) addChange(changes, `${path}.${key}`, `constraint ${key} was narrowed.`, previousValue, nextValue, key, previous);
   }
 
@@ -801,7 +829,7 @@ function collectSecurity(previous: unknown, next: unknown, path: string, changes
     addChange(changes, path, 'security requirement was removed.', previous, next, 'security');
     return;
   }
-  if (JSON.stringify(previous) !== JSON.stringify(next)) addChange(changes, path, 'security requirement changed.', previous, next, 'security');
+  if (stableSerialize(previous) !== stableSerialize(next)) addChange(changes, path, 'security requirement changed.', previous, next, 'security');
 }
 
 function allOfFlattenedIntoWithoutThrowing(previous: RecordValue, next: RecordValue): boolean {
@@ -907,7 +935,13 @@ function stableSerialize(value: unknown, seen = new WeakSet<object>(), canonical
 
 function indexSourceObjects(value: unknown, rootPath: string, context: CollectionContext): void {
   const occurrenceVisited = new WeakMap<object, Set<string>>();
+  const visitedObjects = new WeakSet<object>();
   const visit = (current: unknown, path: string, inheritedOccurrences: readonly SourceOccurrence[] = []): void => {
+    const object = typeof current === 'object' && current !== null ? current : undefined;
+    if (object !== undefined) {
+      if (visitedObjects.has(object)) return;
+      visitedObjects.add(object);
+    }
     if (isRecord(current)) {
       let addedOccurrence = inheritedOccurrences.length === 0;
       for (const occurrence of inheritedOccurrences) {

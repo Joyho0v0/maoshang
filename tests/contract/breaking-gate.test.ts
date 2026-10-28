@@ -200,6 +200,32 @@ describe('OpenAPI compatibility gate', () => {
     }
   });
 
+  it('fails closed for ordinary schema vocabulary and markerless component schemas', async () => {
+    for (const [previous, candidate] of [
+      [{ type: 'array' }, { type: 'array', items: { type: 'string' } }],
+      [{ type: 'array' }, { type: 'array', uniqueItems: true }],
+      [{ type: 'number' }, { type: 'number', multipleOf: 2 }],
+    ] as const) {
+      expect(() => assertNoBreakingChanges(previous, candidate)).toThrow();
+      expect(collectBreakingChanges(previous, candidate)).not.toEqual([]);
+    }
+
+    const baseline = {
+      openapi: '3.1.0',
+      info: { title: 'markerless schema test', version: '1.0.0' },
+      components: { schemas: { FreeForm: {} } },
+      paths: {},
+    };
+    const candidate = structuredClone(baseline);
+    (candidate.components.schemas.FreeForm as Record<string, unknown>).futureAssertion = { limit: 1 };
+    const [normalizedBaseline, normalizedCandidate] = await Promise.all([
+      normalizeDocument(baseline),
+      normalizeDocument(candidate),
+    ]);
+    expect(() => assertNoBreakingChanges(normalizedBaseline, normalizedCandidate)).toThrow();
+    expect(collectBreakingChanges(normalizedBaseline, normalizedCandidate)).not.toEqual([]);
+  });
+
   it('treats direct allOf merge and split as equivalent in both directions', () => {
     const merged = {
       type: 'object',
@@ -240,6 +266,41 @@ describe('OpenAPI compatibility gate', () => {
           Shared: {
             type: 'object',
             properties: { self: { $ref: '#/components/schemas/Shared' } },
+          },
+          Wrapper: {
+            oneOf: [
+              { $ref: '#/components/schemas/Shared' },
+              { $ref: '#/components/schemas/Shared' },
+            ],
+          },
+        },
+      },
+      paths: {},
+    };
+    const candidate = structuredClone(baseline);
+    candidate.components.schemas.Wrapper.oneOf = [];
+    const [normalizedBaseline, normalizedCandidate] = await Promise.all([
+      normalizeDocument(baseline),
+      normalizeDocument(candidate),
+    ]);
+
+    const first = collectBreakingChanges(normalizedBaseline, normalizedCandidate)
+      .filter((change) => change.reason.includes('option was removed'));
+    const second = collectBreakingChanges(normalizedBaseline, normalizedCandidate)
+      .filter((change) => change.reason.includes('option was removed'));
+    expect(first).toHaveLength(2);
+    expect(new Set(first.map((change) => change.sourceIdentity)).size).toBe(2);
+    expect(first.map((change) => change.stableIdentity)).toEqual(second.map((change) => change.stableIdentity));
+  });
+
+  it('handles a recursive dereferenced composition back-edge with stable duplicate occurrences', async () => {
+    const baseline = {
+      openapi: '3.1.0',
+      info: { title: 'recursive composition occurrence test', version: '1.0.0' },
+      components: {
+        schemas: {
+          Shared: {
+            oneOf: [{ type: 'object', properties: { next: { $ref: '#/components/schemas/Shared' } } }],
           },
           Wrapper: {
             oneOf: [
