@@ -36,7 +36,7 @@ describe('idempotency execution interceptor', () => {
     submitPaymentReview: { type: 'PAYMENT', hrefPolicy: 'existing:id', pathParameter: 'id' },
     reviewPayment: { type: 'PAYMENT', hrefPolicy: 'existing:id', pathParameter: 'id' },
     reversePayment: { type: 'PAYMENT', hrefPolicy: 'existing:id', pathParameter: 'id' },
-    createUploadIntent: { type: 'FILE', hrefPolicy: 'collection', pathParameter: null },
+    createUploadIntent: { type: 'FILE', hrefPolicy: 'nested:file', pathParameter: null },
     completeUpload: { type: 'FILE', hrefPolicy: 'existing:id', pathParameter: 'id' },
     createDocument: { type: 'DOCUMENT', hrefPolicy: 'collection', pathParameter: null },
     updateDocument: { type: 'DOCUMENT', hrefPolicy: 'existing:id', pathParameter: 'id' },
@@ -81,7 +81,7 @@ describe('idempotency execution interceptor', () => {
     submitPaymentReview: { status: 200, schema: 'Payment', hrefTemplate: '/api/v1/payments/{resourceId}' },
     reviewPayment: { status: 200, schema: 'Payment', hrefTemplate: '/api/v1/payments/{resourceId}' },
     reversePayment: { status: 200, schema: 'Payment', hrefTemplate: '/api/v1/payments/{resourceId}' },
-    createUploadIntent: { status: 201, schema: 'File', hrefTemplate: '/api/v1/files/{resourceId}' },
+    createUploadIntent: { status: 201, schema: 'UploadIntent', hrefTemplate: '/api/v1/files/{resourceId}' },
     completeUpload: { status: 200, schema: 'File', hrefTemplate: '/api/v1/files/{resourceId}' },
     createDocument: { status: 201, schema: 'Document', hrefTemplate: '/api/v1/documents/{resourceId}' },
     updateDocument: { status: 200, schema: 'Document', hrefTemplate: '/api/v1/documents/{resourceId}' },
@@ -129,9 +129,85 @@ describe('idempotency execution interceptor', () => {
       const href = expected.hrefTemplate.replace('{pathId}', pathId ?? '').replace('{resourceId}', resourceId);
       const request = { params: pathId === undefined ? {} : { id: pathId } };
       const response = { getHeader: (name: string) => name.toLowerCase() === 'location' ? href : undefined };
-      const projected = resourceReferenceForResponse(operationId, operations[operationId as OperationId], request as never, response as never, { id: resourceId }, expected.status);
+      const body = operationId === 'createUploadIntent'
+        ? { file: { id: resourceId, href }, href }
+        : { id: resourceId };
+      const projected = resourceReferenceForResponse(operationId, operations[operationId as OperationId], request as never, response as never, body, expected.status);
       expect(projected).toEqual({ type: policy.type, id: resourceId, href });
     }
+  });
+
+  it('projects the nested file from an UploadIntent and rejects legacy or mismatched resource identities', () => {
+    const fileId = '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019';
+    const canonicalHref = `/api/v1/files/${fileId}`;
+    const request = { params: {} };
+    const responseWithHeaders = (headers: Record<string, string>) => ({
+      getHeader: (name: string) => headers[name.toLowerCase()],
+    });
+    const validBody = { file: { id: fileId, href: canonicalHref }, href: canonicalHref };
+
+    expect(resourceReferenceForResponse(
+      'createUploadIntent',
+      operations.createUploadIntent,
+      request as never,
+      responseWithHeaders({ location: canonicalHref, 'content-location': canonicalHref }) as never,
+      validBody,
+      201,
+    )).toEqual({ type: 'FILE', id: fileId, href: canonicalHref });
+
+    expect(resourceReferenceForResponse(
+      'createUploadIntent',
+      operations.createUploadIntent,
+      request as never,
+      responseWithHeaders({ location: canonicalHref }) as never,
+      { id: fileId, href: canonicalHref },
+      201,
+    )).toBeUndefined();
+
+    expect(resourceReferenceForResponse(
+      'createUploadIntent',
+      operations.createUploadIntent,
+      request as never,
+      responseWithHeaders({ location: canonicalHref }) as never,
+      { ...validBody, file: { id: fileId, href: `/api/v1/files/${'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2'}` } },
+      201,
+    )).toBeUndefined();
+
+    expect(resourceReferenceForResponse(
+      'createUploadIntent',
+      operations.createUploadIntent,
+      request as never,
+      responseWithHeaders({ location: canonicalHref }) as never,
+      { ...validBody, file: { id: undefined, href: canonicalHref } },
+      201,
+    )).toBeUndefined();
+
+    expect(resourceReferenceForResponse(
+      'createUploadIntent',
+      operations.createUploadIntent,
+      request as never,
+      responseWithHeaders({ location: `/api/v1/files/${'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2'}` }) as never,
+      validBody,
+      201,
+    )).toBeUndefined();
+
+    expect(resourceReferenceForResponse(
+      'createUploadIntent',
+      operations.createUploadIntent,
+      request as never,
+      responseWithHeaders({ location: canonicalHref, 'content-location': `/api/v1/files/${'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2'}` }) as never,
+      validBody,
+      201,
+    )).toBeUndefined();
+
+    expect(resourceReferenceForResponse(
+      'createUploadIntent',
+      operations.createUploadIntent,
+      request as never,
+      responseWithHeaders({}) as never,
+      validBody,
+      201,
+    )).toBeUndefined();
   });
 
   it('rejects a resource reference whose Location belongs to the request action, not the returned operation', () => {

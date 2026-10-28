@@ -155,15 +155,23 @@ export function resourceReferenceForResponse(operationId: string, operation: Gen
   const projector = IDEMPOTENT_RESOURCE_PROJECTORS[operationId];
   const responseContract = operation.responses[String(status)];
   if (projector === undefined || responseContract?.schema !== projector.schema || status !== projector.status) return undefined;
-  const id = isRecord(body) && typeof body.id === 'string' ? body.id : undefined;
+  const nestedResource = projector.resourceFromBody?.(body);
+  const id = projector.resourceFromBody === undefined
+    ? isRecord(body) && typeof body.id === 'string' ? body.id : undefined
+    : nestedResource?.id;
   if (id === undefined) return undefined;
   const href = projector.href(request, id);
   if (href === undefined) return undefined;
   const location = headerString(response.getHeader('location'));
   const contentLocation = headerString(response.getHeader('content-location'));
-  const bodyHref = isRecord(body) && typeof body.href === 'string' ? body.href : undefined;
+  if (projector.requireLocation === true && location === undefined) return undefined;
+  const bodyHref = projector.resourceFromBody === undefined
+    ? isRecord(body) && typeof body.href === 'string' ? body.href : undefined
+    : nestedResource?.href;
   if ((location !== undefined && location !== href) || (contentLocation !== undefined && contentLocation !== href) || (bodyHref !== undefined && bodyHref !== href)) return undefined;
-  const version = isRecord(body) && typeof body.version === 'number' ? body.version : undefined;
+  const version = projector.resourceFromBody === undefined
+    ? isRecord(body) && typeof body.version === 'number' ? body.version : undefined
+    : nestedResource?.version;
   const resource = { type: projector.type, id, href, ...(version === undefined ? {} : { version }) };
   return isResourceReference(resource) ? resource : undefined;
 }
@@ -175,6 +183,8 @@ interface ResourceProjector {
   readonly hrefPolicy: 'collection' | 'organization-user' | string;
   readonly pathParameter: string | null;
   readonly href: (request: PrincipalRequest, resourceId: string) => string | undefined;
+  readonly resourceFromBody?: (body: unknown) => { id: string; href: string; version?: number } | undefined;
+  readonly requireLocation?: boolean;
 }
 
 const collectionProjector = (status: number, schema: string, type: string, collection: string): ResourceProjector => ({ status, schema, type, hrefPolicy: 'collection', pathParameter: null, href: (_request, id) => `${collection}/${id}` });
@@ -200,6 +210,26 @@ const existingProjector = (status: number, schema: string, type: string, collect
     const params = isRecord(request.params) ? request.params : {};
     const pathId = typeof params[parameter] === 'string' ? params[parameter] : undefined;
     return pathId === id ? `${collection}/${id}` : undefined;
+  },
+});
+const uploadIntentProjector = (): ResourceProjector => ({
+  status: 201,
+  schema: 'UploadIntent',
+  type: 'FILE',
+  hrefPolicy: 'nested:file',
+  pathParameter: null,
+  requireLocation: true,
+  href: (_request, id) => `/api/v1/files/${id}`,
+  resourceFromBody: (body) => {
+    if (!isRecord(body) || !isRecord(body.file)) return undefined;
+    const id = typeof body.file.id === 'string' ? body.file.id : undefined;
+    const fileHref = typeof body.file.href === 'string' ? body.file.href : undefined;
+    const intentHref = typeof body.href === 'string' ? body.href : undefined;
+    if (id === undefined || fileHref === undefined || intentHref === undefined) return undefined;
+    const canonicalHref = `/api/v1/files/${id}`;
+    if (fileHref !== canonicalHref || intentHref !== canonicalHref) return undefined;
+    const version = typeof body.file.version === 'number' ? body.file.version : undefined;
+    return { id, href: fileHref, ...(version === undefined ? {} : { version }) };
   },
 });
 
@@ -238,7 +268,7 @@ export const IDEMPOTENT_RESOURCE_PROJECTORS: Readonly<Record<string, ResourcePro
   submitPaymentReview: existingProjector(200, 'Payment', 'PAYMENT', '/api/v1/payments'),
   reviewPayment: existingProjector(200, 'Payment', 'PAYMENT', '/api/v1/payments'),
   reversePayment: existingProjector(200, 'Payment', 'PAYMENT', '/api/v1/payments'),
-  createUploadIntent: collectionProjector(201, 'File', 'FILE', '/api/v1/files'),
+  createUploadIntent: uploadIntentProjector(),
   completeUpload: existingProjector(200, 'File', 'FILE', '/api/v1/files'),
   createDocument: collectionProjector(201, 'Document', 'DOCUMENT', '/api/v1/documents'),
   updateDocument: existingProjector(200, 'Document', 'DOCUMENT', '/api/v1/documents'),
