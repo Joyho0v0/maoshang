@@ -58,6 +58,27 @@ describe('generated contract client', () => {
     }
   });
 
+  it('accepts a permission problem on a permission-capable mutation', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const client = new GeneratedApiClient({
+      fetch: async () => new Response(JSON.stringify({
+        type: 'urn:autoflow:problem:permission-denied',
+        title: 'Permission denied',
+        status: 403,
+        code: 'PERMISSION_DENIED',
+        requestId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2',
+        retryable: false,
+        meta: null,
+      }), { status: 403, headers: { 'content-type': 'application/problem+json', 'x-request-id': 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2' } }),
+      validator: createContractValidator(document),
+    });
+
+    await expect(client.call('createCustomer', {
+      headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': 'permission-key' },
+      body: { name: 'Acme', ownerUserId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
+    })).rejects.toBeInstanceOf(ApiProblemError);
+  });
+
   it('exposes a declared dependency failure as a typed Problem instead of an undeclared-status error', async () => {
     const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
     const client = new GeneratedApiClient({

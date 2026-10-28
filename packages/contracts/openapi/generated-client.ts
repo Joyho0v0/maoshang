@@ -946,7 +946,7 @@ export const operations = {
         ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
@@ -1177,7 +1177,7 @@ export const operations = {
         ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
@@ -1408,7 +1408,7 @@ export const operations = {
         ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
@@ -1608,7 +1608,7 @@ export const operations = {
         ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
@@ -2017,7 +2017,7 @@ export const operations = {
         ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
@@ -2391,7 +2391,7 @@ export const operations = {
         ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
@@ -8630,7 +8630,7 @@ export const operations = {
         ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
@@ -10871,7 +10871,7 @@ export const operations = {
         ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {

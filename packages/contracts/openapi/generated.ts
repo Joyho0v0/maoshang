@@ -1894,7 +1894,6 @@ export interface components {
             resource: components["schemas"]["ResourceReference"] | null;
             resultHref: string | null;
             problem: components["schemas"]["Problem"] | null;
-            attemptCount: number;
         };
         CommandStatusInProgress: components["schemas"]["CommandStatusBase"] & {
             /** @constant */
@@ -2951,7 +2950,7 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
             429: components["responses"]["RateLimited"];
@@ -2979,7 +2978,7 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
             429: components["responses"]["RateLimited"];
@@ -3007,7 +3006,7 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
             429: components["responses"]["RateLimited"];
@@ -3034,7 +3033,7 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
             429: components["responses"]["RateLimited"];
@@ -3085,7 +3084,7 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
             429: components["responses"]["RateLimited"];
@@ -3134,7 +3133,7 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
             429: components["responses"]["RateLimited"];
@@ -3913,7 +3912,7 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
             429: components["responses"]["RateLimited"];
@@ -4194,7 +4193,7 @@ export interface operations {
             201: components["responses"]["CreatedFile"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["Problem"];
             429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];

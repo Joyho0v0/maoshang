@@ -76,7 +76,6 @@ class HttpIdempotencyRepositoryFake {
       resource: null,
       resultHref: null,
       problem: null,
-      attemptCount: 1,
     };
     const promise = work(this.transactionClient, { ...status, claimRole: 'OWNER' as const }).then((result) => {
       if (result.resource === undefined) throw new Error('test repository requires the interceptor to derive a resource reference');

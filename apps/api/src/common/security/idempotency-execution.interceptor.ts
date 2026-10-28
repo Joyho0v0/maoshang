@@ -137,7 +137,7 @@ function isCommandResult(value: CommandResult<unknown> | CommandStatus): value i
 }
 
 function publicCommandStatus(value: CommandStatus, operation: GeneratedOperation): CommandStatus {
-  const publicValue = Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'claimRole' && key !== 'ownerToken')) as CommandStatus;
+  const publicValue = Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'claimRole' && key !== 'ownerToken' && key !== 'attemptCount')) as CommandStatus;
   if (publicValue.state !== 'RECOVERY_REQUIRED' || operation.responses['202']?.schema !== 'CommandStatusInProgress') return publicValue;
   return {
     ...publicValue,

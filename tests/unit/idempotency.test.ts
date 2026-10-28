@@ -69,7 +69,7 @@ describe('idempotency claim and replay foundation', () => {
     expect(store.claim({
       actorId: 'actor-1', organizationId: 'org-1', operationId: 'createCustomer',
       idempotencyKey: 'terminal-key', requestHash: 'request-a',
-    })).toMatchObject({ commandId: claimed.commandId, state: 'SUCCEEDED', attemptCount: 1 });
+    })).toMatchObject({ commandId: claimed.commandId, state: 'SUCCEEDED' });
   });
 
   it('keeps transient callback failures recoverable instead of persisting FAILED', async () => {

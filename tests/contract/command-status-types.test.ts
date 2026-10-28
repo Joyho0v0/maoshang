@@ -7,7 +7,6 @@ const base = {
   operationId: 'createCustomer',
   startedAt: '2026-10-28T05:00:00Z',
   expiresAt: '2026-10-29T05:00:00Z',
-  attemptCount: 1,
 };
 
 const inProgress: components['schemas']['CommandStatus'] = {

@@ -185,13 +185,17 @@ function compareCommonSchemaConstraints(previous: RecordValue, next: RecordValue
 
 function compareComposition(previous: RecordValue, next: RecordValue, path: string): void {
   for (const key of ['oneOf', 'anyOf', 'allOf'] as const) {
-    if (!Array.isArray(previous[key])) continue;
+    if (!Array.isArray(previous[key])) {
+      if (Array.isArray(next[key])) throw new Error(`Breaking change at ${path}: ${key} was added as a candidate-only composition.`);
+      continue;
+    }
     if (!Array.isArray(next[key])) {
       if (key === 'allOf' && allOfFlattenedInto(previous, next)) continue;
       throw new Error(`Breaking change at ${path}: ${key} was removed.`);
     }
     for (const previousOption of previous[key]) {
-      if (!next[key].some((candidate) => schemaContainsCompatibleOption(candidate, previousOption))) throw new Error(`Breaking change at ${path}: a ${key} option was removed.`);
+      const inheritedRequired = new Set(effectiveRequired(previous));
+      if (!next[key].some((candidate) => schemaContainsCompatibleOption(candidate, previousOption, inheritedRequired))) throw new Error(`Breaking change at ${path}: a ${key} option was removed.`);
     }
   }
 }
@@ -255,28 +259,54 @@ function allOfFlattenedInto(previous: RecordValue, next: RecordValue): boolean {
       const options = branch[key];
       if (!Array.isArray(options)) continue;
       for (const option of options) {
-        if (!schemaContainsCompatibleOption(next, option)) return false;
+        if (!schemaContainsCompatibleOption(next, option, new Set(effectiveRequired(previous)))) return false;
       }
     }
   }
   return true;
 }
 
-function schemaContainsCompatibleOption(candidate: unknown, previousOption: unknown): boolean {
-  if (schemaContainsOption(candidate, previousOption)) return true;
-  if (isRecord(candidate) && isRecord(previousOption)) {
-    try {
-      assertNoBreakingChanges(previousOption, candidate, 'composition');
-      return true;
-    } catch {
-      // The candidate may contain the compatible schema below another composition branch.
-    }
-    for (const key of ['oneOf', 'anyOf', 'allOf'] as const) {
-      const options = candidate[key];
-      if (Array.isArray(options) && options.some((option) => schemaContainsCompatibleOption(option, previousOption))) return true;
-    }
+function schemaContainsCompatibleOption(candidate: unknown, previousOption: unknown, inheritedRequired = new Set<string>()): boolean {
+  if (!isRecord(candidate) || !isRecord(previousOption)) return false;
+
+  if (schemaContainsOption(candidate, previousOption)) {
+    // An allOf wrapper containing the old option can still add a mandatory
+    // constraint to every value. It is not a containment proof. oneOf/anyOf
+    // wrappers are additive only when they do not add root requirements.
+    if (Array.isArray(candidate.allOf)) return false;
+    const previousRequired = new Set(effectiveRequired(previousOption));
+    if (arrayOfStrings(candidate.required).some((field) => !previousRequired.has(field))) return false;
+    return true;
   }
-  return false;
+
+  // A candidate-only composition can narrow an option even when the ordinary
+  // object comparison sees no newly-required root property.  Do not use the
+  // general comparator as a containment proof until composition shapes match;
+  // compareComposition will recursively inspect matching branches instead.
+  for (const key of ['oneOf', 'anyOf', 'allOf'] as const) {
+    if (Array.isArray(candidate[key]) && !Array.isArray(previousOption[key])) return false;
+  }
+
+  const previousRequired = new Set(effectiveRequired(previousOption));
+  const redundantRequired = new Set([...inheritedRequired].filter((field) => !previousRequired.has(field)));
+  const comparableCandidate = removeRedundantRequired(candidate, redundantRequired);
+
+  try {
+    assertNoBreakingChanges(previousOption, comparableCandidate, 'composition');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeRedundantRequired(schema: RecordValue, redundantRequired: Set<string>): RecordValue {
+  if (redundantRequired.size === 0) return schema;
+  const copy: RecordValue = { ...schema };
+  if (Array.isArray(schema.required)) copy.required = schema.required.filter((field) => typeof field !== 'string' || !redundantRequired.has(field));
+  for (const key of ['oneOf', 'anyOf', 'allOf'] as const) {
+    if (Array.isArray(schema[key])) copy[key] = schema[key].map((branch) => isRecord(branch) ? removeRedundantRequired(branch, redundantRequired) : branch);
+  }
+  return copy;
 }
 
 function schemaContainsOption(candidate: unknown, previousOption: unknown): boolean {

@@ -177,7 +177,6 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
         resource: null,
         resultHref: null,
         problem: null,
-        attemptCount: claim.attemptCount,
       },
     }));
 

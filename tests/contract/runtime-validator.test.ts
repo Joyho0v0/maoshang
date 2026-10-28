@@ -28,10 +28,11 @@ describe('runtime contract validator', () => {
       startedAt: '2026-10-28T05:00:00Z',
       expiresAt: '2026-10-29T05:00:00Z',
     };
-    expect(validator.validate('CommandStatus', { ...base, state: 'IN_PROGRESS', completedAt: null, retryAfterMs: 1000, httpStatus: null, resource: null, resultHref: null, problem: null, attemptCount: 1 })).toBe(true);
-    expect(validator.validate('CommandStatus', { ...base, state: 'RECOVERY_REQUIRED', completedAt: null, retryAfterMs: 0, httpStatus: null, resource: null, resultHref: null, problem: null, attemptCount: 1 })).toBe(true);
-    expect(validator.validate('CommandStatus', { ...base, state: 'SUCCEEDED', completedAt: '2026-10-28T05:01:00Z', retryAfterMs: 0, httpStatus: 201, resource: { type: 'CUSTOMER', id: base.commandId, href: `/api/v1/customers/${base.commandId}` }, resultHref: null, problem: null, attemptCount: 1 })).toBe(true);
-    expect(validator.validate('CommandStatus', { ...base, state: 'FAILED', completedAt: '2026-10-28T05:01:00Z', retryAfterMs: 0, httpStatus: 409, resource: null, resultHref: null, problem: { type: 'urn:autoflow:problem:business-rule-violation', title: 'Conflict', status: 409, code: 'BUSINESS_RULE_VIOLATION', requestId: base.commandId, retryable: false }, attemptCount: 1 })).toBe(true);
+    expect(validator.validate('CommandStatus', { ...base, state: 'IN_PROGRESS', completedAt: null, retryAfterMs: 1000, httpStatus: null, resource: null, resultHref: null, problem: null })).toBe(true);
+    expect(validator.validate('CommandStatus', { ...base, state: 'RECOVERY_REQUIRED', completedAt: null, retryAfterMs: 0, httpStatus: null, resource: null, resultHref: null, problem: null })).toBe(true);
+    expect(validator.validate('CommandStatus', { ...base, state: 'SUCCEEDED', completedAt: '2026-10-28T05:01:00Z', retryAfterMs: 0, httpStatus: 201, resource: { type: 'CUSTOMER', id: base.commandId, href: `/api/v1/customers/${base.commandId}` }, resultHref: null, problem: null })).toBe(true);
+    expect(validator.validate('CommandStatus', { ...base, state: 'FAILED', completedAt: '2026-10-28T05:01:00Z', retryAfterMs: 0, httpStatus: 409, resource: null, resultHref: null, problem: { type: 'urn:autoflow:problem:business-rule-violation', title: 'Conflict', status: 409, code: 'BUSINESS_RULE_VIOLATION', requestId: base.commandId, retryable: false } })).toBe(true);
+    expect(validator.validate('CommandStatus', { ...base, state: 'IN_PROGRESS', completedAt: null, retryAfterMs: 1000, httpStatus: null, resource: null, resultHref: null, problem: null, attemptCount: 1 })).toBe(false);
   });
 
   it('accepts complete response DTOs with forward-compatible fields while keeping requests strict', async () => {

@@ -62,4 +62,30 @@ describe('OpenAPI compatibility gate', () => {
       { type: 'object', required: ['id', 'name'], properties: { id: { type: 'string' }, name: { type: 'string' } } },
     )).toThrow(/became required/);
   });
+
+  it('rejects a candidate-only composition that narrows an existing option', () => {
+    expect(() => assertNoBreakingChanges(
+      { oneOf: [{ type: 'object', required: ['id'], properties: { id: { type: 'string' } } }] },
+      { oneOf: [{ type: 'object', required: ['id'], properties: { id: { type: 'string' } }, anyOf: [{ required: ['a'] }, { required: ['b'] }] }] },
+    )).toThrow(/composition|required|oneOf|anyOf/);
+    expect(() => assertNoBreakingChanges(
+      { oneOf: [{ type: 'object', required: ['id'], properties: { id: { type: 'string' } } }] },
+      { oneOf: [{ type: 'object', required: ['id'], properties: { id: { type: 'string' } }, allOf: [{ required: ['tenantId'] }] }] },
+    )).toThrow(/composition|required|oneOf|allOf/);
+    expect(() => assertNoBreakingChanges(
+      { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+      { type: 'object', required: ['id'], properties: { id: { type: 'string' } }, oneOf: [{ required: ['tenantId'] }] },
+    )).toThrow(/candidate-only composition|oneOf|tenantId/);
+  });
+
+  it('rejects const narrowing while preserving an equivalent additive composition option', () => {
+    expect(() => assertNoBreakingChanges(
+      { oneOf: [{ type: 'string', const: 'A' }] },
+      { oneOf: [{ type: 'string', const: 'B' }] },
+    )).toThrow(/const|composition|oneOf/);
+    expect(() => assertNoBreakingChanges(
+      { oneOf: [{ type: 'object', required: ['id'], properties: { id: { type: 'string' } } }] },
+      { oneOf: [{ type: 'object', required: ['id'], properties: { id: { type: 'string' }, label: { type: 'string' } } }] },
+    )).not.toThrow();
+  });
 });

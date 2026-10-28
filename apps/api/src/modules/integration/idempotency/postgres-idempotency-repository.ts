@@ -5,6 +5,7 @@ import {
   IdempotencyConflictError,
   type CommandResult,
   type CommandStatus,
+  type InternalCommandStatus,
   type ResourceReference,
   isResourceReference,
   requireResourceReference,
@@ -87,7 +88,7 @@ export interface PostgresIdempotencyInput {
   idempotencyKey: string;
   requestHash: string;
 }
-export interface PostgresClaim extends CommandStatus {
+export interface PostgresClaim extends InternalCommandStatus {
   ownerToken?: Buffer;
   claimRole: 'OWNER' | 'OBSERVER' | 'TERMINAL';
 }
@@ -208,7 +209,7 @@ export class PostgresIdempotencyRepository {
     await client.query('UPDATE integration.idempotency_record SET lease_expires_at = clock_timestamp(), last_internal_error_code = $3 WHERE id = $1 AND owner_token = $2 AND state = \'IN_PROGRESS\'', [commandId, ownerToken, code]);
   }
 
-  async execute<T>(input: PostgresIdempotencyInput, work: (client: PoolClient, claim: PostgresClaim) => Promise<CommandResult<T>>): Promise<CommandResult<T> | CommandStatus> {
+  async execute<T>(input: PostgresIdempotencyInput, work: (client: PoolClient, claim: PostgresClaim) => Promise<CommandResult<T>>): Promise<CommandResult<T> | InternalCommandStatus> {
     // Claim/observe/replay is deliberately a short transaction. Keeping the row
     // lock while the owner calls application code would make every observer wait
     // for the business transaction instead of receiving 202 immediately.
@@ -271,12 +272,12 @@ export class PostgresIdempotencyRepository {
 
   async statusByKey(client: PoolClient, input: Omit<PostgresIdempotencyInput, 'requestHash'>): Promise<CommandStatus | undefined> {
     const row = await client.query<StoredIdempotencyRow>(IDEMPOTENCY_READ_SQL, [input.organizationId, input.actorId, input.operationId, hashBuffer(input.idempotencyKey)]);
-    return row.rows[0] === undefined ? undefined : toStatus(row.rows[0]);
+    return row.rows[0] === undefined ? undefined : publicStatus(toStatus(row.rows[0]));
   }
 
   async statusById(client: PoolClient, commandId: string): Promise<CommandStatus | undefined> {
     const row = await client.query<StoredIdempotencyRow>(IDEMPOTENCY_SNAPSHOT_BY_ID_SQL, [commandId]);
-    return row.rows[0] === undefined ? undefined : toStatus(row.rows[0]);
+    return row.rows[0] === undefined ? undefined : publicStatus(toStatus(row.rows[0]));
   }
 
   private async readById(client: PoolClient, id: string): Promise<StoredIdempotencyRow> {
@@ -293,7 +294,7 @@ export class PostgresIdempotencyRepository {
     return row;
   }
 
-  private async readCurrentOutcome<T>(input: PostgresIdempotencyInput): Promise<CommandResult<T> | CommandStatus> {
+  private async readCurrentOutcome<T>(input: PostgresIdempotencyInput): Promise<CommandResult<T> | InternalCommandStatus> {
     const row = await this.withTransaction(async (client) => {
       const result = await client.query<StoredIdempotencyRow>(IDEMPOTENCY_READ_SQL, [
         input.organizationId,
@@ -358,7 +359,7 @@ function positiveIntegerOption(value: number | undefined, fallback: number, name
   return value;
 }
 
-function toStatus(row: StoredIdempotencyRow): CommandStatus {
+function toStatus(row: StoredIdempotencyRow): InternalCommandStatus {
   const recovery = row.state === 'IN_PROGRESS' && row.lease_expired;
   const resource = toResourceReference(row);
   if (row.state === 'SUCCEEDED' && (row.completed_at === null || row.http_status === null || row.http_status < 200 || row.http_status >= 300 || resource === null || row.problem_body !== null)) throw new Error('Persisted SUCCEEDED command has an invalid ResourceReference or terminal shape.');
@@ -378,6 +379,10 @@ function toStatus(row: StoredIdempotencyRow): CommandStatus {
     problem: row.problem_body,
     attemptCount: row.attempt_count,
   };
+}
+
+function publicStatus(status: InternalCommandStatus): CommandStatus {
+  return Object.fromEntries(Object.entries(status).filter(([key]) => key !== 'attemptCount')) as CommandStatus;
 }
 
 function toResourceReference(row: Pick<StoredIdempotencyRow, 'resource_type' | 'resource_id' | 'resource_version' | 'resource_href'>): ResourceReference | null {
@@ -400,7 +405,7 @@ function extractHref(value: unknown): string | null {
 function isInProgressCommandStatus(value: unknown, claim: PostgresClaim): boolean {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const candidate = value as Record<string, unknown>;
-  const required = ['commandId', 'operationId', 'state', 'startedAt', 'completedAt', 'expiresAt', 'retryAfterMs', 'httpStatus', 'resource', 'resultHref', 'problem', 'attemptCount'];
+  const required = ['commandId', 'operationId', 'state', 'startedAt', 'completedAt', 'expiresAt', 'retryAfterMs', 'httpStatus', 'resource', 'resultHref', 'problem'];
   if (Object.keys(candidate).some((key) => !required.includes(key)) || required.some((key) => !(key in candidate))) return false;
   return candidate.commandId === claim.commandId
     && candidate.operationId === claim.operationId
@@ -409,8 +414,7 @@ function isInProgressCommandStatus(value: unknown, claim: PostgresClaim): boolea
     && candidate.completedAt === null
     && typeof candidate.expiresAt === 'string' && !Number.isNaN(Date.parse(candidate.expiresAt))
     && typeof candidate.retryAfterMs === 'number' && Number.isInteger(candidate.retryAfterMs) && candidate.retryAfterMs >= 1
-    && candidate.httpStatus === null && candidate.resource === null && candidate.resultHref === null && candidate.problem === null
-    && typeof candidate.attemptCount === 'number' && Number.isInteger(candidate.attemptCount) && candidate.attemptCount === claim.attemptCount;
+    && candidate.httpStatus === null && candidate.resource === null && candidate.resultHref === null && candidate.problem === null;
 }
 
 function normalizeResponseHeaders(value: Record<string, string> | null | undefined): Record<string, string> | undefined {

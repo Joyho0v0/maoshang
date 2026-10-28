@@ -69,6 +69,10 @@ export interface CommandStatus {
   resource: unknown | null;
   resultHref: string | null;
   problem: ProblemDocument | null;
+}
+
+/** Internal lease/fencing state; never serialize this as public CommandStatus. */
+export interface InternalCommandStatus extends CommandStatus {
   attemptCount: number;
 }
 
@@ -262,7 +266,6 @@ export class InMemoryIdempotencyStore {
       resource: record.resourceReference,
       resultHref: record.resultHref,
       problem: record.problem,
-      attemptCount: record.attemptCount,
     };
   }
 
