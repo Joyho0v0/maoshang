@@ -21,6 +21,7 @@ const databaseUrl = process.env.DATABASE_URL;
 class PostgresCustomerController {
   static executions = 0;
   static backendPids: number[] = [];
+  static ownerBarrier: { started: () => void; released: Promise<void> } | undefined;
 
   @Post()
   @HttpCode(201)
@@ -34,6 +35,10 @@ class PostgresCustomerController {
       "INSERT INTO integration.outbox_event (id, organization_id, aggregate_type, aggregate_id, event_type, payload) VALUES ($1, $2, 'Customer', $3, 'CustomerCreated', $4)",
       [randomUUID(), request.user?.organizationId, id, { customerId: id }],
     );
+    if (PostgresCustomerController.ownerBarrier !== undefined) {
+      PostgresCustomerController.ownerBarrier.started();
+      await PostgresCustomerController.ownerBarrier.released;
+    }
     response.header('location', `/api/v1/customers/${id}`);
     return { id, name: 'Acme' };
   }
@@ -236,6 +241,45 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
       expect(createContractValidator(contract).validate('CommandStatus', status)).toBe(true);
       await expect(pool.query('SELECT count(*)::int AS count FROM integration.outbox_event WHERE organization_id = $1', [organizationId])).resolves.toMatchObject({ rows: [{ count: 2 }] });
     } finally {
+      await app.close();
+    }
+  });
+
+  it('returns a real PostgreSQL HTTP observer before the owner transaction commits', async () => {
+    PostgresCustomerController.executions = 0;
+    let startOwner!: () => void;
+    const ownerStarted = new Promise<void>((resolve) => { startOwner = resolve; });
+    let releaseOwner!: () => void;
+    const ownerRelease = new Promise<void>((resolve) => { releaseOwner = resolve; });
+    PostgresCustomerController.ownerBarrier = { started: startOwner, released: ownerRelease };
+    const app = await NestFactory.create<NestFastifyApplication>(PostgresCustomerModule, new FastifyAdapter({ logger: false }));
+    app.setGlobalPrefix('api/v1');
+    app.useGlobalGuards(new PostgresPrincipalGuard(actorId, organizationId));
+    app.useGlobalInterceptors(new IdempotencyExecutionInterceptor(repository));
+    await app.init();
+    const request = {
+      method: 'POST' as const,
+      url: '/api/v1/customers',
+      headers: { 'idempotency-key': `http-postgres-observer-${randomUUID()}`, 'x-csrf-token': 'csrf-token-value' },
+      payload: { name: 'Observer customer' },
+    };
+    const owner = app.getHttpAdapter().getInstance().inject(request);
+    try {
+      await ownerStarted;
+      const observer = await Promise.race([
+        app.getHttpAdapter().getInstance().inject(request),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('real PostgreSQL HTTP observer remained blocked')), 1_000)),
+      ]);
+      expect(observer.statusCode).toBe(202);
+      expect(observer.json()).toMatchObject({ state: 'IN_PROGRESS', operationId: 'createCustomer' });
+      releaseOwner();
+      const completed = await owner;
+      expect(completed.statusCode).toBe(201);
+      expect(PostgresCustomerController.executions).toBe(1);
+    } finally {
+      releaseOwner();
+      await owner;
+      PostgresCustomerController.ownerBarrier = undefined;
       await app.close();
     }
   });
