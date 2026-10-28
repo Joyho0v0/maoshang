@@ -65,7 +65,6 @@ export interface AuditProvenance {
 }
 
 const APPROVERS = ['高级 Web 后端架构师', '高级 Web 前端架构师', '全栈交付 Leader'] as const;
-const FRONTEND_PROBLEM_DECISION = '高级 Web 前端架构师 comment 01a18255-64b3-76bf-8908-62ebcfe9eb72';
 const BASELINE_REVISION = '9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25';
 const CANDIDATE_REVISION = '9138ea8f5cf130c3664367e39cafc18812edaa55';
 const BREAKING_COMMAND = 'npm run contract:breaking (approved baseline remains unchanged)';
@@ -114,32 +113,15 @@ export function buildAuditDocument(inventory: BreakingInventory, digests: {
       command: provenance.generatorCommand,
     },
     count: inventory.count,
-    inventoryMethod: 'All structured BreakingChange records from the same normalized comparator used by the fail-fast gate; entries retain exact paths and stable identities, raw old/new values via the content-addressed valueStore, and complete affected-path groups after template expansion and Swagger dereference.',
-    promotionStatus: 'blocked: approved baseline is intentionally unchanged; only the Problem v1 semantic direction has frontend acceptance, not promotion authorization.',
+    inventoryMethod: 'All structured BreakingChange records from the same normalized comparator used by the fail-fast gate; entries retain exact paths and stable identities, raw old/new values via the content-addressed valueStore, and complete affected-path groups after template expansion and Swagger dereference. Authorization is recorded separately by stable comparator identity in breaking-decisions.json.',
+    promotionStatus: 'blocked: approved baseline is intentionally unchanged; every entry remains pending in this inventory until its stable comparator identity is reviewed in breaking-decisions.json.',
     affectedPathGroups: inventory.affectedPathGroups,
     valueStore: inventory.valueStore,
     entries: inventory.entries,
   };
 }
 function enrichEntry(index: number, change: BreakingChange, affectedPathGroupId: string, storeValue: (value: unknown) => ValueReference): BreakingInventoryEntry {
-  const isProblem = change.jsonPath.includes('Problem') || change.jsonPath.includes('/auth/sessions');
-  const isCommandStatus = change.jsonPath.includes('CommandStatus') || change.jsonPath.includes('/commands/status');
-  const isInventory = change.jsonPath.includes('/inventory/') || change.jsonPath.includes('Inventory');
-  const domain = isProblem
-    ? 'Joint Frozen v1 Problem/status/code/meta consumer contract'
-    : isCommandStatus
-      ? 'CommandStatus/幂等公共状态契约'
-      : isInventory
-        ? 'Inventory domain request/response contract'
-        : 'Shared OpenAPI operation/request/response contract';
-  const decisionOwner = isProblem || isCommandStatus
-    ? '高级 Web 后端架构师 + 高级 Web 前端架构师'
-    : '高级 Web 后端架构师 + 高级 Web 前端架构师 + 全栈交付 Leader';
-  const impact = isProblem || isCommandStatus || isInventory ? 'direct FE/BE consumer or runtime contract impact' : 'operation/API compatibility impact';
-  const status = isProblem ? 'semantic-direction-accepted; promotion-not-authorized' : 'pending-owner-decision';
-  const action = isProblem
-    ? 'retain strict candidate semantics and obtain authorized baseline evolution after complete inventory review'
-    : 'correct candidate or obtain explicit authorized baseline evolution before promotion';
+  const status = 'pending-owner-decision';
   return {
     id: `BRK-${String(index).padStart(3, '0')}`,
     jsonPath: change.jsonPath,
@@ -147,22 +129,20 @@ function enrichEntry(index: number, change: BreakingChange, affectedPathGroupId:
     newValue: storeValue(change.newValue),
     reason: change.reason,
     ownership: {
-      domain,
-      decisionOwner,
-      consumerImpact: impact,
+      domain: 'OpenAPI compatibility change; exact consumer impact is reviewed by stable comparator identity.',
+      decisionOwner: APPROVERS.join(' + '),
+      consumerImpact: 'operation/API compatibility impact; no path-derived authorization is inferred',
       scope: `stable comparator identity: ${change.stableIdentity}`,
     },
     disposition: {
       status,
-      action,
-      rationale: isProblem
-        ? `Problem v1 strict code/status/meta semantics were accepted only as a semantic direction by ${FRONTEND_PROBLEM_DECISION}; this entry is not promotion authorization.`
-        : `No authorized decision exists for this exact path; preserve the approved baseline until the named owners decide whether to fix the candidate or authorize an explicit baseline evolution.`,
+      action: 'correct candidate or obtain explicit authorized baseline evolution before promotion',
+      rationale: 'No decision is inferred from the URL, schema name, operation, or path. The identity-keyed breaking-decisions.json manifest is the only source of semantic disposition.',
     },
     authorization: {
       status,
       requiredApprovers: APPROVERS,
-      acceptedSemanticDecisionBy: isProblem ? [FRONTEND_PROBLEM_DECISION] : [],
+      acceptedSemanticDecisionBy: [],
       baselinePromotion: `not authorized in revision ${CANDIDATE_REVISION}`,
     },
     verification: {
