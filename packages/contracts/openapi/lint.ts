@@ -1,11 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { parse } from 'yaml';
+import { assertOperationManifest } from './contract-manifest.js';
 
 const source = await readFile(new URL('./openapi.yaml', import.meta.url), 'utf8');
 const document = parse(source) as Record<string, unknown>;
 if (document.openapi !== '3.1.0') throw new Error('OpenAPI must be 3.1.0.');
 const paths = document.paths as Record<string, Record<string, unknown>>;
 const pathItems = (document['x-operationTemplates'] ?? {}) as Record<string, Record<string, unknown>>;
+assertOperationManifest(document);
 const seen = new Set<string>();
 let operationCount = 0;
 for (const [path, methods] of Object.entries(paths)) {

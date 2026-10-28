@@ -12,14 +12,15 @@ CREATE TABLE IF NOT EXISTS core.user_account (
   id uuid PRIMARY KEY,
   organization_id uuid NOT NULL REFERENCES core.organization(id),
   status text NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'DISABLED')),
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (organization_id, id)
 );
 CREATE INDEX IF NOT EXISTS user_account_organization_idx ON core.user_account (organization_id, id);
 
 CREATE TABLE IF NOT EXISTS integration.idempotency_record (
   id uuid PRIMARY KEY,
   organization_id uuid NOT NULL REFERENCES core.organization(id),
-  actor_user_id uuid NOT NULL REFERENCES core.user_account(id),
+  actor_user_id uuid NOT NULL,
   operation_id text NOT NULL,
   key_hash bytea NOT NULL CHECK (octet_length(key_hash) = 32),
   request_hash bytea NOT NULL CHECK (octet_length(request_hash) = 32),
@@ -39,9 +40,11 @@ CREATE TABLE IF NOT EXISTS integration.idempotency_record (
   expires_at timestamptz NOT NULL,
   last_internal_error_code text,
   UNIQUE (organization_id, actor_user_id, operation_id, key_hash),
+  FOREIGN KEY (organization_id, actor_user_id) REFERENCES core.user_account (organization_id, id),
   CHECK (state = 'IN_PROGRESS' OR completed_at IS NOT NULL)
 );
 CREATE INDEX IF NOT EXISTS idempotency_organization_actor_idx ON integration.idempotency_record (organization_id, actor_user_id, id);
+CREATE INDEX IF NOT EXISTS idempotency_actor_idx ON integration.idempotency_record (actor_user_id, id);
 CREATE INDEX IF NOT EXISTS idempotency_lease_idx ON integration.idempotency_record (lease_expires_at, id) WHERE state = 'IN_PROGRESS';
 CREATE INDEX IF NOT EXISTS idempotency_expiry_idx ON integration.idempotency_record (expires_at, id) WHERE state IN ('SUCCEEDED', 'FAILED');
 
@@ -74,5 +77,9 @@ CREATE TABLE IF NOT EXISTS audit.event (
   summary jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE audit.event DROP CONSTRAINT IF EXISTS event_actor_user_id_fkey;
+ALTER TABLE audit.event DROP CONSTRAINT IF EXISTS event_actor_organization_fkey;
+ALTER TABLE audit.event ADD CONSTRAINT event_actor_organization_fkey FOREIGN KEY (organization_id, actor_user_id) REFERENCES core.user_account (organization_id, id);
 CREATE INDEX IF NOT EXISTS audit_event_organization_idx ON audit.event (organization_id, created_at, id);
+CREATE INDEX IF NOT EXISTS audit_event_organization_actor_idx ON audit.event (organization_id, actor_user_id, id);
 CREATE INDEX IF NOT EXISTS audit_event_actor_idx ON audit.event (actor_user_id, created_at, id);

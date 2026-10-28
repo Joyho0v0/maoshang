@@ -1,0 +1,753 @@
+openapi: 3.1.0
+info:
+  title: Autoflow CRM API
+  version: 0.1.0
+  description: Non-production Joint Contract v1 plus JC1-IS01 implementation supplement.
+  x-contract-version: JC1-v1+JC1-IS01
+servers:
+  - url: /api/v1
+    description: Versioned API base path; deployment host is intentionally unspecified.
+security:
+  - CookieSession: []
+tags:
+  - name: auth
+  - name: commands
+  - name: identity
+  - name: customers
+  - name: catalog
+  - name: orders
+  - name: inventory
+  - name: payments
+  - name: files
+  - name: documents
+  - name: operations
+  - name: audit
+paths:
+  /auth/csrf:
+    get:
+      security: []
+      tags: [auth]
+      operationId: getCsrfToken
+      responses:
+        '200': { $ref: '#/components/responses/CsrfToken' }
+  /auth/sessions:
+    post:
+      security: []
+      tags: [auth]
+      operationId: createSession
+      x-safety: { csrf: required, idempotency: exempt, ifMatch: exempt }
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      requestBody: { $ref: '#/components/requestBodies/SessionRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/Session' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /auth/sessions/current:
+    get:
+      tags: [auth]
+      operationId: getCurrentSession
+      responses:
+        '200': { $ref: '#/components/responses/Session' }
+        '401': { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [auth]
+      operationId: deleteCurrentSession
+      x-safety: { csrf: required, idempotency: exempt, ifMatch: exempt }
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }]
+      responses:
+        '204': { description: Session deleted. }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /commands/status:
+    get:
+      tags: [commands]
+      operationId: getCommandStatus
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyHeader' }
+        - { $ref: '#/components/parameters/CommandOperationHeader' }
+      responses:
+        '200': { $ref: '#/components/responses/CommandStatus' }
+        '404': { $ref: '#/components/responses/CommandNotFound' }
+
+  /users/{id}:
+    get: { $ref: '#/x-operationTemplates/getUser' }
+  /organizations/{id}/users:
+    post:
+      tags: [identity]
+      operationId: createUser
+      x-safety: { csrf: required, idempotency: required, ifMatch: exempt }
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+        - { $ref: '#/components/parameters/CsrfHeader' }
+        - { $ref: '#/components/parameters/IdempotencyHeader' }
+        - { $ref: '#/components/parameters/RequestIdHeader' }
+      requestBody: { $ref: '#/components/requestBodies/UserCreateRequest' }
+      responses:
+        '201': { $ref: '#/components/responses/User' }
+        '202': { $ref: '#/components/responses/CommandStatus' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /users/{id}/role-bindings:
+    put:
+      tags: [identity]
+      operationId: updateUserRoleBindings
+      x-safety: { csrf: required, idempotency: required, ifMatch: required }
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }, { $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/IfMatchHeader' }]
+      requestBody: { $ref: '#/components/requestBodies/RoleBindingsUpdateRequest' }
+      responses: { '200': { $ref: '#/components/responses/User' }, '202': { $ref: '#/components/responses/CommandStatus' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
+  /users/{id}/data-scope-grants:
+    put:
+      tags: [identity]
+      operationId: updateUserDataScopeGrants
+      x-safety: { csrf: required, idempotency: required, ifMatch: required }
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }, { $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/IfMatchHeader' }]
+      requestBody: { $ref: '#/components/requestBodies/DataScopeUpdateRequest' }
+      responses: { '200': { $ref: '#/components/responses/User' }, '202': { $ref: '#/components/responses/CommandStatus' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
+  /users/{id}/disable:
+    post:
+      tags: [identity]
+      operationId: disableUser
+      x-safety: { csrf: required, idempotency: required, ifMatch: required }
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }, { $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/IfMatchHeader' }]
+      responses: { '202': { $ref: '#/components/responses/CommandStatus' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
+
+  /customers:
+    get: { $ref: '#/x-operationTemplates/listCustomers' }
+    post:
+      tags: [customers]
+      operationId: createCustomer
+      x-safety: { csrf: required, idempotency: required, ifMatch: exempt }
+      parameters: [{ $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/RequestIdHeader' }]
+      requestBody: { $ref: '#/components/requestBodies/CustomerCreateRequest' }
+      responses: { '201': { $ref: '#/components/responses/Customer' }, '202': { $ref: '#/components/responses/CommandStatus' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
+  /customers/{id}:
+    get: { $ref: '#/x-operationTemplates/getCustomer' }
+    patch:
+      tags: [customers]
+      operationId: updateCustomer
+      x-safety: { csrf: required, idempotency: required, ifMatch: required }
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }, { $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/IfMatchHeader' }]
+      requestBody: { $ref: '#/components/requestBodies/CustomerUpdateRequest' }
+      responses: { '200': { $ref: '#/components/responses/Customer' }, '202': { $ref: '#/components/responses/CommandStatus' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
+  /customers/{id}/submit-approval:
+    post:
+      $ref: '#/x-operationTemplates/customerCommand'
+      operationId: submitCustomerApproval
+  /customers/{id}/approve:
+    post:
+      $ref: '#/x-operationTemplates/customerCommand'
+      operationId: approveCustomer
+  /customers/{id}/reject:
+    post:
+      $ref: '#/x-operationTemplates/customerCommand'
+      operationId: rejectCustomer
+  /customers/{id}/reassign:
+    post:
+      $ref: '#/x-operationTemplates/customerCommand'
+      operationId: reassignCustomer
+
+  /products:
+    get: { $ref: '#/x-operationTemplates/listProducts' }
+    post:
+      $ref: '#/x-operationTemplates/createResource'
+      operationId: createProduct
+  /products/{id}:
+    get: { $ref: '#/x-operationTemplates/getProduct' }
+    patch:
+      $ref: '#/x-operationTemplates/updateResource'
+      operationId: updateProduct
+  /skus:
+    get: { $ref: '#/x-operationTemplates/listSkus' }
+    post:
+      $ref: '#/x-operationTemplates/createResource'
+      operationId: createSku
+  /skus/{id}:
+    get: { $ref: '#/x-operationTemplates/getSku' }
+    patch:
+      $ref: '#/x-operationTemplates/updateResource'
+      operationId: updateSku
+
+  /orders:
+    get: { $ref: '#/x-operationTemplates/listOrders' }
+    post:
+      $ref: '#/x-operationTemplates/createResource'
+      operationId: createOrder
+  /orders/{id}:
+    get: { $ref: '#/x-operationTemplates/getOrder' }
+    patch:
+      $ref: '#/x-operationTemplates/updateResource'
+      operationId: updateOrder
+  /orders/{id}/transitions:
+    post:
+      $ref: '#/x-operationTemplates/orderCommand'
+      operationId: transitionOrder
+
+  /inventory/balances:
+    get:
+      $ref: '#/x-operationTemplates/listInventory'
+      operationId: listInventoryBalances
+  /inventory/movements:
+    get:
+      $ref: '#/x-operationTemplates/listInventory'
+      operationId: listInventoryMovements
+  /inventory/reservations:
+    get:
+      $ref: '#/x-operationTemplates/listInventory'
+      operationId: listInventoryReservations
+    post:
+      $ref: '#/x-operationTemplates/createResource'
+      operationId: createInventoryReservation
+  /inventory/reservations/{id}:
+    get: { $ref: '#/x-operationTemplates/getInventory' }
+  /inventory/reservations/{id}/release:
+    post:
+      $ref: '#/x-operationTemplates/updateCommand'
+      operationId: releaseInventoryReservation
+  /inventory/observations:
+    get:
+      $ref: '#/x-operationTemplates/listInventory'
+      operationId: listInventoryObservations
+    post:
+      $ref: '#/x-operationTemplates/createResource'
+      operationId: createInventoryObservation
+  /inventory/operations/{id}:
+    get: { $ref: '#/x-operationTemplates/getInventoryOperation' }
+  /inventory/initial-receipts:
+    post:
+      $ref: '#/x-operationTemplates/createResource'
+      operationId: createInitialReceipt
+  /inventory/receipts:
+    post:
+      $ref: '#/x-operationTemplates/createResource'
+      operationId: createInventoryReceipt
+  /inventory/adjustments:
+    post:
+      $ref: '#/x-operationTemplates/createResource'
+      operationId: createInventoryAdjustment
+  /inventory/issues:
+    post:
+      $ref: '#/x-operationTemplates/createResource'
+      operationId: issueInventory
+  /inventory/operations/{operationId}/reverse:
+    post:
+      tags: [inventory]
+      operationId: reverseInventoryOperation
+      x-safety: { csrf: required, idempotency: required, ifMatch: required }
+      parameters: [{ $ref: '#/components/parameters/OperationId' }, { $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/IfMatchHeader' }]
+      requestBody: { $ref: '#/components/requestBodies/InventoryCommandRequest' }
+      responses: { '201': { $ref: '#/components/responses/InventoryOperation' }, '202': { $ref: '#/components/responses/CommandStatus' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
+
+  /payments:
+    get: { $ref: '#/x-operationTemplates/listPayments' }
+    post:
+      $ref: '#/x-operationTemplates/createResource'
+      operationId: createPayment
+  /payments/{id}:
+    get: { $ref: '#/x-operationTemplates/getPayment' }
+  /payments/{id}/proofs:
+    post:
+      $ref: '#/x-operationTemplates/updateCommand'
+      operationId: attachPaymentProof
+  /payments/{id}/submit-review:
+    post:
+      $ref: '#/x-operationTemplates/updateCommand'
+      operationId: submitPaymentReview
+  /payments/{id}/review:
+    post:
+      $ref: '#/x-operationTemplates/updateCommand'
+      operationId: reviewPayment
+  /payments/{id}/reverse:
+    post:
+      $ref: '#/x-operationTemplates/updateCommand'
+      operationId: reversePayment
+
+  /files/{id}:
+    get: { $ref: '#/x-operationTemplates/getFile' }
+  /files/upload-intents:
+    post:
+      $ref: '#/x-operationTemplates/createResource'
+      operationId: createUploadIntent
+  /files/{id}/complete:
+    post:
+      $ref: '#/x-operationTemplates/updateCommand'
+      operationId: completeUpload
+  /files/{id}/download-intents:
+    post:
+      tags: [files]
+      operationId: createDownloadIntent
+      x-safety: { csrf: required, idempotency: exempt, ifMatch: exempt }
+      parameters: [{ $ref: '#/components/parameters/ResourceId' }, { $ref: '#/components/parameters/CsrfHeader' }]
+      responses: { '201': { $ref: '#/components/responses/Resource' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '404': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
+
+  /orders/{orderId}/documents:
+    get: { $ref: '#/x-operationTemplates/listDocuments' }
+    post:
+      $ref: '#/x-operationTemplates/createDocument'
+      operationId: createDocument
+  /documents/{id}:
+    get: { $ref: '#/x-operationTemplates/getDocument' }
+    patch:
+      $ref: '#/x-operationTemplates/updateResource'
+      operationId: updateDocument
+  /documents/{id}/versions:
+    post:
+      $ref: '#/x-operationTemplates/updateCommand'
+      operationId: createDocumentVersion
+  /documents/{id}/submit:
+    post:
+      $ref: '#/x-operationTemplates/updateCommand'
+      operationId: submitDocument
+  /documents/{id}/approve:
+    post:
+      $ref: '#/x-operationTemplates/updateCommand'
+      operationId: approveDocument
+  /documents/{id}/reject:
+    post:
+      $ref: '#/x-operationTemplates/updateCommand'
+      operationId: rejectDocument
+  /documents/{id}/finalize:
+    post:
+      $ref: '#/x-operationTemplates/updateCommand'
+      operationId: finalizeDocument
+  /documents/{id}/issue:
+    post:
+      $ref: '#/x-operationTemplates/updateCommand'
+      operationId: issueDocument
+  /documents/{id}/void:
+    post:
+      $ref: '#/x-operationTemplates/updateCommand'
+      operationId: voidDocument
+
+  /tasks:
+    get: { $ref: '#/x-operationTemplates/listTasks' }
+    post:
+      $ref: '#/x-operationTemplates/createResource'
+      operationId: createTask
+  /tasks/{id}:
+    get: { $ref: '#/x-operationTemplates/getTask' }
+  /tasks/{id}/complete:
+    post:
+      $ref: '#/x-operationTemplates/updateCommand'
+      operationId: completeTask
+  /audit-events:
+    get: { $ref: '#/x-operationTemplates/listAudit' }
+
+components:
+  securitySchemes:
+    CookieSession:
+      type: apiKey
+      in: cookie
+      name: session_id
+  parameters:
+    ResourceId: { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    OperationId: { name: operationId, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    CsrfHeader: { name: X-CSRF-Token, in: header, required: true, schema: { type: string, minLength: 16, maxLength: 512 } }
+    IdempotencyHeader: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 1, maxLength: 128, pattern: '^[\x21-\x7E]+$' } }
+    IfMatchHeader: { name: If-Match, in: header, required: true, schema: { type: string, pattern: '^"v[1-9][0-9]*"$' } }
+    RequestIdHeader: { name: X-Request-ID, in: header, required: false, schema: { $ref: '#/components/schemas/Uuid' } }
+    CommandOperationHeader: { name: X-Command-Operation, in: header, required: true, schema: { type: string, minLength: 1, maxLength: 128 } }
+    Cursor: { name: cursor, in: query, required: false, schema: { type: string, minLength: 1, maxLength: 512 } }
+    PageSize: { name: pageSize, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+    Sort: { name: sort, in: query, required: false, schema: { type: string, minLength: 1, maxLength: 256 } }
+    Filter: { name: filter, in: query, required: false, schema: { type: string, minLength: 1, maxLength: 2048 } }
+  requestBodies:
+    JsonObject:
+      required: true
+      content: { application/json: { schema: { $ref: '#/components/schemas/JsonObject' } } }
+    SessionRequest:
+      required: true
+      content: { application/json: { schema: { $ref: '#/components/schemas/SessionRequest' } } }
+    UserCreateRequest: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UserCreateRequest' } } } }
+    RoleBindingsUpdateRequest: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RoleBindingsUpdateRequest' } } } }
+    DataScopeUpdateRequest: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DataScopeUpdateRequest' } } } }
+    CustomerCreateRequest: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CustomerCreateRequest' } } } }
+    CustomerUpdateRequest: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CustomerUpdateRequest' } } } }
+    CustomerCommandRequest: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CustomerCommandRequest' } } } }
+    InventoryCommandRequest: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/InventoryCommandRequest' } } } }
+    ResourceCreateRequest: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ResourceCreateRequest' } } } }
+    ResourceUpdateRequest: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ResourceUpdateRequest' } } } }
+    ResourceCommandRequest: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ResourceCommandRequest' } } } }
+    DocumentCreateRequest: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DocumentCreateRequest' } } } }
+  responses:
+    Resource: { description: A typed resource envelope., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Resource' } } } }
+    PageResource: { description: Cursor-paginated typed resources., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { schema: { type: string } } }, content: { application/json: { schema: { $ref: '#/components/schemas/PageResource' } } } }
+    User: { description: User resource., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
+    Customer: { description: Customer resource., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Customer' } } } }
+    Session: { description: Session resource., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
+    CsrfToken: { description: Session-bound CSRF token., headers: { Cache-Control: { schema: { type: string, const: no-store } } }, content: { application/json: { schema: { $ref: '#/components/schemas/CsrfToken' } } } }
+    CommandStatus: { description: Authoritative idempotent command state., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Retry-After: { schema: { type: string } }, Cache-Control: { schema: { type: string, const: no-store } }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' }, Content-Location: { $ref: '#/components/headers/ContentLocation' } }, content: { application/json: { schema: { $ref: '#/components/schemas/CommandStatus' } } } }
+    InventoryOperation: { description: Inventory operation resource., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/InventoryOperation' } } } }
+    Problem:
+      description: RFC 9457 problem response.
+      headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            KeyReused: { $ref: '#/components/examples/KeyReused' }
+            InventoryInsufficient: { $ref: '#/components/examples/InventoryInsufficient' }
+            OperationAlreadyReversed: { $ref: '#/components/examples/OperationAlreadyReversed' }
+            ReversalInvariant: { $ref: '#/components/examples/ReversalInvariant' }
+            CustomerApprovalConflict: { $ref: '#/components/examples/CustomerApprovalConflict' }
+    CsrfFailed:
+      description: CSRF is missing or invalid before side effects.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/CsrfFailedProblem' }, examples: { CsrfFailed: { $ref: '#/components/examples/CsrfFailed' } } } }
+    PreconditionRequired:
+      description: A required If-Match or Idempotency-Key header is missing.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/PreconditionRequiredProblem' } } }
+    CommandNotFound:
+      description: Command is not visible to this actor.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/CommandNotFoundProblem' }, examples: { CommandNotFound: { $ref: '#/components/examples/CommandNotFound' } } } }
+  headers:
+    RequestId: { description: Correlation identifier., schema: { $ref: '#/components/schemas/Uuid' } }
+    ETag: { description: Strong aggregate version tag., schema: { type: string, pattern: '^"v[1-9][0-9]*"$' } }
+    Location: { description: Created resource location., schema: { $ref: '#/components/schemas/Href' } }
+    ContentLocation: { description: Command status location., schema: { $ref: '#/components/schemas/Href' } }
+    IdempotentReplay: { description: Indicates a terminal result replay., schema: { type: string, enum: ['true'] } }
+  examples:
+    InProgress: { value: { commandId: f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2, operationId: reviewPayment, state: IN_PROGRESS, startedAt: '2026-10-28T05:00:00Z', completedAt: null, expiresAt: '2026-10-29T05:00:00Z', retryAfterMs: 1000, httpStatus: null, resource: null, resultHref: null, problem: null } }
+    RecoveryRequired: { value: { commandId: f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2, operationId: reviewPayment, state: RECOVERY_REQUIRED, startedAt: '2026-10-28T05:00:00Z', completedAt: null, expiresAt: '2026-10-29T05:00:00Z', retryAfterMs: 0, httpStatus: null, resource: null, resultHref: null, problem: null } }
+    CommandNotFound: { value: { type: 'urn:autoflow:problem:command-not-found', title: Command not found, status: 404, code: COMMAND_NOT_FOUND, requestId: f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2, retryable: false } }
+    KeyReused: { value: { type: 'urn:autoflow:problem:idempotency-key-reused', title: Idempotency key reused, status: 409, code: IDEMPOTENCY_KEY_REUSED, requestId: f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2, retryable: false, meta: { operationId: createCustomer, commandStatusHref: /api/v1/commands/status } } }
+    CsrfFailed: { value: { type: 'urn:autoflow:problem:csrf-failed', title: CSRF failed, status: 403, code: CSRF_FAILED, requestId: f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2, retryable: true, meta: { refreshHref: /api/v1/auth/csrf } } }
+    InventoryInsufficient: { value: { type: 'urn:autoflow:problem:inventory-insufficient', title: Inventory insufficient, status: 409, code: INVENTORY_INSUFFICIENT, requestId: f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2, retryable: false, meta: { shortages: [{ skuId: 2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019, requested: '3', available: '1', unit: PCS }] } } }
+    OperationAlreadyReversed: { value: { type: 'urn:autoflow:problem:operation-already-reversed', title: Operation already reversed, status: 409, code: OPERATION_ALREADY_REVERSED, requestId: f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2, retryable: false, meta: { operationId: f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2, reversalOperationId: f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2, reversalHref: /api/v1/inventory/operations/f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2 } } }
+    ReversalInvariant: { value: { type: 'urn:autoflow:problem:reversal-would-violate-invariant', title: Reversal would violate invariant, status: 409, code: REVERSAL_WOULD_VIOLATE_INVARIANT, requestId: f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2, retryable: false, meta: { violations: [{ skuId: 2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019, locationId: 2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019, onHand: '1', reserved: '1', delta: '-3', unit: PCS }] } } }
+    CustomerApprovalConflict: { value: { type: 'urn:autoflow:problem:customer-approval-state-conflict', title: Customer approval state conflict, status: 409, code: CUSTOMER_APPROVAL_STATE_CONFLICT, requestId: f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2, retryable: false, meta: { customerId: f8b6e3a9-3a0a-4ff8-b0f3-8a8225e7f019, currentCustomerStatus: APPROVED, currentVersion: 3 } } }
+  schemas:
+    Uuid: { type: string, format: uuid }
+    DecimalString: { type: string, pattern: '^-?\d+(\.\d+)?$' }
+    JsonObject: { type: object, additionalProperties: true, description: Nested extension object only; never used as a top-level request or response DTO. }
+    ResourceType: { type: string, enum: [USER, ORGANIZATION, CUSTOMER, PRODUCT, SKU, ORDER, PAYMENT, FILE, DOCUMENT, TASK, INVENTORY_OPERATION, INVENTORY_RESERVATION] }
+    ResourcePayload:
+      type: object
+      required: [resourceType]
+      properties:
+        resourceType: { $ref: '#/components/schemas/ResourceType' }
+        name: { type: string, minLength: 1, maxLength: 256 }
+        description: { type: string, maxLength: 2048 }
+        status: { type: string, maxLength: 64 }
+        lines: { type: array, maxItems: 1000, items: { $ref: '#/components/schemas/JsonObject' } }
+        metadata: { type: object, additionalProperties: true }
+      additionalProperties: false
+    ResourceCreateRequest:
+      type: object
+      required: [resourceType, name]
+      properties: { resourceType: { $ref: '#/components/schemas/ResourceType' }, name: { type: string, minLength: 1, maxLength: 256 }, description: { type: string, maxLength: 2048 }, metadata: { type: object, additionalProperties: true } }
+      additionalProperties: false
+    ResourceUpdateRequest:
+      type: object
+      minProperties: 1
+      properties: { name: { type: string, minLength: 1, maxLength: 256 }, description: { type: string, maxLength: 2048 }, status: { type: string, maxLength: 64 }, metadata: { type: object, additionalProperties: true } }
+      additionalProperties: false
+    ResourceCommandRequest:
+      type: object
+      required: [action]
+      properties: { action: { type: string, minLength: 1, maxLength: 128 }, reason: { type: string, maxLength: 2048 }, metadata: { type: object, additionalProperties: true } }
+      additionalProperties: false
+    UserCreateRequest:
+      type: object
+      required: [username, role]
+      properties: { username: { type: string, minLength: 1, maxLength: 320 }, role: { type: string, minLength: 1, maxLength: 128 }, organizationId: { $ref: '#/components/schemas/Uuid' } }
+      additionalProperties: false
+    RoleBindingsUpdateRequest:
+      type: object
+      required: [bindings]
+      properties: { bindings: { type: array, minItems: 1, maxItems: 100, items: { type: string, minLength: 1, maxLength: 128 } } }
+      additionalProperties: false
+    DataScopeUpdateRequest:
+      type: object
+      required: [grants]
+      properties: { grants: { type: array, maxItems: 100, items: { type: object, required: [scope], properties: { scope: { type: string, minLength: 1, maxLength: 256 } }, additionalProperties: false } } }
+      additionalProperties: false
+    CustomerCreateRequest:
+      type: object
+      required: [name, ownerUserId]
+      properties: { name: { type: string, minLength: 1, maxLength: 256 }, ownerUserId: { $ref: '#/components/schemas/Uuid' }, businessGroupId: { $ref: '#/components/schemas/Uuid' }, contacts: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/JsonObject' } } }
+      additionalProperties: false
+    CustomerUpdateRequest:
+      type: object
+      minProperties: 1
+      properties: { name: { type: string, minLength: 1, maxLength: 256 }, ownerUserId: { $ref: '#/components/schemas/Uuid' }, businessGroupId: { $ref: '#/components/schemas/Uuid' }, contacts: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/JsonObject' } } }
+      additionalProperties: false
+    CustomerCommandRequest:
+      type: object
+      required: [action]
+      properties: { action: { type: string, enum: [SUBMIT_APPROVAL, APPROVE, REJECT, REASSIGN] }, reason: { type: string, maxLength: 2048 }, assigneeUserId: { $ref: '#/components/schemas/Uuid' } }
+      additionalProperties: false
+    InventoryCommandRequest:
+      type: object
+      required: [operationType, lines]
+      properties: { operationType: { type: string, enum: [INITIAL_RECEIPT, RECEIPT, ADJUSTMENT, ISSUE, REVERSAL] }, lines: { type: array, minItems: 1, maxItems: 1000, items: { type: object, required: [skuId, quantity], properties: { skuId: { $ref: '#/components/schemas/Uuid' }, quantity: { $ref: '#/components/schemas/DecimalString' }, unit: { type: string, minLength: 1, maxLength: 32 } }, additionalProperties: false } } }
+      additionalProperties: false
+    DocumentCreateRequest:
+      type: object
+      required: [title, documentType]
+      properties: { title: { type: string, minLength: 1, maxLength: 256 }, documentType: { type: string, minLength: 1, maxLength: 128 }, fileId: { $ref: '#/components/schemas/Uuid' }, metadata: { type: object, additionalProperties: true } }
+      additionalProperties: false
+    PageMeta:
+      type: object
+      required: [nextCursor]
+      properties: { nextCursor: { type: [string, 'null'], minLength: 1 }, pageSize: { type: integer, minimum: 1, maximum: 100 }, sort: { type: string }, filter: { type: string } }
+      additionalProperties: false
+    PageResource:
+      type: object
+      required: [items, page]
+      properties: { items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/Resource' } }, page: { $ref: '#/components/schemas/PageMeta' } }
+      additionalProperties: false
+    User:
+      allOf:
+        - $ref: '#/components/schemas/ResourceMeta'
+        - type: object
+          required: [username, role, status]
+          properties: { username: { type: string, minLength: 1, maxLength: 320 }, role: { type: string, minLength: 1, maxLength: 128 }, status: { type: string, enum: [ACTIVE, DISABLED] } }
+          additionalProperties: false
+    Money:
+      type: object
+      required: [amount, currency]
+      properties: { amount: { $ref: '#/components/schemas/DecimalString' }, currency: { type: string, pattern: '^[A-Z]{3}$' } }
+      additionalProperties: false
+    Quantity:
+      type: object
+      required: [value, unit]
+      properties: { value: { $ref: '#/components/schemas/DecimalString' }, unit: { type: string, minLength: 1, maxLength: 32 } }
+      additionalProperties: false
+    ResourceMeta:
+      type: object
+      required: [id, organizationId, version, createdAt, updatedAt]
+      properties: { id: { $ref: '#/components/schemas/Uuid' }, organizationId: { $ref: '#/components/schemas/Uuid' }, version: { type: integer, minimum: 1 }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
+      additionalProperties: false
+    Resource:
+      type: object
+      required: [id, version, href, data]
+      properties: { id: { $ref: '#/components/schemas/Uuid' }, version: { type: integer, minimum: 1 }, href: { $ref: '#/components/schemas/Href' }, data: { $ref: '#/components/schemas/ResourcePayload' } }
+      additionalProperties: false
+    Capability: { type: string, pattern: '^[a-z][a-z0-9.:-]{1,127}$' }
+    SessionRequest:
+      type: object
+      required: [provider]
+      properties: { provider: { type: string, enum: [LOCAL_PASSWORD, OIDC_SSO] }, username: { type: string, minLength: 1, maxLength: 320 }, password: { type: string, minLength: 1, maxLength: 1024 }, authorizationCode: { type: string, minLength: 1, maxLength: 4096 } }
+      additionalProperties: false
+    Session:
+      type: object
+      required: [user, capabilities, scopeSummary, csrfToken]
+      properties: { user: { $ref: '#/components/schemas/Resource' }, capabilities: { type: array, items: { $ref: '#/components/schemas/Capability' } }, scopeSummary: { $ref: '#/components/schemas/JsonObject' }, csrfToken: { type: string, minLength: 16 }, authzVersion: { type: integer, minimum: 1 }, sessionEpoch: { type: integer, minimum: 1 } }
+      additionalProperties: false
+    CsrfToken:
+      type: object
+      required: [csrfToken, expiresAt]
+      properties: { csrfToken: { type: string, minLength: 16 }, expiresAt: { type: string, format: date-time } }
+      additionalProperties: false
+    ProblemViolation:
+      type: object
+      required: [field, code, message]
+      properties: { field: { type: string, maxLength: 256 }, code: { type: string, pattern: '^[A-Z][A-Z0-9_]{2,63}$' }, message: { type: string, maxLength: 500 } }
+      additionalProperties: true
+    VersionConflictMeta:
+      type: object
+      required: [currentVersion, currentEtag, resourceHref]
+      properties: { currentVersion: { type: integer, minimum: 1 }, currentEtag: { type: string, pattern: '^"v[1-9][0-9]*"$' }, resourceHref: { type: string, pattern: '^/api/v1/' } }
+      additionalProperties: false
+    InventoryShortage:
+      type: object
+      required: [skuId, requested, available, unit]
+      properties: { skuId: { $ref: '#/components/schemas/Uuid' }, requested: { $ref: '#/components/schemas/DecimalString' }, available: { $ref: '#/components/schemas/DecimalString' }, unit: { type: string } }
+      additionalProperties: false
+    InventoryInsufficientMeta:
+      type: object
+      required: [shortages]
+      properties: { shortages: { type: array, minItems: 1, items: { $ref: '#/components/schemas/InventoryShortage' } } }
+      additionalProperties: false
+    ReversalViolation:
+      type: object
+      required: [skuId, locationId, onHand, reserved, delta, unit]
+      properties: { skuId: { $ref: '#/components/schemas/Uuid' }, locationId: { $ref: '#/components/schemas/Uuid' }, onHand: { $ref: '#/components/schemas/DecimalString' }, reserved: { $ref: '#/components/schemas/DecimalString' }, delta: { $ref: '#/components/schemas/DecimalString' }, unit: { type: string } }
+      additionalProperties: false
+    ReversalInvariantMeta:
+      type: object
+      required: [violations]
+      properties: { violations: { type: array, minItems: 1, items: { $ref: '#/components/schemas/ReversalViolation' } } }
+      additionalProperties: false
+    CustomerApprovalConflictMeta:
+      type: object
+      required: [customerId, currentCustomerStatus, currentVersion]
+      properties: { customerId: { $ref: '#/components/schemas/Uuid' }, currentCustomerStatus: { type: string, enum: [DRAFT, PENDING_APPROVAL, APPROVED, INACTIVE] }, currentApprovalAttemptId: { $ref: '#/components/schemas/Uuid' }, currentVersion: { type: integer, minimum: 1 } }
+      additionalProperties: false
+    CsrfFailedMeta:
+      type: object
+      required: [refreshHref]
+      properties: { refreshHref: { const: /api/v1/auth/csrf } }
+      additionalProperties: false
+    IdempotencyKeyReusedMeta:
+      type: object
+      required: [operationId, commandStatusHref]
+      properties: { operationId: { type: string, minLength: 1 }, commandStatusHref: { $ref: '#/components/schemas/Href' } }
+      additionalProperties: false
+    StateConflictMeta:
+      type: object
+      required: [resourceType, resourceId, currentState]
+      properties: { resourceType: { type: string }, resourceId: { $ref: '#/components/schemas/Uuid' }, currentState: { type: string } }
+      additionalProperties: false
+    FileNotReadyMeta:
+      type: object
+      required: [fileId, state, statusHref]
+      properties: { fileId: { $ref: '#/components/schemas/Uuid' }, state: { type: string }, statusHref: { $ref: '#/components/schemas/Href' } }
+      additionalProperties: false
+    OperationAlreadyReversedMeta:
+      type: object
+      required: [operationId, reversalOperationId, reversalHref]
+      properties: { operationId: { $ref: '#/components/schemas/Uuid' }, reversalOperationId: { $ref: '#/components/schemas/Uuid' }, reversalHref: { $ref: '#/components/schemas/Href' } }
+      additionalProperties: false
+    ReversalNotAllowedMeta:
+      type: object
+      required: [operationId, operationType, currentStatus]
+      properties: { operationId: { $ref: '#/components/schemas/Uuid' }, operationType: { type: string }, currentStatus: { type: string } }
+      additionalProperties: false
+    ValidationMeta:
+      type: object
+      required: [violations]
+      properties: { violations: { type: array, minItems: 1, maxItems: 100, items: { $ref: '#/components/schemas/ProblemViolation' } } }
+      additionalProperties: false
+    Problem:
+      type: object
+      required: [type, title, status, code, requestId, retryable]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        detail: { type: string, maxLength: 2048 }
+        instance: { type: string, format: uri-reference }
+        code: { type: string, pattern: '^[A-Z][A-Z0-9_]{2,63}$' }
+        requestId: { $ref: '#/components/schemas/Uuid' }
+        traceId: { type: string, maxLength: 128 }
+        retryable: { type: boolean }
+        violations: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/ProblemViolation' } }
+        meta: { $ref: '#/components/schemas/TypedProblemMeta' }
+      additionalProperties: true
+    CsrfFailedProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [meta]
+          properties: { status: { const: 403 }, code: { const: CSRF_FAILED }, meta: { $ref: '#/components/schemas/CsrfFailedMeta' } }
+    PreconditionRequiredProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties: { status: { const: 428 }, code: { const: PRECONDITION_REQUIRED } }
+    CommandNotFoundProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties: { status: { const: 404 }, code: { const: COMMAND_NOT_FOUND } }
+    TypedProblemMeta:
+      oneOf: [{ $ref: '#/components/schemas/VersionConflictMeta' }, { $ref: '#/components/schemas/InventoryInsufficientMeta' }, { $ref: '#/components/schemas/ReversalInvariantMeta' }, { $ref: '#/components/schemas/CustomerApprovalConflictMeta' }, { $ref: '#/components/schemas/CsrfFailedMeta' }, { $ref: '#/components/schemas/IdempotencyKeyReusedMeta' }, { $ref: '#/components/schemas/StateConflictMeta' }, { $ref: '#/components/schemas/FileNotReadyMeta' }, { $ref: '#/components/schemas/OperationAlreadyReversedMeta' }, { $ref: '#/components/schemas/ReversalNotAllowedMeta' }, { $ref: '#/components/schemas/ValidationMeta' }]
+    CommandStatusBase:
+      type: object
+      required: [commandId, operationId, state, startedAt, completedAt, expiresAt, retryAfterMs, httpStatus, resource, resultHref, problem]
+      properties: { commandId: { $ref: '#/components/schemas/Uuid' }, operationId: { type: string }, state: { type: string }, startedAt: { type: string, format: date-time }, completedAt: { type: [string, 'null'], format: date-time }, expiresAt: { type: string, format: date-time }, retryAfterMs: { type: integer, minimum: 0 }, httpStatus: { type: [integer, 'null'], minimum: 200, maximum: 599 }, resource: { type: ['object', 'null'] }, resultHref: { type: [string, 'null'], pattern: '^/api/v1/' }, problem: { oneOf: [{ $ref: '#/components/schemas/Problem' }, { type: 'null' }] } }
+    CommandStatusInProgress:
+      allOf:
+        - $ref: '#/components/schemas/CommandStatusBase'
+        - type: object
+          required: [state, retryAfterMs]
+          properties: { state: { const: IN_PROGRESS }, retryAfterMs: { type: integer, minimum: 1 }, completedAt: { const: null }, httpStatus: { const: null }, resource: { const: null }, resultHref: { const: null }, problem: { const: null } }
+    CommandStatusRecovery:
+      allOf:
+        - $ref: '#/components/schemas/CommandStatusBase'
+        - type: object
+          properties: { state: { const: RECOVERY_REQUIRED }, retryAfterMs: { const: 0 }, completedAt: { const: null }, httpStatus: { const: null }, resource: { const: null }, resultHref: { const: null }, problem: { const: null } }
+    CommandStatusSucceeded:
+      allOf:
+        - $ref: '#/components/schemas/CommandStatusBase'
+        - type: object
+          required: [completedAt, httpStatus]
+          properties: { state: { const: SUCCEEDED }, completedAt: { type: string, format: date-time }, httpStatus: { type: integer, minimum: 200, maximum: 299 }, problem: { const: null } }
+    CommandStatusFailed:
+      allOf:
+        - $ref: '#/components/schemas/CommandStatusBase'
+        - type: object
+          required: [completedAt, httpStatus, problem]
+          properties: { state: { const: FAILED }, completedAt: { type: string, format: date-time }, httpStatus: { type: integer, minimum: 400, maximum: 599 }, problem: { $ref: '#/components/schemas/Problem' } }
+    CommandStatus:
+      oneOf: [{ $ref: '#/components/schemas/CommandStatusInProgress' }, { $ref: '#/components/schemas/CommandStatusRecovery' }, { $ref: '#/components/schemas/CommandStatusSucceeded' }, { $ref: '#/components/schemas/CommandStatusFailed' }]
+      discriminator: { propertyName: state, mapping: { IN_PROGRESS: '#/components/schemas/CommandStatusInProgress', RECOVERY_REQUIRED: '#/components/schemas/CommandStatusRecovery', SUCCEEDED: '#/components/schemas/CommandStatusSucceeded', FAILED: '#/components/schemas/CommandStatusFailed' } }
+    CustomerApprovalSummary:
+      type: object
+      required: [latestOutcome, attemptId, attemptNo, canResubmit]
+      properties: { latestOutcome: { type: string, enum: [PENDING, APPROVED, REJECTED] }, attemptId: { $ref: '#/components/schemas/Uuid' }, attemptNo: { type: integer, minimum: 1 }, reason: { type: string }, decidedAt: { type: string, format: date-time }, decidedBy: { $ref: '#/components/schemas/Uuid' }, canResubmit: { type: boolean } }
+      additionalProperties: false
+    Customer:
+      allOf:
+        - $ref: '#/components/schemas/ResourceMeta'
+        - type: object
+          required: [status, capabilities]
+          properties: { status: { type: string, enum: [DRAFT, PENDING_APPROVAL, APPROVED, INACTIVE] }, ownerUserId: { $ref: '#/components/schemas/Uuid' }, businessGroupId: { $ref: '#/components/schemas/Uuid' }, contacts: { type: array, items: { $ref: '#/components/schemas/JsonObject' } }, approvalSummary: { $ref: '#/components/schemas/CustomerApprovalSummary' }, capabilities: { type: array, items: { $ref: '#/components/schemas/Capability' } } }
+    InventoryOperation:
+      allOf:
+        - $ref: '#/components/schemas/ResourceMeta'
+        - type: object
+          required: [operationType, status, lines]
+          properties: { operationType: { type: string, enum: [INITIAL_RECEIPT, RECEIPT, ADJUSTMENT, ISSUE, REVERSAL] }, status: { type: string, enum: [DRAFT, POSTED, REVERSED, CANCELLED] }, reversalOperationId: { $ref: '#/components/schemas/Uuid' }, reversalHref: { type: string, pattern: '^/api/v1/' }, lines: { type: array, items: { $ref: '#/components/schemas/JsonObject' } } }
+    Href: { type: string, pattern: '^/api/v1/' }
+x-operationTemplates:
+  genericParameters: [{ $ref: '#/components/parameters/ResourceId' }]
+  getUser: { tags: [identity], operationId: getUser, parameters: [{ $ref: '#/components/parameters/ResourceId' }], responses: { '200': { $ref: '#/components/responses/Resource' }, '404': { $ref: '#/components/responses/Problem' } } }
+  listCustomers: { tags: [customers], operationId: listCustomers, parameters: [{ $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Filter' }], responses: { '200': { $ref: '#/components/responses/PageResource' } } }
+  getCustomer: { tags: [customers], operationId: getCustomer, parameters: [{ $ref: '#/components/parameters/ResourceId' }], responses: { '200': { $ref: '#/components/responses/Customer' }, '404': { $ref: '#/components/responses/Problem' } } }
+  customerCommand:
+    tags: [customers]
+    operationId: customerCommand
+    x-safety: { csrf: required, idempotency: required, ifMatch: required }
+    parameters: [{ $ref: '#/components/parameters/ResourceId' }, { $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/IfMatchHeader' }]
+    requestBody: { $ref: '#/components/requestBodies/CustomerCommandRequest' }
+    responses: { '200': { $ref: '#/components/responses/Customer' }, '202': { $ref: '#/components/responses/CommandStatus' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
+  createResource:
+    tags: [operations]
+    operationId: createResource
+    x-safety: { csrf: required, idempotency: required, ifMatch: exempt }
+    parameters: [{ $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }]
+    requestBody: { $ref: '#/components/requestBodies/ResourceCreateRequest' }
+    responses: { '201': { $ref: '#/components/responses/Resource' }, '202': { $ref: '#/components/responses/CommandStatus' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
+  updateResource:
+    tags: [operations]
+    operationId: updateResource
+    x-safety: { csrf: required, idempotency: required, ifMatch: required }
+    parameters: [{ $ref: '#/components/parameters/ResourceId' }, { $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/IfMatchHeader' }]
+    requestBody: { $ref: '#/components/requestBodies/ResourceUpdateRequest' }
+    responses: { '200': { $ref: '#/components/responses/Resource' }, '202': { $ref: '#/components/responses/CommandStatus' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
+  updateCommand:
+    tags: [operations]
+    operationId: updateCommand
+    x-safety: { csrf: required, idempotency: required, ifMatch: required }
+    parameters: [{ $ref: '#/components/parameters/ResourceId' }, { $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/IfMatchHeader' }]
+    requestBody: { $ref: '#/components/requestBodies/ResourceCommandRequest' }
+    responses: { '200': { $ref: '#/components/responses/Resource' }, '202': { $ref: '#/components/responses/CommandStatus' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
+  orderCommand: { $ref: '#/x-operationTemplates/updateCommand' }
+  listProducts: { tags: [catalog], operationId: listProducts, parameters: [{ $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Filter' }], responses: { '200': { $ref: '#/components/responses/PageResource' } } }
+  getProduct: { tags: [catalog], operationId: getProduct, parameters: [{ $ref: '#/components/parameters/ResourceId' }], responses: { '200': { $ref: '#/components/responses/Resource' }, '404': { $ref: '#/components/responses/Problem' } } }
+  listSkus: { tags: [catalog], operationId: listSkus, parameters: [{ $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Filter' }], responses: { '200': { $ref: '#/components/responses/PageResource' } } }
+  getSku: { tags: [catalog], operationId: getSku, parameters: [{ $ref: '#/components/parameters/ResourceId' }], responses: { '200': { $ref: '#/components/responses/Resource' }, '404': { $ref: '#/components/responses/Problem' } } }
+  listOrders: { tags: [orders], operationId: listOrders, parameters: [{ $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Filter' }], responses: { '200': { $ref: '#/components/responses/PageResource' } } }
+  getOrder: { tags: [orders], operationId: getOrder, parameters: [{ $ref: '#/components/parameters/ResourceId' }], responses: { '200': { $ref: '#/components/responses/Resource' }, '404': { $ref: '#/components/responses/Problem' } } }
+  listInventory: { tags: [inventory], operationId: listInventory, parameters: [{ $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Filter' }], responses: { '200': { $ref: '#/components/responses/PageResource' } } }
+  getInventory: { tags: [inventory], operationId: getInventory, parameters: [{ $ref: '#/components/parameters/ResourceId' }], responses: { '200': { $ref: '#/components/responses/Resource' }, '404': { $ref: '#/components/responses/Problem' } } }
+  getInventoryOperation: { tags: [inventory], operationId: getInventoryOperation, parameters: [{ $ref: '#/components/parameters/ResourceId' }], responses: { '200': { $ref: '#/components/responses/InventoryOperation' }, '404': { $ref: '#/components/responses/Problem' } } }
+  listPayments: { tags: [payments], operationId: listPayments, parameters: [{ $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Filter' }], responses: { '200': { $ref: '#/components/responses/PageResource' } } }
+  getPayment: { tags: [payments], operationId: getPayment, parameters: [{ $ref: '#/components/parameters/ResourceId' }], responses: { '200': { $ref: '#/components/responses/Resource' }, '404': { $ref: '#/components/responses/Problem' } } }
+  getFile: { tags: [files], operationId: getFile, parameters: [{ $ref: '#/components/parameters/ResourceId' }], responses: { '200': { $ref: '#/components/responses/Resource' }, '404': { $ref: '#/components/responses/Problem' } } }
+  listDocuments: { tags: [documents], operationId: listDocuments, parameters: [{ name: orderId, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }, { $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Filter' }], responses: { '200': { $ref: '#/components/responses/PageResource' } } }
+  getDocument: { tags: [documents], operationId: getDocument, parameters: [{ $ref: '#/components/parameters/ResourceId' }], responses: { '200': { $ref: '#/components/responses/Resource' }, '404': { $ref: '#/components/responses/Problem' } } }
+  listTasks: { tags: [operations], operationId: listTasks, parameters: [{ $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Filter' }], responses: { '200': { $ref: '#/components/responses/PageResource' } } }
+  getTask: { tags: [operations], operationId: getTask, parameters: [{ $ref: '#/components/parameters/ResourceId' }], responses: { '200': { $ref: '#/components/responses/Resource' }, '404': { $ref: '#/components/responses/Problem' } } }
+  listAudit: { tags: [audit], operationId: listAuditEvents, parameters: [{ $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Filter' }], responses: { '200': { $ref: '#/components/responses/PageResource' } } }
+  createDocument:
+    tags: [documents]
+    operationId: createDocument
+    x-safety: { csrf: required, idempotency: required, ifMatch: required }
+    parameters: [{ name: orderId, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }, { $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/IfMatchHeader' }]
+    requestBody: { $ref: '#/components/requestBodies/DocumentCreateRequest' }
+    responses: { '201': { $ref: '#/components/responses/Resource' }, '202': { $ref: '#/components/responses/CommandStatus' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }

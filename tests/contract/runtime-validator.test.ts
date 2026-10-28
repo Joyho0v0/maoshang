@@ -1,0 +1,36 @@
+import { parse } from 'yaml';
+import { readFile } from 'node:fs/promises';
+import { createContractValidator } from '../../packages/contracts/openapi/runtime-validator.js';
+
+describe('runtime contract validator', () => {
+  it('rejects malformed DecimalString and unknown existing enum values', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const validator = createContractValidator(document);
+
+    expect(validator.validate('DecimalString', 'not-a-decimal')).toBe(false);
+    expect(validator.validate('Customer', {
+      id: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2',
+      organizationId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2',
+      version: 1,
+      createdAt: '2026-10-28T05:00:00Z',
+      updatedAt: '2026-10-28T05:00:00Z',
+      status: 'NOT_A_CUSTOMER_STATE',
+      capabilities: [],
+    })).toBe(false);
+  });
+
+  it('validates each CommandStatus state as a discriminated runtime schema', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const validator = createContractValidator(document);
+    const base = {
+      commandId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2',
+      operationId: 'reviewPayment',
+      startedAt: '2026-10-28T05:00:00Z',
+      expiresAt: '2026-10-29T05:00:00Z',
+    };
+    expect(validator.validate('CommandStatus', { ...base, state: 'IN_PROGRESS', completedAt: null, retryAfterMs: 1000, httpStatus: null, resource: null, resultHref: null, problem: null })).toBe(true);
+    expect(validator.validate('CommandStatus', { ...base, state: 'RECOVERY_REQUIRED', completedAt: null, retryAfterMs: 0, httpStatus: null, resource: null, resultHref: null, problem: null })).toBe(true);
+    expect(validator.validate('CommandStatus', { ...base, state: 'SUCCEEDED', completedAt: '2026-10-28T05:01:00Z', retryAfterMs: 0, httpStatus: 201, resource: { id: base.commandId }, resultHref: null, problem: null })).toBe(true);
+    expect(validator.validate('CommandStatus', { ...base, state: 'FAILED', completedAt: '2026-10-28T05:01:00Z', retryAfterMs: 0, httpStatus: 409, resource: null, resultHref: null, problem: { type: 'urn:autoflow:problem:business-rule-violation', title: 'Conflict', status: 409, code: 'BUSINESS_RULE_VIOLATION', requestId: base.commandId, retryable: false } })).toBe(true);
+  });
+});

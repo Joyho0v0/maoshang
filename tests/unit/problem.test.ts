@@ -36,5 +36,30 @@ describe('RFC 9457 problem foundation', () => {
     expect(() => validateProblemMeta('INVENTORY_INSUFFICIENT', { shortages: [{ requested: 1 }] })).toThrow(
       ProblemError,
     );
+    expect(() => buildProblem({
+      status: 409,
+      code: 'VERSION_CONFLICT',
+      title: 'Version conflict',
+      requestId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2',
+    })).toThrow(ProblemError);
+    expect(() => buildProblem({
+      status: 400,
+      code: 'CSRF_FAILED',
+      title: 'CSRF failed',
+      requestId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2',
+      meta: { refreshHref: '/api/v1/auth/csrf' },
+    })).toThrow(ProblemError);
+    expect(() => buildProblem({
+      status: 503,
+      code: 'DEPENDENCY_UNAVAILABLE',
+      title: 'Dependency unavailable',
+      requestId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2',
+    })).not.toThrow();
+    expect(() => buildProblem({
+      status: 500,
+      code: 'DEPENDENCY_UNAVAILABLE',
+      title: 'Dependency unavailable',
+      requestId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2',
+    })).toThrow(ProblemError);
   });
 });

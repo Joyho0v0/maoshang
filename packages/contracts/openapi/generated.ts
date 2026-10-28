@@ -918,8 +918,108 @@ export interface components {
         /** Format: uuid */
         Uuid: string;
         DecimalString: string;
+        /** @description Nested extension object only; never used as a top-level request or response DTO. */
         JsonObject: {
             [key: string]: unknown;
+        };
+        /** @enum {string} */
+        ResourceType: "USER" | "ORGANIZATION" | "CUSTOMER" | "PRODUCT" | "SKU" | "ORDER" | "PAYMENT" | "FILE" | "DOCUMENT" | "TASK" | "INVENTORY_OPERATION" | "INVENTORY_RESERVATION";
+        ResourcePayload: {
+            resourceType: components["schemas"]["ResourceType"];
+            name?: string;
+            description?: string;
+            status?: string;
+            lines?: components["schemas"]["JsonObject"][];
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        ResourceCreateRequest: {
+            resourceType: components["schemas"]["ResourceType"];
+            name: string;
+            description?: string;
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        ResourceUpdateRequest: {
+            name?: string;
+            description?: string;
+            status?: string;
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        ResourceCommandRequest: {
+            action: string;
+            reason?: string;
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        UserCreateRequest: {
+            username: string;
+            role: string;
+            organizationId?: components["schemas"]["Uuid"];
+        };
+        RoleBindingsUpdateRequest: {
+            bindings: string[];
+        };
+        DataScopeUpdateRequest: {
+            grants: {
+                scope: string;
+            }[];
+        };
+        CustomerCreateRequest: {
+            name: string;
+            ownerUserId: components["schemas"]["Uuid"];
+            businessGroupId?: components["schemas"]["Uuid"];
+            contacts?: components["schemas"]["JsonObject"][];
+        };
+        CustomerUpdateRequest: {
+            name?: string;
+            ownerUserId?: components["schemas"]["Uuid"];
+            businessGroupId?: components["schemas"]["Uuid"];
+            contacts?: components["schemas"]["JsonObject"][];
+        };
+        CustomerCommandRequest: {
+            /** @enum {string} */
+            action: "SUBMIT_APPROVAL" | "APPROVE" | "REJECT" | "REASSIGN";
+            reason?: string;
+            assigneeUserId?: components["schemas"]["Uuid"];
+        };
+        InventoryCommandRequest: {
+            /** @enum {string} */
+            operationType: "INITIAL_RECEIPT" | "RECEIPT" | "ADJUSTMENT" | "ISSUE" | "REVERSAL";
+            lines: {
+                skuId: components["schemas"]["Uuid"];
+                quantity: components["schemas"]["DecimalString"];
+                unit?: string;
+            }[];
+        };
+        DocumentCreateRequest: {
+            title: string;
+            documentType: string;
+            fileId?: components["schemas"]["Uuid"];
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        PageMeta: {
+            nextCursor: string | null;
+            pageSize?: number;
+            sort?: string;
+            filter?: string;
+        };
+        PageResource: {
+            items: components["schemas"]["Resource"][];
+            page: components["schemas"]["PageMeta"];
+        };
+        User: components["schemas"]["ResourceMeta"] & {
+            username: string;
+            role: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "DISABLED";
         };
         Money: {
             amount: components["schemas"]["DecimalString"];
@@ -941,10 +1041,8 @@ export interface components {
         Resource: {
             id: components["schemas"]["Uuid"];
             version: number;
-            href?: string;
-            data?: components["schemas"]["JsonObject"];
-        } & {
-            [key: string]: unknown;
+            href: components["schemas"]["Href"];
+            data: components["schemas"]["ResourcePayload"];
         };
         Capability: string;
         SessionRequest: {
@@ -1006,6 +1104,37 @@ export interface components {
             currentApprovalAttemptId?: components["schemas"]["Uuid"];
             currentVersion: number;
         };
+        CsrfFailedMeta: {
+            /** @constant */
+            refreshHref: "/api/v1/auth/csrf";
+        };
+        IdempotencyKeyReusedMeta: {
+            operationId: string;
+            commandStatusHref: components["schemas"]["Href"];
+        };
+        StateConflictMeta: {
+            resourceType: string;
+            resourceId: components["schemas"]["Uuid"];
+            currentState: string;
+        };
+        FileNotReadyMeta: {
+            fileId: components["schemas"]["Uuid"];
+            state: string;
+            statusHref: components["schemas"]["Href"];
+        };
+        OperationAlreadyReversedMeta: {
+            operationId: components["schemas"]["Uuid"];
+            reversalOperationId: components["schemas"]["Uuid"];
+            reversalHref: components["schemas"]["Href"];
+        };
+        ReversalNotAllowedMeta: {
+            operationId: components["schemas"]["Uuid"];
+            operationType: string;
+            currentStatus: string;
+        };
+        ValidationMeta: {
+            violations: components["schemas"]["ProblemViolation"][];
+        };
         Problem: {
             /** Format: uri */
             type: string;
@@ -1019,9 +1148,7 @@ export interface components {
             traceId?: string;
             retryable: boolean;
             violations?: components["schemas"]["ProblemViolation"][];
-            meta?: {
-                [key: string]: unknown;
-            };
+            meta?: components["schemas"]["TypedProblemMeta"];
         } & {
             [key: string]: unknown;
         };
@@ -1030,10 +1157,7 @@ export interface components {
             status?: 403;
             /** @constant */
             code?: "CSRF_FAILED";
-            meta?: {
-                /** @constant */
-                refreshHref: "/api/v1/auth/csrf";
-            };
+            meta: components["schemas"]["CsrfFailedMeta"];
         };
         PreconditionRequiredProblem: components["schemas"]["Problem"] & {
             /** @constant */
@@ -1047,7 +1171,7 @@ export interface components {
             /** @constant */
             code?: "COMMAND_NOT_FOUND";
         };
-        TypedProblemMeta: components["schemas"]["VersionConflictMeta"] | components["schemas"]["InventoryInsufficientMeta"] | components["schemas"]["ReversalInvariantMeta"] | components["schemas"]["CustomerApprovalConflictMeta"];
+        TypedProblemMeta: components["schemas"]["VersionConflictMeta"] | components["schemas"]["InventoryInsufficientMeta"] | components["schemas"]["ReversalInvariantMeta"] | components["schemas"]["CustomerApprovalConflictMeta"] | components["schemas"]["CsrfFailedMeta"] | components["schemas"]["IdempotencyKeyReusedMeta"] | components["schemas"]["StateConflictMeta"] | components["schemas"]["FileNotReadyMeta"] | components["schemas"]["OperationAlreadyReversedMeta"] | components["schemas"]["ReversalNotAllowedMeta"] | components["schemas"]["ValidationMeta"];
         CommandStatusBase: {
             commandId: components["schemas"]["Uuid"];
             operationId: string;
@@ -1169,15 +1293,38 @@ export interface components {
         Href: string;
     };
     responses: {
-        /** @description A resource or command result. */
+        /** @description A typed resource envelope. */
         Resource: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
+                ETag: components["headers"]["ETag"];
+                Location: components["headers"]["Location"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Resource"];
+            };
+        };
+        /** @description Cursor-paginated typed resources. */
+        PageResource: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
+                "Cache-Control"?: string;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["PageResource"];
+            };
+        };
+        /** @description User resource. */
+        User: {
             headers: {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 [name: string]: unknown;
             };
             content: {
-                "application/json": components["schemas"]["Resource"];
+                "application/json": components["schemas"]["User"];
             };
         };
         /** @description Customer resource. */
@@ -1216,6 +1363,9 @@ export interface components {
             headers: {
                 "X-Request-ID": components["headers"]["RequestId"];
                 "Retry-After"?: string;
+                "Cache-Control"?: "no-store";
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
+                "Content-Location": components["headers"]["ContentLocation"];
                 [name: string]: unknown;
             };
             content: {
@@ -1279,6 +1429,10 @@ export interface components {
         IfMatchHeader: string;
         RequestIdHeader: components["schemas"]["Uuid"];
         CommandOperationHeader: string;
+        Cursor: string;
+        PageSize: number;
+        Sort: string;
+        Filter: string;
     };
     requestBodies: {
         JsonObject: {
@@ -1291,12 +1445,73 @@ export interface components {
                 "application/json": components["schemas"]["SessionRequest"];
             };
         };
+        UserCreateRequest: {
+            content: {
+                "application/json": components["schemas"]["UserCreateRequest"];
+            };
+        };
+        RoleBindingsUpdateRequest: {
+            content: {
+                "application/json": components["schemas"]["RoleBindingsUpdateRequest"];
+            };
+        };
+        DataScopeUpdateRequest: {
+            content: {
+                "application/json": components["schemas"]["DataScopeUpdateRequest"];
+            };
+        };
+        CustomerCreateRequest: {
+            content: {
+                "application/json": components["schemas"]["CustomerCreateRequest"];
+            };
+        };
+        CustomerUpdateRequest: {
+            content: {
+                "application/json": components["schemas"]["CustomerUpdateRequest"];
+            };
+        };
+        CustomerCommandRequest: {
+            content: {
+                "application/json": components["schemas"]["CustomerCommandRequest"];
+            };
+        };
+        InventoryCommandRequest: {
+            content: {
+                "application/json": components["schemas"]["InventoryCommandRequest"];
+            };
+        };
+        ResourceCreateRequest: {
+            content: {
+                "application/json": components["schemas"]["ResourceCreateRequest"];
+            };
+        };
+        ResourceUpdateRequest: {
+            content: {
+                "application/json": components["schemas"]["ResourceUpdateRequest"];
+            };
+        };
+        ResourceCommandRequest: {
+            content: {
+                "application/json": components["schemas"]["ResourceCommandRequest"];
+            };
+        };
+        DocumentCreateRequest: {
+            content: {
+                "application/json": components["schemas"]["DocumentCreateRequest"];
+            };
+        };
     };
     headers: {
         /** @description Correlation identifier. */
         RequestId: components["schemas"]["Uuid"];
         /** @description Strong aggregate version tag. */
         ETag: string;
+        /** @description Created resource location. */
+        Location: components["schemas"]["Href"];
+        /** @description Command status location. */
+        ContentLocation: components["schemas"]["Href"];
+        /** @description Indicates a terminal result replay. */
+        IdempotentReplay: "true";
     };
     pathItems: never;
 }
@@ -1411,9 +1626,9 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["UserCreateRequest"];
         responses: {
-            201: components["responses"]["Resource"];
+            201: components["responses"]["User"];
             202: components["responses"]["CommandStatus"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
@@ -1433,9 +1648,9 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["RoleBindingsUpdateRequest"];
         responses: {
-            200: components["responses"]["Resource"];
+            200: components["responses"]["User"];
             202: components["responses"]["CommandStatus"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
@@ -1455,9 +1670,9 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["DataScopeUpdateRequest"];
         responses: {
-            200: components["responses"]["Resource"];
+            200: components["responses"]["User"];
             202: components["responses"]["CommandStatus"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
@@ -1487,14 +1702,19 @@ export interface operations {
     };
     listCustomers: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                pageSize?: components["parameters"]["PageSize"];
+                sort?: components["parameters"]["Sort"];
+                filter?: components["parameters"]["Filter"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Resource"];
+            200: components["responses"]["PageResource"];
         };
     };
     createCustomer: {
@@ -1508,7 +1728,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["CustomerCreateRequest"];
         responses: {
             201: components["responses"]["Customer"];
             202: components["responses"]["CommandStatus"];
@@ -1545,7 +1765,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["CustomerUpdateRequest"];
         responses: {
             200: components["responses"]["Customer"];
             202: components["responses"]["CommandStatus"];
@@ -1567,7 +1787,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["CustomerCommandRequest"];
         responses: {
             200: components["responses"]["Customer"];
             202: components["responses"]["CommandStatus"];
@@ -1589,7 +1809,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["CustomerCommandRequest"];
         responses: {
             200: components["responses"]["Customer"];
             202: components["responses"]["CommandStatus"];
@@ -1611,7 +1831,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["CustomerCommandRequest"];
         responses: {
             200: components["responses"]["Customer"];
             202: components["responses"]["CommandStatus"];
@@ -1633,7 +1853,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["CustomerCommandRequest"];
         responses: {
             200: components["responses"]["Customer"];
             202: components["responses"]["CommandStatus"];
@@ -1644,14 +1864,19 @@ export interface operations {
     };
     listProducts: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                pageSize?: components["parameters"]["PageSize"];
+                sort?: components["parameters"]["Sort"];
+                filter?: components["parameters"]["Filter"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Resource"];
+            200: components["responses"]["PageResource"];
         };
     };
     createProduct: {
@@ -1664,7 +1889,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCreateRequest"];
         responses: {
             201: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -1701,7 +1926,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceUpdateRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -1712,14 +1937,19 @@ export interface operations {
     };
     listSkus: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                pageSize?: components["parameters"]["PageSize"];
+                sort?: components["parameters"]["Sort"];
+                filter?: components["parameters"]["Filter"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Resource"];
+            200: components["responses"]["PageResource"];
         };
     };
     createSku: {
@@ -1732,7 +1962,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCreateRequest"];
         responses: {
             201: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -1769,7 +1999,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceUpdateRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -1780,14 +2010,19 @@ export interface operations {
     };
     listOrders: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                pageSize?: components["parameters"]["PageSize"];
+                sort?: components["parameters"]["Sort"];
+                filter?: components["parameters"]["Filter"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Resource"];
+            200: components["responses"]["PageResource"];
         };
     };
     createOrder: {
@@ -1800,7 +2035,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCreateRequest"];
         responses: {
             201: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -1837,7 +2072,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceUpdateRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -1859,7 +2094,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCommandRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -1870,38 +2105,53 @@ export interface operations {
     };
     listInventoryBalances: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                pageSize?: components["parameters"]["PageSize"];
+                sort?: components["parameters"]["Sort"];
+                filter?: components["parameters"]["Filter"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Resource"];
+            200: components["responses"]["PageResource"];
         };
     };
     listInventoryMovements: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                pageSize?: components["parameters"]["PageSize"];
+                sort?: components["parameters"]["Sort"];
+                filter?: components["parameters"]["Filter"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Resource"];
+            200: components["responses"]["PageResource"];
         };
     };
     listInventoryReservations: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                pageSize?: components["parameters"]["PageSize"];
+                sort?: components["parameters"]["Sort"];
+                filter?: components["parameters"]["Filter"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Resource"];
+            200: components["responses"]["PageResource"];
         };
     };
     createInventoryReservation: {
@@ -1914,7 +2164,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCreateRequest"];
         responses: {
             201: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -1951,7 +2201,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCommandRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -1962,14 +2212,19 @@ export interface operations {
     };
     listInventoryObservations: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                pageSize?: components["parameters"]["PageSize"];
+                sort?: components["parameters"]["Sort"];
+                filter?: components["parameters"]["Filter"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Resource"];
+            200: components["responses"]["PageResource"];
         };
     };
     createInventoryObservation: {
@@ -1982,7 +2237,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCreateRequest"];
         responses: {
             201: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2016,7 +2271,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCreateRequest"];
         responses: {
             201: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2035,7 +2290,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCreateRequest"];
         responses: {
             201: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2054,7 +2309,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCreateRequest"];
         responses: {
             201: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2073,7 +2328,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCreateRequest"];
         responses: {
             201: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2095,7 +2350,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["InventoryCommandRequest"];
         responses: {
             201: components["responses"]["InventoryOperation"];
             202: components["responses"]["CommandStatus"];
@@ -2106,14 +2361,19 @@ export interface operations {
     };
     listPayments: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                pageSize?: components["parameters"]["PageSize"];
+                sort?: components["parameters"]["Sort"];
+                filter?: components["parameters"]["Filter"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Resource"];
+            200: components["responses"]["PageResource"];
         };
     };
     createPayment: {
@@ -2126,7 +2386,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCreateRequest"];
         responses: {
             201: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2163,7 +2423,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCommandRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2185,7 +2445,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCommandRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2207,7 +2467,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCommandRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2229,7 +2489,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCommandRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2263,7 +2523,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCreateRequest"];
         responses: {
             201: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2285,7 +2545,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCommandRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2315,7 +2575,12 @@ export interface operations {
     };
     listDocuments: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                pageSize?: components["parameters"]["PageSize"];
+                sort?: components["parameters"]["Sort"];
+                filter?: components["parameters"]["Filter"];
+            };
             header?: never;
             path: {
                 orderId: components["schemas"]["Uuid"];
@@ -2324,7 +2589,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Resource"];
+            200: components["responses"]["PageResource"];
         };
     };
     createDocument: {
@@ -2333,11 +2598,14 @@ export interface operations {
             header: {
                 "X-CSRF-Token": components["parameters"]["CsrfHeader"];
                 "Idempotency-Key": components["parameters"]["IdempotencyHeader"];
+                "If-Match": components["parameters"]["IfMatchHeader"];
             };
-            path?: never;
+            path: {
+                orderId: components["schemas"]["Uuid"];
+            };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["DocumentCreateRequest"];
         responses: {
             201: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2374,7 +2642,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceUpdateRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2396,7 +2664,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCommandRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2418,7 +2686,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCommandRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2440,7 +2708,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCommandRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2462,7 +2730,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCommandRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2484,7 +2752,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCommandRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2506,7 +2774,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCommandRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2528,7 +2796,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCommandRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2539,14 +2807,19 @@ export interface operations {
     };
     listTasks: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                pageSize?: components["parameters"]["PageSize"];
+                sort?: components["parameters"]["Sort"];
+                filter?: components["parameters"]["Filter"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Resource"];
+            200: components["responses"]["PageResource"];
         };
     };
     createTask: {
@@ -2559,7 +2832,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCreateRequest"];
         responses: {
             201: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2596,7 +2869,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["JsonObject"];
+        requestBody: components["requestBodies"]["ResourceCommandRequest"];
         responses: {
             200: components["responses"]["Resource"];
             202: components["responses"]["CommandStatus"];
@@ -2607,14 +2880,19 @@ export interface operations {
     };
     listAuditEvents: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                pageSize?: components["parameters"]["PageSize"];
+                sort?: components["parameters"]["Sort"];
+                filter?: components["parameters"]["Filter"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Resource"];
+            200: components["responses"]["PageResource"];
         };
     };
 }

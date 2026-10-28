@@ -14,4 +14,15 @@ describe('transactional outbox worker entry point', () => {
     expect(published).toEqual(['event-1']);
     expect(acknowledged).toEqual(['event-1']);
   });
+
+  it('does not acknowledge a failed publish and records a retryable failure', async () => {
+    const failed: string[] = [];
+    const worker = new OutboxWorker(
+      { claimBatch: async () => [{ id: 'event-1', topic: 'CustomerCreated', payload: {} }], markPublished: async () => undefined, markFailed: async (id) => { failed.push(id); } },
+      { publish: async () => { throw new Error('broker unavailable'); } },
+    );
+
+    await expect(worker.runOnce()).rejects.toThrow('broker unavailable');
+    expect(failed).toEqual(['event-1']);
+  });
 });

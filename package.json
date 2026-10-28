@@ -20,7 +20,7 @@
     "test:migration": "vitest run tests/migration",
     "lint:openapi": "tsx packages/contracts/openapi/lint.ts",
     "generate:client": "tsx packages/contracts/openapi/generate-client.ts",
-    "contract:breaking": "vitest run tests/contract/breaking-gate.test.ts",
+    "contract:breaking": "tsx packages/contracts/openapi/breaking-gate.ts packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml",
     "contract:digest": "sha256sum packages/contracts/openapi/openapi.yaml",
     "migration:validate": "tsx packages/database/migrations/validate.ts"
   },

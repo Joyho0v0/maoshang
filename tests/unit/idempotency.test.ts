@@ -55,4 +55,48 @@ describe('idempotency claim and replay foundation', () => {
     expect(store.status(pending.commandId)).toMatchObject({ state: 'RECOVERY_REQUIRED' });
     expect(store.takeover(pending.commandId)).toMatchObject({ state: 'IN_PROGRESS' });
   });
+
+  it('replays terminal claims without incrementing attempts or re-executing work', async () => {
+    const store = new InMemoryIdempotencyStore();
+    const claimed = store.claim({
+      actorId: 'actor-1', organizationId: 'org-1', operationId: 'createCustomer',
+      idempotencyKey: 'terminal-key', requestHash: 'request-a',
+    });
+    await store.complete(claimed.commandId, { status: 201, body: { id: 'customer-1' } });
+
+    expect(store.claim({
+      actorId: 'actor-1', organizationId: 'org-1', operationId: 'createCustomer',
+      idempotencyKey: 'terminal-key', requestHash: 'request-a',
+    })).toMatchObject({ commandId: claimed.commandId, state: 'SUCCEEDED', attemptCount: 1 });
+  });
+
+  it('keeps transient callback failures recoverable instead of persisting FAILED', async () => {
+    const store = new InMemoryIdempotencyStore({ leaseMs: 5 });
+    await expect(store.execute({
+      actorId: 'actor-1', organizationId: 'org-1', operationId: 'createCustomer',
+      idempotencyKey: 'transient-key', requestHash: 'request-a',
+      run: async () => { throw new Error('database connection reset'); },
+    })).rejects.toThrow('database connection reset');
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(store.statusByKey({ actorId: 'actor-1', organizationId: 'org-1', operationId: 'createCustomer', idempotencyKey: 'transient-key' })).toMatchObject({ state: 'RECOVERY_REQUIRED' });
+  });
+
+  it('stores only a SHA-256 key digest and exposes a complete four-state status', () => {
+    const store = new InMemoryIdempotencyStore();
+    const claimed = store.claim({
+      actorId: 'actor-1', organizationId: 'org-1', operationId: 'createCustomer',
+      idempotencyKey: 'sensitive-key', requestHash: 'request-a',
+    });
+    expect(store.debugRecord(claimed.commandId)).toEqual(expect.objectContaining({ keyHash: expect.stringMatching(/^[0-9a-f]{64}$/) }));
+    expect(store.status(claimed.commandId)).toMatchObject({
+      commandId: claimed.commandId,
+      operationId: 'createCustomer',
+      state: 'IN_PROGRESS',
+      completedAt: null,
+      httpStatus: null,
+      resultHref: null,
+      problem: null,
+    });
+  });
 });

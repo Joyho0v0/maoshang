@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import SwaggerParser from '@apidevtools/swagger-parser';
 import { parse } from 'yaml';
+import { EXPECTED_OPERATION_MANIFEST, assertOperationManifest } from '../../packages/contracts/openapi/contract-manifest.js';
 
 const artifactPath = new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url);
 type Operation = {
@@ -56,6 +57,26 @@ describe('machine-readable Joint Contract v1 artifact', () => {
       expect(operation.responses?.['403']).toBeDefined();
       expect(operation.responses?.['428']).toBeDefined();
     }
+  });
+
+  it('matches the independent frozen operation and safety manifest exactly', async () => {
+    const document = parse(await readFile(artifactPath, 'utf8')) as Record<string, unknown>;
+    expect(EXPECTED_OPERATION_MANIFEST).toHaveLength(72);
+    expect(() => assertOperationManifest(document)).not.toThrow();
+  });
+
+  it('keeps document creation bound to its order aggregate and typed DTOs', async () => {
+    const document = parse(await readFile(artifactPath, 'utf8')) as Record<string, unknown>;
+    const templates = document['x-operationTemplates'] as Record<string, Record<string, unknown>>;
+    const createDocument = templates.createDocument;
+    expect(createDocument).toMatchObject({
+      operationId: 'createDocument',
+      'x-safety': { csrf: 'required', idempotency: 'required', ifMatch: 'required' },
+    });
+    expect(JSON.stringify(createDocument)).toContain('orderId');
+    expect(JSON.stringify(createDocument)).toContain('IfMatchHeader');
+    expect(JSON.stringify(createDocument)).toContain('DocumentCreateRequest');
+    expect(JSON.stringify(document)).not.toContain('requestBody: { $ref: \'#/components/requestBodies/JsonObject\' }');
   });
 });
 
