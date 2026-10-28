@@ -1,0 +1,54 @@
+{
+  "name": "autoflow-crm-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Non-production backend foundation for the Autoflow CRM rebuild.",
+  "type": "module",
+  "engines": {
+    "node": ">=18.20.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start:api": "tsx apps/api/src/main.ts",
+    "start:worker": "tsx apps/worker/src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:contract": "vitest run tests/contract",
+    "test:integration": "vitest run tests/integration",
+    "test:migration": "vitest run tests/migration",
+    "lint:openapi": "tsx packages/contracts/openapi/lint.ts",
+    "generate:client": "tsx packages/contracts/openapi/generate-client.ts",
+    "contract:breaking": "vitest run tests/contract/breaking-gate.test.ts",
+    "contract:digest": "sha256sum packages/contracts/openapi/openapi.yaml",
+    "migration:validate": "tsx packages/database/migrations/validate.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.4.20",
+    "@nestjs/core": "^10.4.20",
+    "@nestjs/platform-fastify": "^10.4.20",
+    "@fastify/cookie": "^9.3.0",
+    "fastify": "^4.28.1",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "pg": "^8.13.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "^10.1.0",
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "eslint": "^9.17.0",
+    "openapi-typescript": "^7.6.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vitest": "^2.1.8"
+  }
+}
