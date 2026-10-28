@@ -603,7 +603,7 @@ function collectOpenApiDocument(previous: RecordValue, next: RecordValue, change
         addChange(changes, `root.components.${section}.${name}`, `${name} was removed.`, previousValue, undefined, name);
         continue;
       }
-      collectValue(previousValue, nextValue, `root.components.${section}.${name}`, changes, section === 'schemas');
+      collectComponent(previousValue, nextValue, `root.components.${section}.${name}`, section, changes);
     }
   }
 
@@ -612,6 +612,7 @@ function collectOpenApiDocument(previous: RecordValue, next: RecordValue, change
 
 function collectPathItem(previous: unknown, next: RecordValue, path: string, changes: BreakingChange[]): void {
   if (!isRecord(previous)) return;
+  collectNamedCollection(previous.parameters, next.parameters, ['name', 'in'], `${path}.parameters`, changes);
   for (const [method, previousOperation] of Object.entries(previous)) {
     if (!['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace'].includes(method)) continue;
     const nextOperation = next[method];
@@ -634,6 +635,28 @@ function collectOperation(previous: unknown, next: RecordValue, path: string, ch
   collectSecurity(previous.security, next.security, `${path}.security`, changes);
 }
 
+function collectComponent(previous: unknown, next: unknown, path: string, section: string, changes: BreakingChange[]): void {
+  switch (section) {
+    case 'schemas':
+      collectValue(previous, next, path, changes, true);
+      return;
+    case 'parameters':
+      collectParameter(previous, next, path, changes);
+      return;
+    case 'headers':
+      collectHeader(previous, next, path, changes);
+      return;
+    case 'requestBodies':
+      collectRequestBody(previous, next, path, changes);
+      return;
+    case 'responses':
+      collectResponse(previous, next, path, changes);
+      return;
+    default:
+      collectValue(previous, next, path, changes);
+  }
+}
+
 function collectNamedCollection(previousValue: unknown, nextValue: unknown, identity: string[], path: string, changes: BreakingChange[]): void {
   if (!Array.isArray(previousValue)) return;
   const next = Array.isArray(nextValue) ? nextValue : [];
@@ -646,13 +669,38 @@ function collectNamedCollection(previousValue: unknown, nextValue: unknown, iden
       addChange(changes, entryPath, 'named parameter was removed.', previousEntry, undefined, identityValue);
       continue;
     }
-    if (previousEntry.required === true && match.required !== true) addChange(changes, `${entryPath}.required`, 'required parameter was relaxed unexpectedly.', true, match.required ?? false, identityValue, previousEntry);
-    if (previousEntry.required !== true && match.required === true) addChange(changes, `${entryPath}.required`, 'optional parameter became required.', previousEntry.required ?? false, true, identityValue, previousEntry);
-    if (previousEntry.schema !== undefined) {
-      if (match.schema === undefined) addChange(changes, `${entryPath}.schema`, 'parameter schema was removed.', previousEntry.schema, undefined, identityValue);
-      else collectValue(previousEntry.schema, match.schema, `${entryPath}.schema`, changes, true);
-    }
+    collectParameter(previousEntry, match, entryPath, changes);
   }
+}
+
+function collectParameter(previous: unknown, next: unknown, path: string, changes: BreakingChange[]): void {
+  if (!isRecord(previous)) return;
+  if (!isRecord(next)) {
+    addChange(changes, path, 'parameter was removed.', previous, undefined, 'parameter');
+    return;
+  }
+  if (previous.required === true && next.required !== true) addChange(changes, `${path}.required`, 'required parameter was relaxed unexpectedly.', true, next.required ?? false, 'parameter', previous);
+  if (previous.required !== true && next.required === true) addChange(changes, `${path}.required`, 'optional parameter became required.', previous.required ?? false, true, 'parameter', previous);
+  collectSchemaOrContent(previous, next, path, changes, 'parameter');
+}
+
+function collectSchemaOrContent(previous: RecordValue, next: RecordValue, path: string, changes: BreakingChange[], kind: 'parameter' | 'header'): void {
+  if (previous.schema !== undefined) {
+    if (next.schema === undefined) addChange(changes, `${path}.schema`, `${kind} schema was removed.`, previous.schema, undefined, kind, previous);
+    else collectValue(previous.schema, next.schema, `${path}.schema`, changes, true);
+  }
+  if (previous.content !== undefined) collectContent(previous.content, next.content, `${path}.content`, changes);
+}
+
+function collectHeader(previous: unknown, next: unknown, path: string, changes: BreakingChange[]): void {
+  if (!isRecord(previous)) return;
+  if (!isRecord(next)) {
+    addChange(changes, path, 'header was removed.', previous, undefined, 'header');
+    return;
+  }
+  if (previous.required === true && next.required !== true) addChange(changes, `${path}.required`, 'required header was relaxed unexpectedly.', true, next.required ?? false, 'header', previous);
+  if (previous.required !== true && next.required === true) addChange(changes, `${path}.required`, 'optional header became required.', previous.required ?? false, true, 'header', previous);
+  collectSchemaOrContent(previous, next, path, changes, 'header');
 }
 
 function collectRequestBody(previous: unknown, next: unknown, path: string, changes: BreakingChange[]): void {
@@ -679,11 +727,18 @@ function collectResponses(previous: unknown, next: unknown, path: string, change
       addChange(changes, responsePath, `response ${status} was removed.`, previousResponse, undefined, status);
       continue;
     }
-    if (isRecord(previousResponse) && isRecord(nextResponse)) {
-      collectHeaders(previousResponse.headers, nextResponse.headers, `${responsePath}.headers`, changes);
-      collectContent(previousResponse.content, nextResponse.content, `${responsePath}.content`, changes);
-    }
+    collectResponse(previousResponse, nextResponse, responsePath, changes);
   }
+}
+
+function collectResponse(previous: unknown, next: unknown, path: string, changes: BreakingChange[]): void {
+  if (!isRecord(previous)) return;
+  if (!isRecord(next)) {
+    addChange(changes, path, 'response was removed.', previous, undefined, 'response');
+    return;
+  }
+  collectHeaders(previous.headers, next.headers, `${path}.headers`, changes);
+  collectContent(previous.content, next.content, `${path}.content`, changes);
 }
 
 function collectHeaders(previous: unknown, next: unknown, path: string, changes: BreakingChange[]): void {
@@ -699,14 +754,7 @@ function collectHeaders(previous: unknown, next: unknown, path: string, changes:
       addChange(changes, headerPath, `header ${name} was removed.`, previousHeader, undefined, name);
       continue;
     }
-    collectValue(previousHeader, nextHeader, headerPath, changes);
-    if (isRecord(previousHeader) && isRecord(nextHeader) && previousHeader.schema !== undefined) {
-      if (nextHeader.schema === undefined) {
-        addChange(changes, `${headerPath}.schema`, 'header schema was removed.', previousHeader.schema, undefined, name);
-      } else {
-        collectValue(previousHeader.schema, nextHeader.schema, `${headerPath}.schema`, changes, true);
-      }
-    }
+    collectHeader(previousHeader, nextHeader, headerPath, changes);
   }
 }
 

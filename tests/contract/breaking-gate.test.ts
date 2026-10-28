@@ -303,6 +303,91 @@ describe('OpenAPI compatibility gate', () => {
     }
   });
 
+  it('routes every OpenAPI Schema Object entry point through the schema-aware collectors', async () => {
+    type ProbeName =
+      | 'reusable parameter schema'
+      | 'reusable header schema'
+      | 'operation parameter content schema'
+      | 'response header content schema'
+      | 'path item parameter schema'
+      | 'reusable request body schema'
+      | 'reusable response schema';
+    type DocumentBuilder = (schema: Record<string, unknown>) => Record<string, unknown>;
+
+    const base = (components: Record<string, unknown> = {}, paths: Record<string, unknown> = {}): Record<string, unknown> => ({
+      openapi: '3.1.0',
+      info: { title: 'schema entry routing test', version: '1.0.0' },
+      paths,
+      components,
+    });
+    const okResponse = { description: 'ok' };
+    const content = (schema: Record<string, unknown>) => ({ 'application/json': { schema } });
+    const parameter = (schema: Record<string, unknown>) => ({ name: 'probe', in: 'query', schema });
+    const header = (schema: Record<string, unknown>) => ({ description: 'probe', schema });
+
+    const probes: Array<{ name: ProbeName; build: DocumentBuilder }> = [
+      {
+        name: 'reusable parameter schema',
+        build: (schema) => base({ parameters: { Probe: parameter(schema) } }),
+      },
+      {
+        name: 'reusable header schema',
+        build: (schema) => base({ headers: { Probe: header(schema) } }),
+      },
+      {
+        name: 'operation parameter content schema',
+        build: (schema) => base({}, {
+          '/probe': {
+            get: {
+              operationId: 'probeParameterContent',
+              parameters: [{ name: 'probe', in: 'query', content: content(schema) }],
+              responses: { '200': okResponse },
+            },
+          },
+        }),
+      },
+      {
+        name: 'response header content schema',
+        build: (schema) => base({}, {
+          '/probe': {
+            get: {
+              operationId: 'probeHeaderContent',
+              responses: { '200': { description: 'ok', headers: { Probe: { content: content(schema) } } } },
+            },
+          },
+        }),
+      },
+      {
+        name: 'path item parameter schema',
+        build: (schema) => base({}, {
+          '/probe': {
+            parameters: [parameter(schema)],
+            get: { operationId: 'probePathParameter', responses: { '200': okResponse } },
+          },
+        }),
+      },
+      {
+        name: 'reusable request body schema',
+        build: (schema) => base({ requestBodies: { Probe: { content: content(schema) } } }),
+      },
+      {
+        name: 'reusable response schema',
+        build: (schema) => base({ responses: { Probe: { description: 'ok', content: content(schema) } } }),
+      },
+    ];
+
+    for (const probe of probes) {
+      const previous = probe.build({});
+      const candidate = probe.build({ futureAssertion: { limit: 1 } });
+      const [normalizedPrevious, normalizedCandidate] = await Promise.all([
+        normalizeDocument(previous),
+        normalizeDocument(candidate),
+      ]);
+      expect(() => assertNoBreakingChanges(normalizedPrevious, normalizedCandidate), probe.name).toThrow();
+      expect(collectBreakingChanges(normalizedPrevious, normalizedCandidate), probe.name).not.toEqual([]);
+    }
+  });
+
   it('treats direct allOf merge and split as equivalent in both directions', () => {
     const merged = {
       type: 'object',
