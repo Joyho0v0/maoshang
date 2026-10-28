@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { parse } from 'yaml';
 import { expect, it } from 'vitest';
 import inventory from '../../packages/contracts/openapi/breaking-inventory.json' with { type: 'json' };
+import decisionManifest from '../../packages/contracts/openapi/breaking-decisions.json' with { type: 'json' };
 import { collectBreakingInventory, createContentAddressedValueStore, normalizeDocument } from '../../packages/contracts/openapi/breaking-inventory.js';
 import { collectBreakingChanges } from '../../packages/contracts/openapi/breaking-gate.js';
 
@@ -281,6 +282,51 @@ it('aggregates shared component derived properties across all consumers', async 
     'root.paths./shared-a.get.responses.200.content.application/json.schema.id.const',
     'root.paths./shared-b.get.responses.200.content.application/json.schema.id.const',
   ]));
+});
+
+it('keeps the identity-keyed decision manifest in strict one-to-one lockstep', async () => {
+  const persisted = inventory as typeof inventory & {
+    baseline: { digest: string };
+    candidate: { sha256: string };
+    comparator: { revision: string; sourceSha256: string };
+    entries: Array<{ verification: { comparatorIdentity: string }; disposition: { status: string } }>;
+  };
+  const manifest = decisionManifest as {
+    formatVersion: number;
+    baselineDigest: string;
+    candidateDigest: string;
+    comparatorRevision: string;
+    comparatorSourceSha256: string;
+    inventoryDigest: string;
+    decisions: Record<string, {
+      decision: 'accept-semantic-direction' | 'reject' | 'pending';
+      owner: string[];
+      approvalCommentIds: string[];
+      evidence: string[];
+      promotionAuthorized: boolean;
+    }>;
+  };
+  const identities = persisted.entries.map((entry) => entry.verification.comparatorIdentity).sort();
+  const decisionKeys = Object.keys(manifest.decisions).sort();
+
+  expect(manifest.formatVersion).toBe(1);
+  expect(manifest.baselineDigest).toBe(persisted.baseline.digest);
+  expect(manifest.candidateDigest).toBe(persisted.candidate.sha256);
+  expect(manifest.comparatorRevision).toBe(persisted.comparator.revision);
+  expect(manifest.comparatorSourceSha256).toBe(persisted.comparator.sourceSha256);
+  expect(manifest.inventoryDigest).toBe(createHash('sha256').update(await readFile(new URL('../../packages/contracts/openapi/breaking-inventory.json', import.meta.url))).digest('hex'));
+  expect(decisionKeys).toEqual(identities);
+  expect(new Set(decisionKeys).size).toBe(persisted.count);
+  expect(persisted.entries.every((entry) => entry.disposition.status === 'pending-owner-decision')).toBe(true);
+
+  const decisions = Object.values(manifest.decisions);
+  expect(decisions.every((decision) => decision.owner.length > 0 && decision.evidence.length > 0)).toBe(true);
+  expect(decisions.every((decision) => decision.promotionAuthorized === false)).toBe(true);
+  expect(decisions.filter((decision) => decision.decision === 'accept-semantic-direction')).toHaveLength(26);
+  expect(decisions.filter((decision) => decision.decision === 'reject')).toHaveLength(4);
+  expect(decisions.filter((decision) => decision.decision === 'pending')).toHaveLength(persisted.count - 30);
+  expect(decisions.filter((decision) => decision.decision === 'pending').every((decision) => decision.approvalCommentIds.length === 0)).toBe(true);
+  expect(decisions.filter((decision) => decision.decision !== 'pending').every((decision) => decision.approvalCommentIds.length > 0)).toBe(true);
 });
 
 function digest(value: unknown): string {
