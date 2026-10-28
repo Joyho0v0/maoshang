@@ -45,7 +45,7 @@ export class IdempotencyExecutionInterceptor implements NestInterceptor {
       try {
         const body = await firstValueFrom(next.handle());
         const contentLocation = headerString(response.getHeader('content-location'));
-        const resource = resourceReferenceForResponse(match.operation, request, response, body, response.statusCode ?? 200);
+        const resource = resourceReferenceForResponse(match.definition.operationId, match.operation, request, response, body, response.statusCode ?? 200);
         const result: CommandResult<unknown> = {
           status: response.statusCode ?? 200,
           body,
@@ -97,14 +97,14 @@ function isCommandStatus(value: CommandResult<unknown> | CommandStatus): value i
   return typeof value === 'object' && value !== null && 'state' in value && 'commandId' in value;
 }
 
-function resourceReferenceForResponse(operation: GeneratedOperation, request: PrincipalRequest, response: FastifyReply, body: unknown, status: number): ResourceReference | undefined {
+export function resourceReferenceForResponse(operationId: string, operation: GeneratedOperation, request: PrincipalRequest, response: FastifyReply, body: unknown, status: number): ResourceReference | undefined {
   const schema = operation.responses[String(status)]?.schema;
   const type = resourceTypeForSchema(schema);
   const id = isRecord(body) && typeof body.id === 'string' ? body.id : undefined;
   const href = headerString(response.getHeader('location'))
     ?? headerString(response.getHeader('content-location'))
     ?? (isRecord(body) && typeof body.href === 'string' ? body.href : undefined)
-    ?? resourceHrefFromRequest(request);
+    ?? resourceHrefFromRequest(operationId, request, id);
   if (type === undefined || id === undefined || href === undefined || !href.startsWith('/api/v1/')) return undefined;
   const version = isRecord(body) && typeof body.version === 'number' ? body.version : undefined;
   return { type, id, href, ...(version === undefined ? {} : { version }) };
@@ -123,13 +123,62 @@ function resourceTypeForSchema(schema: string | undefined): string | undefined {
     Task: 'TASK',
     InventoryOperation: 'INVENTORY_OPERATION',
     InventoryReservation: 'INVENTORY_RESERVATION',
+    InventoryObservation: 'INVENTORY_OBSERVATION',
   };
   return schema === undefined ? undefined : types[schema];
 }
 
-function resourceHrefFromRequest(request: PrincipalRequest): string | undefined {
+function resourceHrefFromRequest(operationId: string, request: PrincipalRequest, resourceId: string | undefined): string | undefined {
   const path = request.url.split('?')[0] ?? request.url;
-  const resourcePath = path.replace(/\/(?:submit-approval|approve|reject|reassign|transition|release|reverse|attach-proof|submit-review|review|complete-upload|create-version|submit|finalize|issue|void|complete)\/?$/, '');
+  const params = isRecord(request.params) ? request.params : {};
+  const pathId = typeof params.id === 'string' ? params.id : typeof params.operationId === 'string' ? params.operationId : undefined;
+  const collectionProjects: Readonly<Record<string, string>> = {
+    createCustomer: '/api/v1/customers',
+    createProduct: '/api/v1/products',
+    createSku: '/api/v1/skus',
+    createOrder: '/api/v1/orders',
+    createInventoryReservation: '/api/v1/inventory/reservations',
+    createInventoryObservation: '/api/v1/inventory/observations',
+    createInitialReceipt: '/api/v1/inventory/operations',
+    createInventoryReceipt: '/api/v1/inventory/operations',
+    createInventoryAdjustment: '/api/v1/inventory/operations',
+    issueInventory: '/api/v1/inventory/operations',
+    reverseInventoryOperation: '/api/v1/inventory/operations',
+    createPayment: '/api/v1/payments',
+    createUploadIntent: '/api/v1/files',
+    createDocument: '/api/v1/documents',
+    createTask: '/api/v1/tasks',
+  };
+  if (operationId === 'createUser' && pathId !== undefined && resourceId !== undefined) return `/api/v1/organizations/${pathId}/users/${resourceId}`;
+  const collection = collectionProjects[operationId];
+  if (collection !== undefined && resourceId !== undefined) return `${collection}/${resourceId}`;
+  const actionSuffixes: Readonly<Record<string, string>> = {
+    updateUserRoleBindings: '/role-bindings',
+    updateUserDataScopeGrants: '/data-scope-grants',
+    disableUser: '/disable',
+    transitionOrder: '/transitions',
+    releaseInventoryReservation: '/release',
+    reverseInventoryOperation: '/reverse',
+    submitCustomerApproval: '/submit-approval',
+    approveCustomer: '/approve',
+    rejectCustomer: '/reject',
+    reassignCustomer: '/reassign',
+    attachPaymentProof: '/proofs',
+    submitPaymentReview: '/submit-review',
+    reviewPayment: '/review',
+    reversePayment: '/reverse',
+    completeUpload: '/complete',
+    createDocumentVersion: '/versions',
+    submitDocument: '/submit',
+    approveDocument: '/approve',
+    rejectDocument: '/reject',
+    finalizeDocument: '/finalize',
+    issueDocument: '/issue',
+    voidDocument: '/void',
+    completeTask: '/complete',
+  };
+  const suffix = actionSuffixes[operationId];
+  const resourcePath = suffix !== undefined && path.endsWith(suffix) ? path.slice(0, -suffix.length) : path;
   return resourcePath.startsWith('/api/v1/') ? resourcePath : undefined;
 }
 

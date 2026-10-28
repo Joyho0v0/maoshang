@@ -154,31 +154,34 @@ export class PostgresIdempotencyRepository {
   }
 
   async execute<T>(input: PostgresIdempotencyInput, work: (client: PoolClient, claim: PostgresClaim) => Promise<CommandResult<T>>): Promise<CommandResult<T> | CommandStatus> {
+    // Claim/observe/replay is deliberately a short transaction. Keeping the row
+    // lock while the owner calls application code would make every observer wait
+    // for the business transaction instead of receiving 202 immediately.
+    const claim = await this.withTransaction((client) => this.claim(client, input));
+    if (claim.state === 'SUCCEEDED') {
+      const stored = await this.withTransaction((client) => this.readById(client, claim.commandId));
+      const resource = toResourceReference(stored);
+      return { status: claim.httpStatus ?? 200, body: stored.response_body as T, ...(claim.resultHref === null ? {} : { resultHref: claim.resultHref }), ...(resource === null ? {} : { resource }), replayed: true };
+    }
+    if (claim.state === 'FAILED') throw new CommandFailureError(claim.problem ?? storedFailure());
+    if (claim.claimRole !== 'OWNER') return claim;
+    if (claim.ownerToken === undefined) throw new Error('Idempotency owner token is missing.');
+
     const outcome = await this.withTransaction(async (client) => {
-      const claim = await this.claim(client, input);
-      if (claim.state === 'SUCCEEDED') {
-        const stored = await this.readById(client, claim.commandId);
-        const resource = toResourceReference(stored);
-        return { kind: 'result' as const, value: { status: claim.httpStatus ?? 200, body: stored.response_body as T, ...(claim.resultHref === null ? {} : { resultHref: claim.resultHref }), ...(resource === null ? {} : { resource }), replayed: true } };
-      }
-      if (claim.state === 'FAILED') return { kind: 'failure' as const, error: new CommandFailureError(claim.problem ?? storedFailure()) };
-      if (claim.claimRole !== 'OWNER') return { kind: 'terminal' as const, value: claim };
       await client.query('SAVEPOINT idempotency_command');
       try {
         const result = await work(client, claim);
         await client.query('RELEASE SAVEPOINT idempotency_command');
         if (result.status === 202 && isInProgressCommandStatus(result.body, claim.commandId)) return { kind: 'result' as const, value: result };
-        if (claim.ownerToken === undefined) throw new Error('Idempotency owner token is missing.');
-        await this.complete(client, claim.commandId, claim.ownerToken, result);
+        await this.complete(client, claim.commandId, claim.ownerToken as Buffer, result);
         return { kind: 'result' as const, value: result };
       } catch (error) {
         await client.query('ROLLBACK TO SAVEPOINT idempotency_command');
-        if (claim.ownerToken === undefined) throw new Error('Idempotency owner token is missing.');
         if (error instanceof CommandFailureError) {
-          await this.fail(client, claim.commandId, claim.ownerToken, error.problem);
+          await this.fail(client, claim.commandId, claim.ownerToken as Buffer, error.problem);
           return { kind: 'failure' as const, error };
         }
-        await this.releaseForRecovery(client, claim.commandId, claim.ownerToken, error instanceof Error ? error.name : 'UNKNOWN_FAILURE');
+        await this.releaseForRecovery(client, claim.commandId, claim.ownerToken as Buffer, error instanceof Error ? error.name : 'UNKNOWN_FAILURE');
         return { kind: 'transient' as const, error };
       }
     });

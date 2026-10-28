@@ -80,4 +80,60 @@ describe('idempotency execution interceptor', () => {
     await expect(lastValueFrom(interceptor.intercept(context, { handle: () => of({}) } as never))).resolves.toEqual({ id: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' });
     expect(headers['idempotent-replay']).toBe('true');
   });
+
+  it('projects transition resources to their canonical resource href', async () => {
+    let persistedResult: unknown;
+    const repository = {
+      execute: async (_input: unknown, work: (client: unknown, claim: unknown) => Promise<unknown>) => {
+        persistedResult = await work({}, { commandId: 'command-transition', claimRole: 'OWNER' });
+        return persistedResult;
+      },
+    };
+    const interceptor = new IdempotencyExecutionInterceptor(repository as never);
+    const orderId = '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019';
+    const request = {
+      method: 'POST',
+      url: `/api/v1/orders/${orderId}/transitions`,
+      routeOptions: { url: '/api/v1/orders/:id/transitions' },
+      params: { id: orderId },
+      query: {},
+      body: { action: 'CONFIRM' },
+      headers: { 'idempotency-key': 'transition-key', 'x-csrf-token': 'csrf-token-value', 'if-match': '"1"' },
+      user: { id: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
+    };
+    const response = { statusCode: 200, getHeader: () => undefined, header: () => response };
+    const context = { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as never;
+
+    await lastValueFrom(interceptor.intercept(context, { handle: () => of({ id: orderId }) } as never));
+
+    expect(persistedResult).toMatchObject({ resource: { type: 'ORDER', id: orderId, href: `/api/v1/orders/${orderId}` } });
+  });
+
+  it('projects inventory observations with a dedicated resource type', async () => {
+    let persistedResult: unknown;
+    const repository = {
+      execute: async (_input: unknown, work: (client: unknown, claim: unknown) => Promise<unknown>) => {
+        persistedResult = await work({}, { commandId: 'command-observation', claimRole: 'OWNER' });
+        return persistedResult;
+      },
+    };
+    const interceptor = new IdempotencyExecutionInterceptor(repository as never);
+    const observationId = '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019';
+    const request = {
+      method: 'POST',
+      url: '/api/v1/inventory/observations',
+      routeOptions: { url: '/api/v1/inventory/observations' },
+      params: {},
+      query: {},
+      body: { skuId: observationId, quantity: '1' },
+      headers: { 'idempotency-key': 'observation-key', 'x-csrf-token': 'csrf-token-value' },
+      user: { id: 'f8b6e3a9-3a0a-4c1c-b3f3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
+    };
+    const response = { statusCode: 201, getHeader: () => undefined, header: () => response };
+    const context = { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as never;
+
+    await lastValueFrom(interceptor.intercept(context, { handle: () => of({ id: observationId }) } as never));
+
+    expect(persistedResult).toMatchObject({ resource: { type: 'INVENTORY_OBSERVATION', id: observationId, href: `/api/v1/inventory/observations/${observationId}` } });
+  });
 });

@@ -115,6 +115,32 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
     expect(observer).toMatchObject({ commandId: owner.commandId, state: 'IN_PROGRESS' });
   });
 
+  it('returns an observer while the owner business transaction is still open', async () => {
+    const input: PostgresIdempotencyInput = { actorId, organizationId, operationId: 'createCustomerObserverWhileOpen', idempotencyKey: 'observer-open-key', requestHash: 'request-a' };
+    let ownerStarted!: () => void;
+    const ownerStartedPromise = new Promise<void>((resolve) => { ownerStarted = resolve; });
+    let releaseOwner!: () => void;
+    const ownerRelease = new Promise<void>((resolve) => { releaseOwner = resolve; });
+    const owner = repository.execute(input, async () => {
+      ownerStarted();
+      await ownerRelease;
+      const customerId = randomUUID();
+      return { status: 201, body: { id: customerId }, resource: { type: 'CUSTOMER', id: customerId, href: `/api/v1/customers/${customerId}` } };
+    });
+
+    try {
+      await ownerStartedPromise;
+      const observer = await Promise.race([
+        repository.execute(input, async () => ({ status: 201, body: { id: randomUUID() }, resource: { type: 'CUSTOMER', id: randomUUID(), href: '/api/v1/customers/observer' } })),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('observer remained blocked by the owner transaction')), 1_000)),
+      ]);
+      expect(observer).toMatchObject({ state: 'IN_PROGRESS', commandId: expect.any(String) });
+    } finally {
+      releaseOwner();
+      await owner;
+    }
+  });
+
   it('rejects a successful terminal write without a strict resource reference', async () => {
     const input: PostgresIdempotencyInput = { actorId, organizationId, operationId: 'createCustomerMissingResource', idempotencyKey: 'missing-resource-key', requestHash: 'request-a' };
     const owner = await repository.withTransaction((client) => repository.claim(client, input));

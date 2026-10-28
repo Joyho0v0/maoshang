@@ -15,7 +15,7 @@ export class PostgresOutboxSource implements OutboxSource {
            SELECT id
            FROM integration.outbox_event
            WHERE available_at <= now()
-             AND (status IN ('PENDING', 'FAILED') OR (status = 'CLAIMED' AND (claim_expires_at <= now() OR claimed_at <= now() - interval '30 seconds')))
+             AND (status = 'PENDING' OR (status = 'CLAIMED' AND (claim_expires_at <= now() OR claimed_at <= now() - interval '30 seconds')))
            ORDER BY available_at, id
            FOR UPDATE SKIP LOCKED
            LIMIT $1

@@ -521,7 +521,7 @@ components:
     Uuid: { type: string, format: uuid }
     DecimalString: { type: string, pattern: '^-?\d+(\.\d+)?$' }
     JsonObject: { type: object, additionalProperties: true, description: Nested extension object only; never used as a top-level request or response DTO. }
-    ResourceType: { type: string, enum: [USER, ORGANIZATION, CUSTOMER, PRODUCT, SKU, ORDER, PAYMENT, FILE, DOCUMENT, TASK, INVENTORY_OPERATION, INVENTORY_RESERVATION] }
+    ResourceType: { type: string, enum: [USER, ORGANIZATION, CUSTOMER, PRODUCT, SKU, ORDER, PAYMENT, FILE, DOCUMENT, TASK, INVENTORY_OPERATION, INVENTORY_RESERVATION, INVENTORY_OBSERVATION] }
     ResourcePayload:
       type: object
       required: [resourceType]

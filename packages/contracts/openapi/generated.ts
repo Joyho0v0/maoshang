@@ -923,7 +923,7 @@ export interface components {
             [key: string]: unknown;
         };
         /** @enum {string} */
-        ResourceType: "USER" | "ORGANIZATION" | "CUSTOMER" | "PRODUCT" | "SKU" | "ORDER" | "PAYMENT" | "FILE" | "DOCUMENT" | "TASK" | "INVENTORY_OPERATION" | "INVENTORY_RESERVATION";
+        ResourceType: "USER" | "ORGANIZATION" | "CUSTOMER" | "PRODUCT" | "SKU" | "ORDER" | "PAYMENT" | "FILE" | "DOCUMENT" | "TASK" | "INVENTORY_OPERATION" | "INVENTORY_RESERVATION" | "INVENTORY_OBSERVATION";
         ResourcePayload: {
             resourceType: components["schemas"]["ResourceType"];
             name?: string;
