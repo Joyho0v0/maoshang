@@ -14,6 +14,10 @@ function executionContext(headers: Record<string, string>, responseHeaders: Reco
   const response = {
     statusCode: options.statusCode ?? 200,
     getHeader: (name: string) => responseHeaders[name],
+    header: (name: string, value: string) => {
+      responseHeaders[name] = value;
+      return response;
+    },
   };
   return { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as never;
 }
@@ -41,5 +45,18 @@ describe('contract response interceptor', () => {
     const next = { handle: () => of({ unexpected: true }) };
 
     await expect(firstValueFrom(interceptor.intercept(executionContext({}, { 'content-type': 'application/json' }, { method: 'DELETE', url: '/api/v1/auth/sessions/current', statusCode: 204 }), next))).rejects.toMatchObject({ name: 'ProblemError', status: 500 });
+  });
+
+  it('uses the contract JSON media type before framework serialization', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const interceptor = new ContractResponseValidationInterceptor(createContractValidator(document));
+    const responseHeaders: Record<string, string> = {
+      'X-Request-ID': '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019',
+      'Cache-Control': 'no-store',
+    };
+    const next = { handle: () => of({ csrfToken: 'csrf-token-value', expiresAt: '2026-10-28T00:00:00.000Z' }) };
+
+    await expect(firstValueFrom(interceptor.intercept(executionContext({}, responseHeaders), next))).resolves.toMatchObject({ csrfToken: 'csrf-token-value' });
+    expect(responseHeaders['content-type']).toBe('application/json');
   });
 });

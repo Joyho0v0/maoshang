@@ -1,9 +1,40 @@
 import { lastValueFrom, of } from 'rxjs';
-import { IdempotencyExecutionInterceptor } from '../../apps/api/src/common/security/idempotency-execution.interceptor.js';
+import { IDEMPOTENT_RESOURCE_PROJECTORS, IdempotencyExecutionInterceptor, resourceReferenceForResponse } from '../../apps/api/src/common/security/idempotency-execution.interceptor.js';
 import { requireIdempotencyTransaction } from '../../apps/api/src/common/security/idempotency-transaction-context.js';
 import { IdempotencyConflictError } from '../../apps/api/src/modules/integration/idempotency/in-memory-idempotency-store.js';
+import { EXPECTED_OPERATION_MANIFEST } from '../../packages/contracts/openapi/contract-manifest.js';
+import { operations } from '../../packages/contracts/openapi/generated-client.js';
 
 describe('idempotency execution interceptor', () => {
+  it('has an operation-aware projector for every synchronous idempotent resource response', () => {
+    const expected = EXPECTED_OPERATION_MANIFEST
+      .filter((entry) => entry.idempotency)
+      .filter((entry) => Object.entries(operations[entry.operationId].responses).some(([status, contract]) => status.startsWith('2') && status !== '202' && contract.schema !== undefined))
+      .map((entry) => entry.operationId)
+      .sort();
+    expect(Object.keys(IDEMPOTENT_RESOURCE_PROJECTORS).sort()).toEqual(expected);
+    for (const operationId of expected) {
+      const success = Object.entries(operations[operationId].responses).find(([status, contract]) => status.startsWith('2') && status !== '202' && contract.schema !== undefined);
+      expect(success).toBeDefined();
+      const [status, contract] = success as [string, { schema?: string }];
+      expect(IDEMPOTENT_RESOURCE_PROJECTORS[operationId]).toMatchObject({ status: Number(status), schema: contract.schema });
+    }
+  });
+
+  it('rejects a resource reference whose Location belongs to the request action, not the returned operation', () => {
+    const reservationId = 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2';
+    const operationId = '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019';
+    const request = {
+      method: 'POST',
+      url: `/api/v1/inventory/reservations/${reservationId}/release`,
+      routeOptions: { url: '/api/v1/inventory/reservations/:id/release' },
+      params: { id: reservationId },
+    };
+    const response = { getHeader: (name: string) => name.toLowerCase() === 'location' ? `/api/v1/inventory/reservations/${reservationId}` : undefined };
+
+    expect(resourceReferenceForResponse('releaseInventoryReservation', operations.releaseInventoryReservation, request as never, response as never, { id: operationId }, 200)).toBeUndefined();
+  });
+
   it('executes the controller only through the repository transaction boundary', async () => {
     let controllerExecutions = 0;
     let persistedResult: unknown;

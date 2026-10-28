@@ -8,10 +8,13 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import {
   IdempotencyConflictError,
   type CommandResult,
+  type CommandStatus,
 } from '../../apps/api/src/modules/integration/idempotency/in-memory-idempotency-store.js';
 import { PostgresIdempotencyRepository, type PostgresIdempotencyInput } from '../../apps/api/src/modules/integration/idempotency/postgres-idempotency-repository.js';
 import { createContractValidator } from '../../packages/contracts/openapi/runtime-validator.js';
 import { IdempotencyExecutionInterceptor } from '../../apps/api/src/common/security/idempotency-execution.interceptor.js';
+import { ContractResponseValidationInterceptor } from '../../apps/api/src/common/http/contract-response.interceptor.js';
+import { ProblemExceptionFilter } from '../../apps/api/src/common/http/problem.filter.js';
 import { requireIdempotencyTransaction } from '../../apps/api/src/common/security/idempotency-transaction-context.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
@@ -21,11 +24,12 @@ const databaseUrl = process.env.DATABASE_URL;
 class PostgresCustomerController {
   static executions = 0;
   static backendPids: number[] = [];
+  static invalidResponse = false;
   static ownerBarrier: { started: () => void; released: Promise<void> } | undefined;
 
   @Post()
   @HttpCode(201)
-  async create(@Req() request: FastifyRequest & { user?: { id: string; organizationId: string } }, @Res({ passthrough: true }) response: FastifyReply): Promise<{ id: string; name: string }> {
+  async create(@Req() request: FastifyRequest & { user?: { id: string; organizationId: string } }, @Res({ passthrough: true }) response: FastifyReply): Promise<Record<string, unknown>> {
     PostgresCustomerController.executions += 1;
     const { client } = requireIdempotencyTransaction(request);
     const pid = await client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
@@ -40,7 +44,10 @@ class PostgresCustomerController {
       await PostgresCustomerController.ownerBarrier.released;
     }
     response.header('location', `/api/v1/customers/${id}`);
-    return { id, name: 'Acme' };
+    response.header('etag', '"v1"');
+    if (PostgresCustomerController.invalidResponse) return { id };
+    const now = new Date().toISOString();
+    return { id, organizationId: request.user?.organizationId, version: 1, createdAt: now, updatedAt: now, status: 'DRAFT', capabilities: [] };
   }
 }
 
@@ -211,7 +218,10 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
     const app = await NestFactory.create<NestFastifyApplication>(PostgresCustomerModule, new FastifyAdapter({ logger: false }));
     app.setGlobalPrefix('api/v1');
     app.useGlobalGuards(new PostgresPrincipalGuard(actorId, organizationId));
-    app.useGlobalInterceptors(new IdempotencyExecutionInterceptor(repository));
+    const contract = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const validator = createContractValidator(contract);
+    app.useGlobalFilters(new ProblemExceptionFilter(validator));
+    app.useGlobalInterceptors(new ContractResponseValidationInterceptor(validator), new IdempotencyExecutionInterceptor(repository, validator));
     await app.init();
     const idempotencyKey = `http-postgres-${randomUUID()}`;
     const request = {
@@ -255,7 +265,10 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
     const app = await NestFactory.create<NestFastifyApplication>(PostgresCustomerModule, new FastifyAdapter({ logger: false }));
     app.setGlobalPrefix('api/v1');
     app.useGlobalGuards(new PostgresPrincipalGuard(actorId, organizationId));
-    app.useGlobalInterceptors(new IdempotencyExecutionInterceptor(repository));
+    const contract = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const validator = createContractValidator(contract);
+    app.useGlobalFilters(new ProblemExceptionFilter(validator));
+    app.useGlobalInterceptors(new ContractResponseValidationInterceptor(validator), new IdempotencyExecutionInterceptor(repository, validator));
     await app.init();
     const request = {
       method: 'POST' as const,
@@ -282,6 +295,81 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
       PostgresCustomerController.ownerBarrier = undefined;
       await app.close();
     }
+  });
+
+  it('validates the operation response before committing a terminal idempotency row', async () => {
+    PostgresCustomerController.executions = 0;
+    PostgresCustomerController.invalidResponse = true;
+    const contract = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const validator = createContractValidator(contract);
+    const app = await NestFactory.create<NestFastifyApplication>(PostgresCustomerModule, new FastifyAdapter({ logger: false }));
+    app.setGlobalPrefix('api/v1');
+    app.useGlobalGuards(new PostgresPrincipalGuard(actorId, organizationId));
+    app.useGlobalFilters(new ProblemExceptionFilter(validator));
+    app.useGlobalInterceptors(new ContractResponseValidationInterceptor(validator), new IdempotencyExecutionInterceptor(repository, validator));
+    await app.init();
+    const idempotencyKey = `http-postgres-invalid-${randomUUID()}`;
+    const request = { method: 'POST' as const, url: '/api/v1/customers', headers: { 'idempotency-key': idempotencyKey, 'x-csrf-token': 'csrf-token-value' }, payload: { name: 'Invalid customer' } };
+    try {
+      const before = await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM integration.outbox_event WHERE organization_id = $1', [organizationId]);
+      const rejected = await app.getHttpAdapter().getInstance().inject(request);
+      expect(rejected.statusCode).toBe(500);
+      await expect(repository.withTransaction((client) => repository.statusByKey(client, { actorId, organizationId, operationId: 'createCustomer', idempotencyKey }))).resolves.toMatchObject({ state: 'RECOVERY_REQUIRED' });
+
+      PostgresCustomerController.invalidResponse = false;
+      const recovered = await app.getHttpAdapter().getInstance().inject(request);
+      expect(recovered.statusCode).toBe(201);
+      const after = await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM integration.outbox_event WHERE organization_id = $1', [organizationId]);
+      expect(after.rows[0]?.count).toBe((before.rows[0]?.count ?? 0) + 1);
+      expect(PostgresCustomerController.executions).toBe(2);
+      await expect(repository.withTransaction((client) => repository.statusByKey(client, { actorId, organizationId, operationId: 'createCustomer', idempotencyKey }))).resolves.toMatchObject({ state: 'SUCCEEDED' });
+    } finally {
+      PostgresCustomerController.invalidResponse = false;
+      await app.close();
+    }
+  });
+
+  it('fences a takeover behind an owner Phase B row lock instead of entering a second callback', async () => {
+    const input: PostgresIdempotencyInput = { actorId, organizationId, operationId: 'createCustomerLeaseFence', idempotencyKey: `lease-fence-${randomUUID()}`, requestHash: 'request-a' };
+    let ownerStarted!: () => void;
+    const ownerStartedPromise = new Promise<void>((resolve) => { ownerStarted = resolve; });
+    let releaseOwner!: () => void;
+    const ownerRelease = new Promise<void>((resolve) => { releaseOwner = resolve; });
+    let executions = 0;
+    const owner = repository.execute(input, async (client) => {
+      void client;
+      executions += 1;
+      ownerStarted();
+      await ownerRelease;
+      const id = randomUUID();
+      return { status: 201, body: { id }, resource: { type: 'CUSTOMER', id, href: `/api/v1/customers/${id}` } };
+    });
+
+    await ownerStartedPromise;
+    let expirationFinished = false;
+    const expireLease = pool.query("UPDATE integration.idempotency_record SET lease_expires_at = now() - interval '1 second' WHERE organization_id = $1 AND operation_id = $2", [organizationId, input.operationId]).then(() => { expirationFinished = true; });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    let takeover: Promise<CommandResult<unknown> | CommandStatus> | undefined;
+    if (expirationFinished) {
+      takeover = repository.execute(input, async () => {
+        executions += 1;
+        const id = randomUUID();
+        return { status: 201, body: { id }, resource: { type: 'CUSTOMER', id, href: `/api/v1/customers/${id}` } };
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    releaseOwner();
+    await owner;
+    await expireLease;
+    const recovered = takeover ?? repository.execute(input, async () => {
+      executions += 1;
+      const id = randomUUID();
+      return { status: 201, body: { id }, resource: { type: 'CUSTOMER', id, href: `/api/v1/customers/${id}` } };
+    });
+    await expect(recovered).resolves.toMatchObject({ status: 201 });
+    expect(executions).toBe(1);
   });
 
   it('fails closed when a persisted terminal resource reference is corrupted', async () => {

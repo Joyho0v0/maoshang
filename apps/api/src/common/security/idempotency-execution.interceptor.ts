@@ -4,10 +4,12 @@ import { catchError, firstValueFrom, from, map, throwError, type Observable } fr
 import { canonicalRequestHash } from './canonical-request.js';
 import { EXPECTED_OPERATION_MANIFEST } from '../../../../../packages/contracts/openapi/contract-manifest.js';
 import { operations, type OperationId } from '../../../../../packages/contracts/openapi/generated-client.js';
-import { CommandFailureError, IdempotencyConflictError, type CommandResult, type CommandStatus, type ResourceReference } from '../../modules/integration/idempotency/in-memory-idempotency-store.js';
+import { CommandFailureError, IdempotencyConflictError, isResourceReference, type CommandResult, type CommandStatus, type ResourceReference } from '../../modules/integration/idempotency/in-memory-idempotency-store.js';
 import type { PostgresIdempotencyInput, PostgresIdempotencyRepository } from '../../modules/integration/idempotency/postgres-idempotency-repository.js';
 import type { GeneratedOperation } from '../../../../../packages/contracts/openapi/client.js';
+import type { ContractValidator } from '../../../../../packages/contracts/openapi/runtime-validator.js';
 import { buildProblem, normalizeRequestId, ProblemError } from '../http/problem.js';
+import { ensureContractResponseContentType, validateContractResponse } from '../http/contract-response.interceptor.js';
 import { restoreIdempotencyTransaction, setIdempotencyTransaction } from './idempotency-transaction-context.js';
 
 interface PrincipalRequest extends FastifyRequest {
@@ -16,7 +18,7 @@ interface PrincipalRequest extends FastifyRequest {
 
 @Injectable()
 export class IdempotencyExecutionInterceptor implements NestInterceptor {
-  constructor(private readonly repository: PostgresIdempotencyRepository) {}
+  constructor(private readonly repository: PostgresIdempotencyRepository, private readonly validator?: ContractValidator) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<PrincipalRequest>();
@@ -44,10 +46,25 @@ export class IdempotencyExecutionInterceptor implements NestInterceptor {
       const previous = setIdempotencyTransaction(request, { client, claim });
       try {
         const body = await firstValueFrom(next.handle());
+        const status = response.statusCode ?? 200;
+        if (this.validator !== undefined) {
+          ensureContractResponseContentType(match.operation, status, response);
+          validateContractResponse(match.operation, status, body, response, this.validator, normalizeRequestId(request.headers['x-request-id']));
+        }
         const contentLocation = headerString(response.getHeader('content-location'));
-        const resource = resourceReferenceForResponse(match.definition.operationId, match.operation, request, response, body, response.statusCode ?? 200);
+        const resource = resourceReferenceForResponse(match.definition.operationId, match.operation, request, response, body, status);
+        const responseContract = (match.operation as GeneratedOperation).responses[String(status)];
+        if (status >= 200 && status < 300 && status !== 202 && responseContract?.schema !== undefined && resource === undefined) {
+          throw new ProblemError(buildProblem({
+            status: 500,
+            code: 'INTERNAL_ERROR',
+            title: 'Operation resource reference projection failed',
+            requestId: normalizeRequestId(request.headers['x-request-id']),
+            retryable: false,
+          }));
+        }
         const result: CommandResult<unknown> = {
-          status: response.statusCode ?? 200,
+          status,
           body,
           ...(resource === undefined ? {} : { resource }),
           ...(contentLocation === undefined ? {} : { resultHref: contentLocation }),
@@ -58,18 +75,32 @@ export class IdempotencyExecutionInterceptor implements NestInterceptor {
         restoreIdempotencyTransaction(request, previous);
       }
     })).pipe(map((outcome) => {
-      if (isCommandStatus(outcome)) {
+      const commandStatus = isCommandStatus(outcome)
+        ? publicCommandStatus(outcome)
+        : isCommandResult(outcome) && outcome.status === 202 && isCommandStatus(outcome.body)
+          ? publicCommandStatus(outcome.body)
+          : undefined;
+      if (commandStatus !== undefined) {
         response.statusCode = 202;
         response.header('cache-control', 'no-store');
         response.header('content-location', '/api/v1/commands/status');
-        response.header('retry-after', String(Math.max(1, Math.ceil(outcome.retryAfterMs / 1000))));
-        return outcome;
+        response.header('retry-after', String(Math.max(1, Math.ceil(commandStatus.retryAfterMs / 1000))));
+        if (this.validator !== undefined) {
+          ensureContractResponseContentType(match.operation, 202, response);
+          validateContractResponse(match.operation, 202, commandStatus, response, this.validator, normalizeRequestId(request.headers['x-request-id']));
+        }
+        return commandStatus;
       }
+      if (!isCommandResult(outcome)) throw new Error('Invalid idempotency execution outcome.');
       if (outcome.replayed === true) {
         for (const [name, value] of Object.entries(outcome.responseHeaders ?? {})) response.header(name, value);
         response.header('idempotent-replay', 'true');
       }
       response.statusCode = outcome.status;
+      if (this.validator !== undefined) {
+        ensureContractResponseContentType(match.operation, outcome.status, response);
+        validateContractResponse(match.operation, outcome.status, outcome.body, response, this.validator, normalizeRequestId(request.headers['x-request-id']));
+      }
       return outcome.body;
     }), catchError((error: unknown) => {
       if (error instanceof IdempotencyConflictError) {
@@ -97,95 +128,113 @@ function operationForRequest(request: FastifyRequest): { definition: (typeof EXP
   return operation === undefined ? undefined : { definition, operation };
 }
 
-function isCommandStatus(value: CommandResult<unknown> | CommandStatus): value is CommandStatus {
+function isCommandStatus(value: unknown): value is CommandStatus {
   return typeof value === 'object' && value !== null && 'state' in value && 'commandId' in value;
 }
 
+function isCommandResult(value: CommandResult<unknown> | CommandStatus): value is CommandResult<unknown> {
+  return typeof value === 'object' && value !== null && 'status' in value && 'body' in value;
+}
+
+function publicCommandStatus(value: CommandStatus): CommandStatus {
+  return Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'claimRole' && key !== 'ownerToken')) as CommandStatus;
+}
+
 export function resourceReferenceForResponse(operationId: string, operation: GeneratedOperation, request: PrincipalRequest, response: FastifyReply, body: unknown, status: number): ResourceReference | undefined {
-  const schema = operation.responses[String(status)]?.schema;
-  const type = resourceTypeForSchema(schema);
+  const projector = IDEMPOTENT_RESOURCE_PROJECTORS[operationId];
+  const responseContract = operation.responses[String(status)];
+  if (projector === undefined || responseContract?.schema !== projector.schema || status !== projector.status) return undefined;
   const id = isRecord(body) && typeof body.id === 'string' ? body.id : undefined;
-  const href = headerString(response.getHeader('location'))
-    ?? headerString(response.getHeader('content-location'))
-    ?? (isRecord(body) && typeof body.href === 'string' ? body.href : undefined)
-    ?? resourceHrefFromRequest(operationId, request, id);
-  if (type === undefined || id === undefined || href === undefined || !href.startsWith('/api/v1/')) return undefined;
+  if (id === undefined) return undefined;
+  const href = projector.href(request, id);
+  if (href === undefined) return undefined;
+  const location = headerString(response.getHeader('location'));
+  const contentLocation = headerString(response.getHeader('content-location'));
+  const bodyHref = isRecord(body) && typeof body.href === 'string' ? body.href : undefined;
+  if ((location !== undefined && location !== href) || (contentLocation !== undefined && contentLocation !== href) || (bodyHref !== undefined && bodyHref !== href)) return undefined;
   const version = isRecord(body) && typeof body.version === 'number' ? body.version : undefined;
-  return { type, id, href, ...(version === undefined ? {} : { version }) };
+  const resource = { type: projector.type, id, href, ...(version === undefined ? {} : { version }) };
+  return isResourceReference(resource) ? resource : undefined;
 }
 
-function resourceTypeForSchema(schema: string | undefined): string | undefined {
-  const types: Readonly<Record<string, string>> = {
-    User: 'USER',
-    Customer: 'CUSTOMER',
-    Product: 'PRODUCT',
-    Sku: 'SKU',
-    Order: 'ORDER',
-    Payment: 'PAYMENT',
-    File: 'FILE',
-    Document: 'DOCUMENT',
-    Task: 'TASK',
-    InventoryOperation: 'INVENTORY_OPERATION',
-    InventoryReservation: 'INVENTORY_RESERVATION',
-    InventoryObservation: 'INVENTORY_OBSERVATION',
-  };
-  return schema === undefined ? undefined : types[schema];
+interface ResourceProjector {
+  readonly status: number;
+  readonly schema: string;
+  readonly type: string;
+  readonly href: (request: PrincipalRequest, resourceId: string) => string | undefined;
 }
 
-function resourceHrefFromRequest(operationId: string, request: PrincipalRequest, resourceId: string | undefined): string | undefined {
-  const path = request.url.split('?')[0] ?? request.url;
-  const params = isRecord(request.params) ? request.params : {};
-  const pathId = typeof params.id === 'string' ? params.id : typeof params.operationId === 'string' ? params.operationId : undefined;
-  const collectionProjects: Readonly<Record<string, string>> = {
-    createCustomer: '/api/v1/customers',
-    createProduct: '/api/v1/products',
-    createSku: '/api/v1/skus',
-    createOrder: '/api/v1/orders',
-    createInventoryReservation: '/api/v1/inventory/reservations',
-    createInventoryObservation: '/api/v1/inventory/observations',
-    releaseInventoryReservation: '/api/v1/inventory/operations',
-    createInitialReceipt: '/api/v1/inventory/operations',
-    createInventoryReceipt: '/api/v1/inventory/operations',
-    createInventoryAdjustment: '/api/v1/inventory/operations',
-    issueInventory: '/api/v1/inventory/operations',
-    reverseInventoryOperation: '/api/v1/inventory/operations',
-    createPayment: '/api/v1/payments',
-    createUploadIntent: '/api/v1/files',
-    createDocument: '/api/v1/documents',
-    createTask: '/api/v1/tasks',
-  };
-  if (operationId === 'createUser' && pathId !== undefined && resourceId !== undefined) return `/api/v1/organizations/${pathId}/users/${resourceId}`;
-  const collection = collectionProjects[operationId];
-  if (collection !== undefined && resourceId !== undefined) return `${collection}/${resourceId}`;
-  const actionSuffixes: Readonly<Record<string, string>> = {
-    updateUserRoleBindings: '/role-bindings',
-    updateUserDataScopeGrants: '/data-scope-grants',
-    disableUser: '/disable',
-    transitionOrder: '/transitions',
-    releaseInventoryReservation: '/release',
-    reverseInventoryOperation: '/reverse',
-    submitCustomerApproval: '/submit-approval',
-    approveCustomer: '/approve',
-    rejectCustomer: '/reject',
-    reassignCustomer: '/reassign',
-    attachPaymentProof: '/proofs',
-    submitPaymentReview: '/submit-review',
-    reviewPayment: '/review',
-    reversePayment: '/reverse',
-    completeUpload: '/complete',
-    createDocumentVersion: '/versions',
-    submitDocument: '/submit',
-    approveDocument: '/approve',
-    rejectDocument: '/reject',
-    finalizeDocument: '/finalize',
-    issueDocument: '/issue',
-    voidDocument: '/void',
-    completeTask: '/complete',
-  };
-  const suffix = actionSuffixes[operationId];
-  const resourcePath = suffix !== undefined && path.endsWith(suffix) ? path.slice(0, -suffix.length) : path;
-  return resourcePath.startsWith('/api/v1/') ? resourcePath : undefined;
-}
+const collectionProjector = (status: number, schema: string, type: string, collection: string): ResourceProjector => ({ status, schema, type, href: (_request, id) => `${collection}/${id}` });
+const organizationUserProjector = (): ResourceProjector => ({
+  status: 201,
+  schema: 'User',
+  type: 'USER',
+  href: (request, id) => {
+    const params = isRecord(request.params) ? request.params : {};
+    const organizationId = typeof params.id === 'string' ? params.id : undefined;
+    return organizationId === undefined ? undefined : `/api/v1/organizations/${organizationId}/users/${id}`;
+  },
+});
+const existingProjector = (status: number, schema: string, type: string, collection: string, parameter = 'id'): ResourceProjector => ({
+  status,
+  schema,
+  type,
+  href: (request, id) => {
+    const params = isRecord(request.params) ? request.params : {};
+    const pathId = typeof params[parameter] === 'string' ? params[parameter] : undefined;
+    return pathId === id ? `${collection}/${id}` : undefined;
+  },
+});
+
+/**
+ * Every synchronous idempotent success is listed here deliberately.  A
+ * response schema alone cannot identify a canonical resource: action URLs
+ * (for example reservation release) can return a newly-created operation.
+ */
+export const IDEMPOTENT_RESOURCE_PROJECTORS: Readonly<Record<string, ResourceProjector>> = {
+  createUser: organizationUserProjector(),
+  updateUserRoleBindings: existingProjector(200, 'User', 'USER', '/api/v1/users'),
+  updateUserDataScopeGrants: existingProjector(200, 'User', 'USER', '/api/v1/users'),
+  createCustomer: collectionProjector(201, 'Customer', 'CUSTOMER', '/api/v1/customers'),
+  updateCustomer: existingProjector(200, 'Customer', 'CUSTOMER', '/api/v1/customers'),
+  submitCustomerApproval: existingProjector(200, 'Customer', 'CUSTOMER', '/api/v1/customers'),
+  approveCustomer: existingProjector(200, 'Customer', 'CUSTOMER', '/api/v1/customers'),
+  rejectCustomer: existingProjector(200, 'Customer', 'CUSTOMER', '/api/v1/customers'),
+  reassignCustomer: existingProjector(200, 'Customer', 'CUSTOMER', '/api/v1/customers'),
+  createProduct: collectionProjector(201, 'Product', 'PRODUCT', '/api/v1/products'),
+  updateProduct: existingProjector(200, 'Product', 'PRODUCT', '/api/v1/products'),
+  createSku: collectionProjector(201, 'Sku', 'SKU', '/api/v1/skus'),
+  updateSku: existingProjector(200, 'Sku', 'SKU', '/api/v1/skus'),
+  createOrder: collectionProjector(201, 'Order', 'ORDER', '/api/v1/orders'),
+  updateOrder: existingProjector(200, 'Order', 'ORDER', '/api/v1/orders'),
+  transitionOrder: existingProjector(200, 'Order', 'ORDER', '/api/v1/orders'),
+  createInventoryReservation: collectionProjector(201, 'InventoryReservation', 'INVENTORY_RESERVATION', '/api/v1/inventory/reservations'),
+  releaseInventoryReservation: collectionProjector(200, 'InventoryOperation', 'INVENTORY_OPERATION', '/api/v1/inventory/operations'),
+  createInventoryObservation: collectionProjector(201, 'InventoryObservation', 'INVENTORY_OBSERVATION', '/api/v1/inventory/observations'),
+  createInitialReceipt: collectionProjector(201, 'InventoryOperation', 'INVENTORY_OPERATION', '/api/v1/inventory/operations'),
+  createInventoryReceipt: collectionProjector(201, 'InventoryOperation', 'INVENTORY_OPERATION', '/api/v1/inventory/operations'),
+  createInventoryAdjustment: collectionProjector(201, 'InventoryOperation', 'INVENTORY_OPERATION', '/api/v1/inventory/operations'),
+  issueInventory: collectionProjector(201, 'InventoryOperation', 'INVENTORY_OPERATION', '/api/v1/inventory/operations'),
+  reverseInventoryOperation: collectionProjector(201, 'InventoryOperation', 'INVENTORY_OPERATION', '/api/v1/inventory/operations'),
+  createPayment: collectionProjector(201, 'Payment', 'PAYMENT', '/api/v1/payments'),
+  attachPaymentProof: existingProjector(200, 'Payment', 'PAYMENT', '/api/v1/payments'),
+  submitPaymentReview: existingProjector(200, 'Payment', 'PAYMENT', '/api/v1/payments'),
+  reviewPayment: existingProjector(200, 'Payment', 'PAYMENT', '/api/v1/payments'),
+  reversePayment: existingProjector(200, 'Payment', 'PAYMENT', '/api/v1/payments'),
+  createUploadIntent: collectionProjector(201, 'File', 'FILE', '/api/v1/files'),
+  completeUpload: existingProjector(200, 'File', 'FILE', '/api/v1/files'),
+  createDocument: collectionProjector(201, 'Document', 'DOCUMENT', '/api/v1/documents'),
+  updateDocument: existingProjector(200, 'Document', 'DOCUMENT', '/api/v1/documents'),
+  createDocumentVersion: existingProjector(200, 'Document', 'DOCUMENT', '/api/v1/documents'),
+  submitDocument: existingProjector(200, 'Document', 'DOCUMENT', '/api/v1/documents'),
+  approveDocument: existingProjector(200, 'Document', 'DOCUMENT', '/api/v1/documents'),
+  rejectDocument: existingProjector(200, 'Document', 'DOCUMENT', '/api/v1/documents'),
+  finalizeDocument: existingProjector(200, 'Document', 'DOCUMENT', '/api/v1/documents'),
+  issueDocument: existingProjector(200, 'Document', 'DOCUMENT', '/api/v1/documents'),
+  voidDocument: existingProjector(200, 'Document', 'DOCUMENT', '/api/v1/documents'),
+  createTask: collectionProjector(201, 'Task', 'TASK', '/api/v1/tasks'),
+  completeTask: existingProjector(200, 'Task', 'TASK', '/api/v1/tasks'),
+};
 
 function headerString(value: string | string[] | number | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : typeof value === 'number' ? String(value) : value;

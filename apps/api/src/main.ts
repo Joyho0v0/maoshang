@@ -24,7 +24,7 @@ export async function createApp(options: { config?: RuntimeConfig; env?: Record<
   app.setGlobalPrefix('api/v1');
   app.useGlobalFilters(new ProblemExceptionFilter(contractValidator));
   app.useGlobalGuards(app.get(RequestSafetyGuard));
-  app.useGlobalInterceptors(new ContractResponseValidationInterceptor(contractValidator), new IdempotencyExecutionInterceptor(app.get(IDEMPOTENCY_REPOSITORY)));
+  app.useGlobalInterceptors(new ContractResponseValidationInterceptor(contractValidator), new IdempotencyExecutionInterceptor(app.get(IDEMPOTENCY_REPOSITORY), contractValidator));
   return app;
 }
 
