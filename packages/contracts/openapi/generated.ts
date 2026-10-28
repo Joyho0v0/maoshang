@@ -2611,6 +2611,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["CsrfToken"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createSession: {
@@ -2625,8 +2631,13 @@ export interface operations {
         requestBody: components["requestBodies"]["SessionRequest"];
         responses: {
             201: components["responses"]["Session"];
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getCurrentSession: {
@@ -2639,7 +2650,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Session"];
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     deleteCurrentSession: {
@@ -2660,8 +2676,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getCommandStatus: {
@@ -2677,7 +2698,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["CommandStatus"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["CommandNotFound"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getUser: {
@@ -2692,7 +2719,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["User"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createUser: {
@@ -2712,9 +2745,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedUser"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     updateUserRoleBindings: {
@@ -2734,9 +2773,15 @@ export interface operations {
         responses: {
             200: components["responses"]["User"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     updateUserDataScopeGrants: {
@@ -2756,9 +2801,15 @@ export interface operations {
         responses: {
             200: components["responses"]["User"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     disableUser: {
@@ -2777,9 +2828,15 @@ export interface operations {
         requestBody?: never;
         responses: {
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listCustomers: {
@@ -2797,6 +2854,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["CustomerPage"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createCustomer: {
@@ -2814,9 +2877,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedCustomer"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getCustomer: {
@@ -2831,7 +2900,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Customer"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     updateCustomer: {
@@ -2851,9 +2926,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Customer"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     submitCustomerApproval: {
@@ -2873,9 +2954,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Customer"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     approveCustomer: {
@@ -2895,9 +2982,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Customer"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     rejectCustomer: {
@@ -2917,9 +3010,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Customer"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     reassignCustomer: {
@@ -2939,9 +3038,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Customer"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listProducts: {
@@ -2959,6 +3064,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["ProductPage"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createProduct: {
@@ -2975,9 +3086,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedProduct"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getProduct: {
@@ -2992,7 +3109,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Product"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     updateProduct: {
@@ -3012,9 +3135,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Product"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listSkus: {
@@ -3032,6 +3161,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["SkuPage"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createSku: {
@@ -3048,9 +3183,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedSku"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getSku: {
@@ -3065,7 +3206,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Sku"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     updateSku: {
@@ -3085,9 +3232,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Sku"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listOrders: {
@@ -3105,6 +3258,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["OrderPage"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createOrder: {
@@ -3121,9 +3280,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedOrder"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getOrder: {
@@ -3138,7 +3303,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Order"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     updateOrder: {
@@ -3158,9 +3329,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Order"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     transitionOrder: {
@@ -3180,9 +3357,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Order"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listInventoryBalances: {
@@ -3200,6 +3383,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["InventoryBalancePage"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listInventoryMovements: {
@@ -3217,6 +3406,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["InventoryMovementPage"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listInventoryReservations: {
@@ -3234,6 +3429,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["InventoryReservationPage"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createInventoryReservation: {
@@ -3250,9 +3451,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedInventoryReservation"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getInventory: {
@@ -3267,7 +3474,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["InventoryReservation"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     releaseInventoryReservation: {
@@ -3287,9 +3500,15 @@ export interface operations {
         responses: {
             200: components["responses"]["InventoryOperation"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listInventoryObservations: {
@@ -3307,6 +3526,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["InventoryObservationPage"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createInventoryObservation: {
@@ -3323,9 +3548,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedInventoryObservation"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getInventoryOperation: {
@@ -3340,7 +3571,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["InventoryOperation"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createInitialReceipt: {
@@ -3357,9 +3594,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedInventoryOperation"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createInventoryReceipt: {
@@ -3376,9 +3619,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedInventoryOperation"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createInventoryAdjustment: {
@@ -3395,9 +3644,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedInventoryOperation"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     issueInventory: {
@@ -3414,9 +3669,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedInventoryOperation"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     reverseInventoryOperation: {
@@ -3436,9 +3697,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedInventoryOperation"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listPayments: {
@@ -3456,6 +3723,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["PaymentPage"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createPayment: {
@@ -3472,9 +3745,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedPayment"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getPayment: {
@@ -3489,7 +3768,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Payment"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     attachPaymentProof: {
@@ -3509,9 +3794,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Payment"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     submitPaymentReview: {
@@ -3531,9 +3822,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Payment"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     reviewPayment: {
@@ -3553,9 +3850,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Payment"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     reversePayment: {
@@ -3575,9 +3878,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Payment"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getFile: {
@@ -3592,7 +3901,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["File"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createUploadIntent: {
@@ -3609,9 +3924,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedFile"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     completeUpload: {
@@ -3631,9 +3952,15 @@ export interface operations {
         responses: {
             200: components["responses"]["File"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createDownloadIntent: {
@@ -3650,8 +3977,14 @@ export interface operations {
         requestBody?: never;
         responses: {
             201: components["responses"]["CreatedFile"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listDocuments: {
@@ -3671,6 +4004,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["DocumentPage"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createDocument: {
@@ -3690,9 +4029,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedDocument"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getDocument: {
@@ -3707,7 +4052,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Document"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     updateDocument: {
@@ -3727,9 +4078,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Document"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createDocumentVersion: {
@@ -3749,9 +4106,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Document"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     submitDocument: {
@@ -3771,9 +4134,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Document"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     approveDocument: {
@@ -3793,9 +4162,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Document"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     rejectDocument: {
@@ -3815,9 +4190,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Document"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     finalizeDocument: {
@@ -3837,9 +4218,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Document"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     issueDocument: {
@@ -3859,9 +4246,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Document"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     voidDocument: {
@@ -3881,9 +4274,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Document"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listTasks: {
@@ -3901,6 +4300,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["TaskPage"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     createTask: {
@@ -3917,9 +4322,15 @@ export interface operations {
         responses: {
             201: components["responses"]["CreatedTask"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getTask: {
@@ -3934,7 +4345,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Task"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     completeTask: {
@@ -3954,9 +4371,15 @@ export interface operations {
         responses: {
             200: components["responses"]["Task"];
             202: components["responses"]["CommandStatusInProgress"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listAuditEvents: {
@@ -3974,6 +4397,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["AuditEventPage"];
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            500: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
 }

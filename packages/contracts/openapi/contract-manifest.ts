@@ -37,6 +37,10 @@ const IDEMPOTENT_REPLAY = { type: 'string', enum: ['true'] } as const;
 const RESOURCE_HEADERS = ['X-Request-ID', 'ETag'] as const;
 const LIST_HEADERS = ['X-Request-ID', 'Cache-Control'] as const;
 const ASYNC_RESPONSE_HEADERS = ['X-Request-ID', 'Retry-After', 'Cache-Control', 'Content-Location'] as const;
+const COMMON_PROBLEM_STATUSES = ['400', '401', '429', '500', '502', '503'] as const;
+const COMMON_PROBLEM_RESPONSE_SCHEMAS = Object.fromEntries(COMMON_PROBLEM_STATUSES.map((status) => [status, 'Problem'])) as Readonly<Record<string, string>>;
+const COMMON_PROBLEM_RESPONSE_HEADERS = Object.fromEntries(COMMON_PROBLEM_STATUSES.map((status) => [status, ['X-Request-ID'] as const])) as Readonly<Record<string, readonly string[]>>;
+const COMMON_PROBLEM_HEADER_SCHEMAS = Object.fromEntries(COMMON_PROBLEM_STATUSES.map((status) => [status, { 'X-Request-ID': REQUEST_ID }])) as Readonly<Record<string, Readonly<Record<string, string>>>>;
 
 function listHeaders(schema: string): ExpectedContractShape {
   return { queryParams: PAGE_QUERY, queryDefaults: PAGE_DEFAULTS, responseSchemas: { '200': schema }, responseHeaders: { '200': LIST_HEADERS }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': { type: 'string' } } } };
@@ -78,10 +82,10 @@ function commandShape(schema: string, requestSchema: string): ExpectedContractSh
 
 export const EXPECTED_CONTRACT_SHAPES: Readonly<Record<string, ExpectedContractShape>> = {
   getCsrfToken: { responseSchemas: { '200': 'CsrfToken' }, responseHeaders: { '200': ['Cache-Control'] }, headerSchemas: { '200': { 'Cache-Control': NO_STORE } }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
-  createSession: { requestSchema: 'SessionRequest', responseSchemas: { '201': 'Session', '401': 'Problem', '403': 'CsrfFailedProblem' }, responseHeaders: { '201': ['X-Request-ID', 'Cache-Control'], '401': ['X-Request-ID'], '403': [] }, headerSchemas: { '201': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': NO_STORE }, '401': { 'X-Request-ID': REQUEST_ID }, '403': {} }, requiredResponseHeaders: { '201': ['Cache-Control'] } },
+  createSession: { requestSchema: 'SessionRequest', responseSchemas: { '201': 'Session', '400': 'Problem', '401': 'Problem', '403': 'CsrfFailedProblem', '503': 'Problem' }, responseHeaders: { '201': ['X-Request-ID', 'Cache-Control'], '400': ['X-Request-ID'], '401': ['X-Request-ID'], '403': [], '503': ['X-Request-ID'] }, headerSchemas: { '201': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': NO_STORE }, '400': { 'X-Request-ID': REQUEST_ID }, '401': { 'X-Request-ID': REQUEST_ID }, '403': {}, '503': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '201': ['Cache-Control'] } },
   getCurrentSession: { responseSchemas: { '200': 'Session', '401': 'Problem' }, responseHeaders: { '200': ['X-Request-ID', 'Cache-Control'], '401': ['X-Request-ID'] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': NO_STORE }, '401': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
   deleteCurrentSession: { responseSchemas: { '204': null, '401': 'Problem', '403': 'CsrfFailedProblem' }, responseHeaders: { '204': [], '401': ['X-Request-ID'], '403': [] }, headerSchemas: { '204': {}, '401': { 'X-Request-ID': REQUEST_ID }, '403': {} } },
-  getCommandStatus: { responseSchemas: { '200': 'CommandStatus', '404': 'CommandNotFoundProblem' }, responseHeaders: { '200': ['X-Request-ID', 'Retry-After', 'Cache-Control', 'Idempotent-Replay', 'Content-Location'], '404': [] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Retry-After': RETRY_AFTER, 'Cache-Control': NO_STORE, 'Idempotent-Replay': IDEMPOTENT_REPLAY, 'Content-Location': HREF }, '404': {} }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
+  getCommandStatus: { responseSchemas: { '200': 'CommandStatus', '400': 'Problem', '401': 'Problem', '404': 'CommandNotFoundProblem' }, responseHeaders: { '200': ['X-Request-ID', 'Retry-After', 'Cache-Control', 'Idempotent-Replay', 'Content-Location'], '400': ['X-Request-ID'], '401': ['X-Request-ID'], '404': [] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Retry-After': RETRY_AFTER, 'Cache-Control': NO_STORE, 'Idempotent-Replay': IDEMPOTENT_REPLAY, 'Content-Location': HREF }, '400': { 'X-Request-ID': REQUEST_ID }, '401': { 'X-Request-ID': REQUEST_ID }, '404': {} }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
   getUser: getShape('User'),
   createUser: createShape('User', 'UserCreateRequest'),
   updateUserRoleBindings: updateShape('User', 'RoleBindingsUpdateRequest'),
@@ -977,7 +981,8 @@ function assertContractShape(operationId: string, operation: AnyRecord, paramete
       const schema = isRecord(content) && isRecord(content.schema) ? schemaComponentName(content.schema) : null;
       return [status, schema];
     }));
-    if (JSON.stringify(actual) !== JSON.stringify(expected.responseSchemas)) throw new Error(`${operationId} response schema mismatch: expected ${JSON.stringify(expected.responseSchemas)}, observed ${JSON.stringify(actual)}.`);
+    const expectedResponseSchemas = { ...COMMON_PROBLEM_RESPONSE_SCHEMAS, ...expected.responseSchemas };
+    if (JSON.stringify(actual) !== JSON.stringify(expectedResponseSchemas)) throw new Error(`${operationId} response schema mismatch: expected ${JSON.stringify(expectedResponseSchemas)}, observed ${JSON.stringify(actual)}.`);
   }
   if (expected.responseHeaders !== undefined) {
     const responses = isRecord(operation.responses) ? operation.responses : {};
@@ -987,7 +992,7 @@ function assertContractShape(operationId: string, operation: AnyRecord, paramete
       return [status, headers];
     }));
     const normalizedActual = Object.fromEntries(Object.entries(actual).map(([status, headers]) => [status, [...headers].sort()]));
-    const normalizedExpected = Object.fromEntries(Object.entries(expected.responseHeaders).map(([status, headers]) => [status, [...headers].sort()]));
+    const normalizedExpected = Object.fromEntries(Object.entries({ ...COMMON_PROBLEM_RESPONSE_HEADERS, ...expected.responseHeaders }).map(([status, headers]) => [status, [...headers].sort()]));
     if (JSON.stringify(normalizedActual) !== JSON.stringify(normalizedExpected)) throw new Error(`${operationId} response header shape mismatch: expected ${JSON.stringify(normalizedExpected)}, observed ${JSON.stringify(normalizedActual)}.`);
   }
   if (expected.headerSchemas !== undefined) {
@@ -1001,7 +1006,8 @@ function assertContractShape(operationId: string, operation: AnyRecord, paramete
       })) : {};
       return [status, headers];
     }));
-    if (JSON.stringify(actual) !== JSON.stringify(expected.headerSchemas)) throw new Error(`${operationId} response header schema mismatch: expected ${JSON.stringify(expected.headerSchemas)}, observed ${JSON.stringify(actual)}.`);
+    const expectedHeaderSchemas = { ...COMMON_PROBLEM_HEADER_SCHEMAS, ...expected.headerSchemas };
+    if (JSON.stringify(actual) !== JSON.stringify(expectedHeaderSchemas)) throw new Error(`${operationId} response header schema mismatch: expected ${JSON.stringify(expectedHeaderSchemas)}, observed ${JSON.stringify(actual)}.`);
   }
   if (expected.requiredResponseHeaders !== undefined) {
     const responses = isRecord(operation.responses) ? operation.responses : {};

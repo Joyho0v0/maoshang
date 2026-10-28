@@ -2,14 +2,55 @@ import pg from 'pg';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { parse } from 'yaml';
+import { CanActivate, Controller, ExecutionContext, HttpCode, Module, Post, Req, Res } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import {
   IdempotencyConflictError,
   type CommandResult,
 } from '../../apps/api/src/modules/integration/idempotency/in-memory-idempotency-store.js';
 import { PostgresIdempotencyRepository, type PostgresIdempotencyInput } from '../../apps/api/src/modules/integration/idempotency/postgres-idempotency-repository.js';
 import { createContractValidator } from '../../packages/contracts/openapi/runtime-validator.js';
+import { IdempotencyExecutionInterceptor } from '../../apps/api/src/common/security/idempotency-execution.interceptor.js';
+import { requireIdempotencyTransaction } from '../../apps/api/src/common/security/idempotency-transaction-context.js';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 const databaseUrl = process.env.DATABASE_URL;
+
+@Controller('customers')
+class PostgresCustomerController {
+  static executions = 0;
+  static backendPids: number[] = [];
+
+  @Post()
+  @HttpCode(201)
+  async create(@Req() request: FastifyRequest & { user?: { id: string; organizationId: string } }, @Res({ passthrough: true }) response: FastifyReply): Promise<{ id: string; name: string }> {
+    PostgresCustomerController.executions += 1;
+    const { client } = requireIdempotencyTransaction(request);
+    const pid = await client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
+    PostgresCustomerController.backendPids.push(pid.rows[0]?.pid as number);
+    const id = randomUUID();
+    await client.query(
+      "INSERT INTO integration.outbox_event (id, organization_id, aggregate_type, aggregate_id, event_type, payload) VALUES ($1, $2, 'Customer', $3, 'CustomerCreated', $4)",
+      [randomUUID(), request.user?.organizationId, id, { customerId: id }],
+    );
+    response.header('location', `/api/v1/customers/${id}`);
+    return { id, name: 'Acme' };
+  }
+}
+
+@Module({ controllers: [PostgresCustomerController] })
+class PostgresCustomerModule {}
+
+class PostgresPrincipalGuard implements CanActivate {
+  constructor(private readonly actorId: string, private readonly organizationId: string) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest<FastifyRequest & { user?: { id: string; organizationId: string } }>();
+    request.user = { id: this.actorId, organizationId: this.organizationId };
+    return true;
+  }
+}
 
 describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', () => {
   const pool = new pg.Pool({ connectionString: databaseUrl, max: 25 });
@@ -108,5 +149,44 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
       return { status: 201, body: { id: customerId }, resource: { type: 'CUSTOMER', id: customerId, href: `/api/v1/customers/${customerId}` } };
     })).resolves.toMatchObject({ status: 201 });
     await expect(pool.query('SELECT count(*)::int AS count FROM integration.outbox_event WHERE id = $1', [eventId])).resolves.toMatchObject({ rows: [{ count: 1 }] });
+  });
+
+  it('carries one PostgreSQL client through HTTP business work and replays the stored terminal result', async () => {
+    PostgresCustomerController.executions = 0;
+    PostgresCustomerController.backendPids = [];
+    const app = await NestFactory.create<NestFastifyApplication>(PostgresCustomerModule, new FastifyAdapter({ logger: false }));
+    app.setGlobalPrefix('api/v1');
+    app.useGlobalGuards(new PostgresPrincipalGuard(actorId, organizationId));
+    app.useGlobalInterceptors(new IdempotencyExecutionInterceptor(repository));
+    await app.init();
+    const idempotencyKey = `http-postgres-${randomUUID()}`;
+    const request = {
+      method: 'POST' as const,
+      url: '/api/v1/customers',
+      headers: { 'idempotency-key': idempotencyKey, 'x-csrf-token': 'csrf-token-value' },
+      payload: { name: 'Acme' },
+    };
+    try {
+      const first = await app.getHttpAdapter().getInstance().inject(request);
+      const second = await app.getHttpAdapter().getInstance().inject(request);
+      expect(first.statusCode).toBe(201);
+      expect(second.statusCode).toBe(201);
+      expect(second.headers['idempotent-replay']).toBe('true');
+      expect(PostgresCustomerController.executions).toBe(1);
+      expect(new Set(PostgresCustomerController.backendPids)).toHaveLength(1);
+
+      const status = await repository.withTransaction((client) => repository.statusByKey(client, {
+        actorId,
+        organizationId,
+        operationId: 'createCustomer',
+        idempotencyKey,
+      }));
+      expect(status).toMatchObject({ state: 'SUCCEEDED', httpStatus: 201, resource: { type: 'CUSTOMER' } });
+      const contract = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+      expect(createContractValidator(contract).validate('CommandStatus', status)).toBe(true);
+      await expect(pool.query('SELECT count(*)::int AS count FROM integration.outbox_event WHERE organization_id = $1', [organizationId])).resolves.toMatchObject({ rows: [{ count: 2 }] });
+    } finally {
+      await app.close();
+    }
   });
 });

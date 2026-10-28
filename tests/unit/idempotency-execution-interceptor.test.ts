@@ -1,14 +1,17 @@
 import { lastValueFrom, of } from 'rxjs';
 import { IdempotencyExecutionInterceptor } from '../../apps/api/src/common/security/idempotency-execution.interceptor.js';
+import { requireIdempotencyTransaction } from '../../apps/api/src/common/security/idempotency-transaction-context.js';
 import { IdempotencyConflictError } from '../../apps/api/src/modules/integration/idempotency/in-memory-idempotency-store.js';
 
 describe('idempotency execution interceptor', () => {
   it('executes the controller only through the repository transaction boundary', async () => {
     let controllerExecutions = 0;
     let persistedResult: unknown;
+    const transactionClient = { query: async () => undefined };
+    const claim = { commandId: 'command-1', claimRole: 'OWNER' as const };
     const repository = {
-      execute: async (_input: unknown, work: (client: unknown) => Promise<unknown>) => {
-        persistedResult = await work({ transaction: true });
+      execute: async (_input: unknown, work: (client: unknown, claim: unknown) => Promise<unknown>) => {
+        persistedResult = await work(transactionClient, claim);
         return persistedResult;
       },
     };
@@ -25,7 +28,11 @@ describe('idempotency execution interceptor', () => {
     };
     const response = { statusCode: 201, getHeader: (name: string) => name.toLowerCase() === 'location' ? '/api/v1/customers/2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' : undefined, header: () => response };
     const context = { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as never;
-    const next = { handle: () => { controllerExecutions += 1; return of({ id: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' }); } };
+    const next = { handle: () => {
+      controllerExecutions += 1;
+      expect(requireIdempotencyTransaction(request as never)).toEqual({ client: transactionClient, claim });
+      return of({ id: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' });
+    } };
 
     const result = await lastValueFrom(interceptor.intercept(context, next as never));
     const callbackClient = (result as { id: string }).id;

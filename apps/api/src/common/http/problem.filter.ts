@@ -2,6 +2,8 @@ import { Catch, HttpException, type ArgumentsHost, type ExceptionFilter } from '
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { buildProblem, normalizeRequestId, ProblemError, type ProblemViolation } from './problem.js';
 import type { ContractValidator } from '../../../../../packages/contracts/openapi/runtime-validator.js';
+import { operations, type OperationId } from '../../../../../packages/contracts/openapi/generated-client.js';
+import type { GeneratedOperation, OperationResponseContract } from '../../../../../packages/contracts/openapi/client.js';
 
 @Catch()
 export class ProblemExceptionFilter implements ExceptionFilter<unknown> {
@@ -15,12 +17,47 @@ export class ProblemExceptionFilter implements ExceptionFilter<unknown> {
     const candidate = exception instanceof ProblemError
       ? exception.problem
       : toProblem(exception, requestId);
-    const problem = this.validator?.validate('Problem', candidate) === false
-      ? buildProblem({ status: 500, code: 'INTERNAL_ERROR', title: 'Internal server error', requestId, retryable: false })
-      : candidate;
-    response.header('X-Request-ID', problem.requestId).header('Cache-Control', 'no-store');
-    response.status(problem.status).type('application/problem+json').send(problem);
+    response.header('X-Request-ID', candidate.requestId).header('Cache-Control', 'no-store').type('application/problem+json');
+    const operation = operationForRequest(request);
+    const problem = this.validator === undefined || operation === undefined
+      ? this.validator?.validate('Problem', candidate) === false
+        ? internalProblem(requestId)
+        : candidate
+      : isDeclaredProblem(operation, candidate, response, this.validator)
+        ? candidate
+        : internalProblem(requestId);
+    response.header('X-Request-ID', problem.requestId).status(problem.status).send(problem);
   }
+}
+
+function isDeclaredProblem(operation: GeneratedOperation, candidate: ReturnType<typeof buildProblem>, response: FastifyReply, validator: ContractValidator): boolean {
+  const responseContract = operation.responses[String(candidate.status)];
+  if (responseContract === undefined || responseContract.contentType !== 'application/problem+json' || responseContract.schema === undefined) return false;
+  if (!validator.validate(responseContract.schema, candidate)) return false;
+  return responseHeadersMatch(responseContract, response, validator);
+}
+
+function responseHeadersMatch(contract: OperationResponseContract, response: FastifyReply, validator: ContractValidator): boolean {
+  for (const [name, header] of Object.entries(contract.headers)) {
+    const rawValue = response.getHeader(name);
+    const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+    if (value === undefined || value === null) {
+      if (header.required) return false;
+      continue;
+    }
+    if (header.schema !== undefined && (typeof value !== 'string' || (typeof header.schema === 'string' ? !validator.validate(header.schema, value) : !validator.validateSchema(header.schema, value)))) return false;
+  }
+  return true;
+}
+
+function internalProblem(requestId: string) {
+  return buildProblem({ status: 500, code: 'INTERNAL_ERROR', title: 'Internal server error', requestId, retryable: false });
+}
+
+function operationForRequest(request: FastifyRequest): GeneratedOperation | undefined {
+  const path = (request.routeOptions.url ?? request.url.split('?')[0] ?? '').replace(/^\/api\/v1/, '').replace(/:([A-Za-z][A-Za-z0-9_]*)/g, '{$1}');
+  const method = request.method.toUpperCase();
+  return Object.values(operations).find((candidate) => candidate.method === method && candidate.path === path) as (typeof operations)[OperationId] | undefined;
 }
 
 function toProblem(exception: unknown, requestId: string) {

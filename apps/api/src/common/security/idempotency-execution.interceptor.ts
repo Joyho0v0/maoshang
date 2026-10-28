@@ -8,6 +8,7 @@ import { CommandFailureError, IdempotencyConflictError, type CommandResult, type
 import type { PostgresIdempotencyInput, PostgresIdempotencyRepository } from '../../modules/integration/idempotency/postgres-idempotency-repository.js';
 import type { GeneratedOperation } from '../../../../../packages/contracts/openapi/client.js';
 import { buildProblem, normalizeRequestId, ProblemError } from '../http/problem.js';
+import { restoreIdempotencyTransaction, setIdempotencyTransaction } from './idempotency-transaction-context.js';
 
 interface PrincipalRequest extends FastifyRequest {
   user?: { id: string; organizationId: string };
@@ -39,17 +40,22 @@ export class IdempotencyExecutionInterceptor implements NestInterceptor {
       }),
     };
 
-    return from(this.repository.execute(input, async () => {
-      const body = await firstValueFrom(next.handle());
-      const contentLocation = headerString(response.getHeader('content-location'));
-      const resource = resourceReferenceForResponse(match.operation, request, response, body, response.statusCode ?? 200);
-      const result: CommandResult<unknown> = {
-        status: response.statusCode ?? 200,
-        body,
-        ...(resource === undefined ? {} : { resource }),
-        ...(contentLocation === undefined ? {} : { resultHref: contentLocation }),
-      };
-      return result;
+    return from(this.repository.execute(input, async (client, claim) => {
+      const previous = setIdempotencyTransaction(request, { client, claim });
+      try {
+        const body = await firstValueFrom(next.handle());
+        const contentLocation = headerString(response.getHeader('content-location'));
+        const resource = resourceReferenceForResponse(match.operation, request, response, body, response.statusCode ?? 200);
+        const result: CommandResult<unknown> = {
+          status: response.statusCode ?? 200,
+          body,
+          ...(resource === undefined ? {} : { resource }),
+          ...(contentLocation === undefined ? {} : { resultHref: contentLocation }),
+        };
+        return result;
+      } finally {
+        restoreIdempotencyTransaction(request, previous);
+      }
     })).pipe(map((outcome) => {
       if (isCommandStatus(outcome)) {
         response.statusCode = 202;

@@ -82,4 +82,26 @@ describe('Fastify API entry point', () => {
       await app.close();
     }
   });
+
+  it('emits the operation-declared dependency problem for a valid session request', async () => {
+    const app = await createApp({ config: { nodeEnv: 'test', databaseUrl: 'postgres://localhost/test', sessionSecret: 's'.repeat(32) } });
+    await app.init();
+    try {
+      const csrfResponse = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: '/api/v1/auth/csrf' });
+      const response = await app.getHttpAdapter().getInstance().inject({
+        method: 'POST',
+        url: '/api/v1/auth/sessions',
+        headers: {
+          'x-csrf-token': csrfResponse.json().csrfToken,
+          cookie: Array.isArray(csrfResponse.headers['set-cookie']) ? csrfResponse.headers['set-cookie'][0] : csrfResponse.headers['set-cookie'],
+        },
+        payload: { provider: 'LOCAL_PASSWORD' },
+      });
+      expect(response.statusCode).toBe(503);
+      expect(response.headers['content-type']).toContain('application/problem+json');
+      expect(response.json()).toMatchObject({ status: 503, code: 'DEPENDENCY_UNAVAILABLE' });
+    } finally {
+      await app.close();
+    }
+  });
 });

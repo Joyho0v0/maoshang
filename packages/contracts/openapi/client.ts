@@ -99,6 +99,7 @@ export class ContractApiClient {
     if (responseContract === undefined) throw new Error(`Unexpected HTTP ${response.status} response.`);
     const payload = await parseResponseBody(response);
     validateResponseMetadata(response, responseContract, validator);
+    if (responseContract.schema === undefined && payload !== undefined) throw new Error(`Unexpected response body for HTTP ${response.status}.`);
     if (!response.ok) {
       const schema = responseContract.schema;
       if (!isRecord(payload) || typeof payload.status !== 'number' || payload.status !== response.status) throw new Error(`Problem status does not match HTTP status ${response.status}.`);
@@ -162,6 +163,7 @@ function validateResponseMetadata(response: Response, contract: OperationRespons
     const contentType = response.headers.get('content-type')?.split(';', 1)[0]?.trim();
     if (contentType !== contract.contentType) throw new Error(`Unexpected response content type: ${contentType ?? 'missing'}.`);
   }
+  if (contract.schema === undefined && response.headers.has('content-type')) throw new Error('Unexpected response content type for a bodyless response.');
   for (const [name, header] of Object.entries(contract.headers)) {
     const value = response.headers.get(name);
     if (value === null) {

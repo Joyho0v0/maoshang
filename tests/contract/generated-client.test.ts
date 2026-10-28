@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { parse } from 'yaml';
+import { ApiProblemError } from '../../packages/contracts/openapi/client.js';
 import { GeneratedApiClient } from '../../packages/contracts/openapi/generated-client.js';
 import { createContractValidator } from '../../packages/contracts/openapi/runtime-validator.js';
 
@@ -41,6 +42,26 @@ describe('generated contract client', () => {
     });
 
     await expect(client.call('createSession', { headers: { 'X-CSRF-Token': 'csrf-token-value' }, body: { provider: 'LOCAL_PASSWORD' } })).rejects.toThrow(/Invalid CsrfFailedProblem response/);
+  });
+
+  it('exposes a declared dependency failure as a typed Problem instead of an undeclared-status error', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const client = new GeneratedApiClient({
+      fetch: async () => new Response(JSON.stringify({ type: 'urn:autoflow:problem:dependency-unavailable', title: 'Dependency unavailable', status: 503, code: 'DEPENDENCY_UNAVAILABLE', requestId: 'f8b6e3a9-3a0a-4c1c-b3f3-8a8225e7f019', retryable: true }), { status: 503, headers: { 'content-type': 'application/problem+json', 'x-request-id': 'f8b6e3a9-3a0a-4c1c-b3f3-8a8225e7f019' } }),
+      validator: createContractValidator(document),
+    });
+
+    await expect(client.call('createSession', { headers: { 'X-CSRF-Token': 'csrf-token-value' }, body: { provider: 'LOCAL_PASSWORD' } })).rejects.toBeInstanceOf(ApiProblemError);
+  });
+
+  it('rejects an unexpected media type on a 204 response', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const client = new GeneratedApiClient({
+      fetch: async () => new Response(null, { status: 204, headers: { 'content-type': 'application/json' } }),
+      validator: createContractValidator(document),
+    });
+
+    await expect(client.call('deleteCurrentSession', { headers: { 'X-CSRF-Token': 'csrf-token-value' } })).rejects.toThrow(/unexpected response content type/i);
   });
 
   it('rejects invalid path, body, and required safety headers before fetch', async () => {

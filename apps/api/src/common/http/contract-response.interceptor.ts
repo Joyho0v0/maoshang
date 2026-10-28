@@ -27,8 +27,8 @@ export class ContractResponseValidationInterceptor implements NestInterceptor {
           retryable: false,
         }));
       }
+      const contentType = String(response.getHeader('content-type') ?? '').split(';', 1)[0];
       if (responseContract.contentType !== undefined) {
-        const contentType = String(response.getHeader('content-type') ?? '').split(';', 1)[0];
         if (contentType !== responseContract.contentType) {
           throw new ProblemError(buildProblem({
             status: 500,
@@ -38,6 +38,14 @@ export class ContractResponseValidationInterceptor implements NestInterceptor {
             retryable: false,
           }));
         }
+      } else if (responseContract.schema === undefined && contentType !== '') {
+        throw new ProblemError(buildProblem({
+          status: 500,
+          code: 'INTERNAL_ERROR',
+          title: 'Bodyless response has an unexpected content type',
+          requestId: normalizeRequestId(request.headers['x-request-id']),
+          retryable: false,
+        }));
       }
       for (const [headerName, headerContract] of Object.entries(responseContract.headers)) {
         const rawValue = response.getHeader(headerName);
@@ -62,7 +70,17 @@ export class ContractResponseValidationInterceptor implements NestInterceptor {
           }));
         }
       }
-      if (responseContract.schema === undefined || this.validator.validate(responseContract.schema, value)) return value;
+      if (responseContract.schema === undefined) {
+        if (value === undefined || value === null) return value;
+        throw new ProblemError(buildProblem({
+          status: 500,
+          code: 'INTERNAL_ERROR',
+          title: 'Bodyless response contains a response body',
+          requestId: normalizeRequestId(request.headers['x-request-id']),
+          retryable: false,
+        }));
+      }
+      if (this.validator.validate(responseContract.schema, value)) return value;
       throw new ProblemError(buildProblem({
         status: 500,
         code: 'INTERNAL_ERROR',
