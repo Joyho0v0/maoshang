@@ -933,6 +933,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         ResourceCreateRequest: {
             resourceType: components["schemas"]["ResourceType"];
@@ -1124,10 +1126,14 @@ export interface components {
         PageMeta: {
             nextCursor: string | null;
             hasNext: boolean;
+        } & {
+            [key: string]: unknown;
         };
         PageResource: {
             data: components["schemas"]["Resource"][];
             page: components["schemas"]["PageMeta"];
+        } & {
+            [key: string]: unknown;
         };
         DomainResource: {
             id: components["schemas"]["Uuid"];
@@ -1142,6 +1148,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         Product: {
             id: components["schemas"]["Uuid"];
@@ -1161,6 +1169,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         Sku: {
             id: components["schemas"]["Uuid"];
@@ -1174,12 +1184,18 @@ export interface components {
             skuCode: string;
             name: string;
             unit: string;
+            baseUnit: string;
+            /** @enum {string} */
+            trackingMode: "NONE" | "LOT" | "SERIAL";
+            lowStockThreshold: components["schemas"]["DecimalString"];
             price?: components["schemas"]["DecimalString"];
             /** @enum {string} */
             status: "ACTIVE" | "INACTIVE";
             metadata?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         Order: {
             id: components["schemas"]["Uuid"];
@@ -1203,6 +1219,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         Payment: {
             id: components["schemas"]["Uuid"];
@@ -1222,6 +1240,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         File: {
             id: components["schemas"]["Uuid"];
@@ -1236,10 +1256,12 @@ export interface components {
             sizeBytes: number;
             checksum?: string;
             /** @enum {string} */
-            status: "PENDING" | "READY" | "FAILED";
+            status: "PENDING_UPLOAD" | "UPLOADED" | "SCANNING" | "AVAILABLE" | "REJECTED" | "QUARANTINED";
             metadata?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         Document: {
             id: components["schemas"]["Uuid"];
@@ -1253,11 +1275,17 @@ export interface components {
             title: string;
             documentType: string;
             fileId?: components["schemas"]["Uuid"];
+            versionNo: number;
+            /** @enum {string} */
+            renderStatus: "NOT_STARTED" | "RENDERING" | "RENDERED" | "FAILED";
+            capabilities: components["schemas"]["Capability"][];
             /** @enum {string} */
             status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "FINALIZED" | "ISSUED" | "VOID";
             metadata?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         Task: {
             id: components["schemas"]["Uuid"];
@@ -1277,6 +1305,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
         };
         InventoryReservation: {
             id: components["schemas"]["Uuid"];
@@ -1291,62 +1321,163 @@ export interface components {
             unit: string;
             /** @enum {string} */
             status: "ACTIVE" | "RELEASED" | "EXPIRED";
+        } & {
+            [key: string]: unknown;
         };
-        InventoryBalance: components["schemas"]["DomainResource"];
-        InventoryMovement: components["schemas"]["DomainResource"];
-        InventoryObservation: components["schemas"]["DomainResource"];
-        AuditEvent: components["schemas"]["DomainResource"];
+        InventoryBalance: {
+            id: components["schemas"]["Uuid"];
+            organizationId: components["schemas"]["Uuid"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            skuId: components["schemas"]["Uuid"];
+            locationId: components["schemas"]["Uuid"];
+            onHand: components["schemas"]["DecimalString"];
+            reserved: components["schemas"]["DecimalString"];
+            available: components["schemas"]["DecimalString"];
+            unit: string;
+            belowThreshold: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        InventoryMovement: {
+            id: components["schemas"]["Uuid"];
+            organizationId: components["schemas"]["Uuid"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            skuId: components["schemas"]["Uuid"];
+            locationId: components["schemas"]["Uuid"];
+            quantity: components["schemas"]["DecimalString"];
+            unit: string;
+            /** @enum {string} */
+            movementType: "RECEIPT" | "ISSUE" | "ADJUSTMENT" | "RESERVATION" | "RELEASE" | "REVERSAL";
+            operationId?: components["schemas"]["Uuid"];
+            /** Format: date-time */
+            occurredAt?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        InventoryObservation: {
+            id: components["schemas"]["Uuid"];
+            organizationId: components["schemas"]["Uuid"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            skuId: components["schemas"]["Uuid"];
+            locationId: components["schemas"]["Uuid"];
+            /** Format: date-time */
+            observedAt: string;
+            onHand: components["schemas"]["DecimalString"];
+            reserved: components["schemas"]["DecimalString"];
+            available: components["schemas"]["DecimalString"];
+            unit: string;
+            /** @enum {string} */
+            source: "COUNT" | "IMPORT" | "INTEGRATION" | "ADJUSTMENT";
+        } & {
+            [key: string]: unknown;
+        };
+        AuditEvent: {
+            id: components["schemas"]["Uuid"];
+            organizationId: components["schemas"]["Uuid"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            actorUserId: components["schemas"]["Uuid"];
+            action: string;
+            resourceType: components["schemas"]["ResourceType"];
+            resourceId: components["schemas"]["Uuid"];
+            details?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
         CustomerPage: {
             data: components["schemas"]["Customer"][];
             page: components["schemas"]["PageMeta"];
+        } & {
+            [key: string]: unknown;
         };
         ProductPage: {
             data: components["schemas"]["Product"][];
             page: components["schemas"]["PageMeta"];
+        } & {
+            [key: string]: unknown;
         };
         SkuPage: {
             data: components["schemas"]["Sku"][];
             page: components["schemas"]["PageMeta"];
+        } & {
+            [key: string]: unknown;
         };
         OrderPage: {
             data: components["schemas"]["Order"][];
             page: components["schemas"]["PageMeta"];
+        } & {
+            [key: string]: unknown;
         };
         InventoryPage: {
             data: components["schemas"]["DomainResource"][];
             page: components["schemas"]["PageMeta"];
+        } & {
+            [key: string]: unknown;
         };
         InventoryBalancePage: {
             data: components["schemas"]["InventoryBalance"][];
             page: components["schemas"]["PageMeta"];
+        } & {
+            [key: string]: unknown;
         };
         InventoryMovementPage: {
             data: components["schemas"]["InventoryMovement"][];
             page: components["schemas"]["PageMeta"];
+        } & {
+            [key: string]: unknown;
         };
         InventoryReservationPage: {
             data: components["schemas"]["InventoryReservation"][];
             page: components["schemas"]["PageMeta"];
+        } & {
+            [key: string]: unknown;
         };
         InventoryObservationPage: {
             data: components["schemas"]["InventoryObservation"][];
             page: components["schemas"]["PageMeta"];
+        } & {
+            [key: string]: unknown;
         };
         PaymentPage: {
             data: components["schemas"]["Payment"][];
             page: components["schemas"]["PageMeta"];
+        } & {
+            [key: string]: unknown;
         };
         DocumentPage: {
             data: components["schemas"]["Document"][];
             page: components["schemas"]["PageMeta"];
+        } & {
+            [key: string]: unknown;
         };
         TaskPage: {
             data: components["schemas"]["Task"][];
             page: components["schemas"]["PageMeta"];
+        } & {
+            [key: string]: unknown;
         };
         AuditEventPage: {
             data: components["schemas"]["AuditEvent"][];
             page: components["schemas"]["PageMeta"];
+        } & {
+            [key: string]: unknown;
         };
         User: {
             id: components["schemas"]["Uuid"];
@@ -1360,6 +1491,8 @@ export interface components {
             role: string;
             /** @enum {string} */
             status: "ACTIVE" | "DISABLED";
+        } & {
+            [key: string]: unknown;
         };
         Money: {
             amount: components["schemas"]["DecimalString"];
@@ -1377,12 +1510,16 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        } & {
+            [key: string]: unknown;
         };
         Resource: {
             id: components["schemas"]["Uuid"];
             version: number;
             href: components["schemas"]["Href"];
             data: components["schemas"]["ResourcePayload"];
+        } & {
+            [key: string]: unknown;
         };
         Capability: string;
         SessionRequest: {
@@ -1489,6 +1626,8 @@ export interface components {
             retryable: boolean;
             violations?: components["schemas"]["ProblemViolation"][];
             meta?: components["schemas"]["TypedProblemMeta"] | null;
+        } & {
+            [key: string]: unknown;
         };
         ProblemInvalidCursor: components["schemas"]["ProblemFields"] & {
             /** @constant */
@@ -1761,16 +1900,11 @@ export interface components {
             /** @constant */
             state: "IN_PROGRESS";
             retryAfterMs: number;
-            /** @constant */
-            completedAt?: unknown;
-            /** @constant */
-            httpStatus?: unknown;
-            /** @constant */
-            resource?: unknown;
-            /** @constant */
-            resultHref?: unknown;
-            /** @constant */
-            problem?: unknown;
+            completedAt: null;
+            httpStatus: null;
+            resource: null;
+            resultHref: null;
+            problem: null;
         } & {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1780,19 +1914,14 @@ export interface components {
         };
         CommandStatusRecovery: components["schemas"]["CommandStatusBase"] & {
             /** @constant */
-            state?: "RECOVERY_REQUIRED";
+            state: "RECOVERY_REQUIRED";
             /** @constant */
-            retryAfterMs?: 0;
-            /** @constant */
-            completedAt?: unknown;
-            /** @constant */
-            httpStatus?: unknown;
-            /** @constant */
-            resource?: unknown;
-            /** @constant */
-            resultHref?: unknown;
-            /** @constant */
-            problem?: unknown;
+            retryAfterMs: 0;
+            completedAt: null;
+            httpStatus: null;
+            resource: null;
+            resultHref: null;
+            problem: null;
         } & {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1802,13 +1931,13 @@ export interface components {
         };
         CommandStatusSucceeded: components["schemas"]["CommandStatusBase"] & {
             /** @constant */
-            state?: "SUCCEEDED";
+            state: "SUCCEEDED";
             /** Format: date-time */
             completedAt: string;
             httpStatus: number;
             resource: components["schemas"]["ResourceReference"];
-            /** @constant */
-            problem?: unknown;
+            resultHref: null;
+            problem: null;
         } & {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1818,14 +1947,12 @@ export interface components {
         };
         CommandStatusFailed: components["schemas"]["CommandStatusBase"] & {
             /** @constant */
-            state?: "FAILED";
+            state: "FAILED";
             /** Format: date-time */
             completedAt: string;
             httpStatus: number;
-            /** @constant */
-            resource?: unknown;
-            /** @constant */
-            resultHref?: unknown;
+            resource: null;
+            resultHref: null;
             problem: components["schemas"]["Problem"];
         } & {
             /**
@@ -1861,6 +1988,19 @@ export interface components {
             contacts?: components["schemas"]["JsonObject"][];
             approvalSummary?: components["schemas"]["CustomerApprovalSummary"];
             capabilities: components["schemas"]["Capability"][];
+        } & {
+            [key: string]: unknown;
+        };
+        InventoryOperationLine: {
+            skuId: components["schemas"]["Uuid"];
+            locationId: components["schemas"]["Uuid"];
+            quantity: components["schemas"]["DecimalString"];
+            unit: string;
+            reversalOfLineId?: components["schemas"]["Uuid"];
+            /** @enum {string} */
+            movementType?: "RECEIPT" | "ISSUE" | "ADJUSTMENT" | "RESERVATION" | "RELEASE" | "REVERSAL";
+        } & {
+            [key: string]: unknown;
         };
         InventoryOperation: {
             id: components["schemas"]["Uuid"];
@@ -1876,7 +2016,9 @@ export interface components {
             status: "DRAFT" | "POSTED" | "REVERSED" | "CANCELLED";
             reversalOperationId?: components["schemas"]["Uuid"];
             reversalHref?: string;
-            lines: components["schemas"]["JsonObject"][];
+            lines: components["schemas"]["InventoryOperationLine"][];
+        } & {
+            [key: string]: unknown;
         };
         Href: string;
     };
@@ -2338,6 +2480,7 @@ export interface components {
         /** @description Session-bound CSRF token. */
         CsrfToken: {
             headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
                 "Cache-Control"?: "no-store";
                 [name: string]: unknown;
             };
@@ -2407,6 +2550,35 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /** @description Successful response without a representation. */
+        NoContent: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content?: never;
+        };
+        /** @description CSRF or permission denied. */
+        Forbidden: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Request rate limit exceeded. */
+        RateLimited: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
+                "Retry-After"?: string;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
         /** @description CSRF is missing or invalid before side effects. */
         CsrfFailed: {
             headers: {
@@ -2419,6 +2591,7 @@ export interface components {
         /** @description A required If-Match or Idempotency-Key header is missing. */
         PreconditionRequired: {
             headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
                 [name: string]: unknown;
             };
             content: {
@@ -2428,6 +2601,7 @@ export interface components {
         /** @description Command is not visible to this actor. */
         CommandNotFound: {
             headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
                 [name: string]: unknown;
             };
             content: {
@@ -2447,6 +2621,16 @@ export interface components {
         PageSize: number;
         Sort: string;
         Filter: string[];
+        FilterStatus: string[];
+        FilterGroupId: components["schemas"]["Uuid"][];
+        FilterOwnerUserId: components["schemas"]["Uuid"][];
+        FilterSkuId: components["schemas"]["Uuid"][];
+        FilterLocationId: components["schemas"]["Uuid"][];
+        FilterOrderId: components["schemas"]["Uuid"][];
+        FilterActorUserId: components["schemas"]["Uuid"][];
+        FilterAction: string[];
+        FilterResourceType: components["schemas"]["ResourceType"][];
+        FilterAssigneeUserId: components["schemas"]["Uuid"][];
     };
     requestBodies: {
         JsonObject: {
@@ -2638,7 +2822,7 @@ export interface operations {
             200: components["responses"]["CsrfToken"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -2658,8 +2842,8 @@ export interface operations {
             201: components["responses"]["Session"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
-            429: components["responses"]["Problem"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -2677,7 +2861,7 @@ export interface operations {
             200: components["responses"]["Session"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -2694,17 +2878,11 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Session deleted. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
+            204: components["responses"]["NoContent"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
-            429: components["responses"]["Problem"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -2726,7 +2904,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["CommandNotFound"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -2747,7 +2925,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -2772,10 +2950,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -2800,10 +2978,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -2828,10 +3006,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -2855,10 +3033,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -2870,7 +3048,9 @@ export interface operations {
                 "page[after]"?: components["parameters"]["PageAfter"];
                 "page[size]"?: components["parameters"]["PageSize"];
                 sort?: components["parameters"]["Sort"];
-                filter?: components["parameters"]["Filter"];
+                "filter[status]"?: components["parameters"]["FilterStatus"];
+                "filter[groupId]"?: components["parameters"]["FilterGroupId"];
+                "filter[ownerUserId]"?: components["parameters"]["FilterOwnerUserId"];
             };
             header?: never;
             path?: never;
@@ -2881,7 +3061,7 @@ export interface operations {
             200: components["responses"]["CustomerPage"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -2904,10 +3084,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -2928,7 +3108,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -2953,10 +3133,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -2981,10 +3161,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3009,10 +3189,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3037,10 +3217,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3065,10 +3245,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3080,7 +3260,7 @@ export interface operations {
                 "page[after]"?: components["parameters"]["PageAfter"];
                 "page[size]"?: components["parameters"]["PageSize"];
                 sort?: components["parameters"]["Sort"];
-                filter?: components["parameters"]["Filter"];
+                "filter[status]"?: components["parameters"]["FilterStatus"];
             };
             header?: never;
             path?: never;
@@ -3091,7 +3271,7 @@ export interface operations {
             200: components["responses"]["ProductPage"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3113,10 +3293,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3137,7 +3317,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3162,10 +3342,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3177,7 +3357,7 @@ export interface operations {
                 "page[after]"?: components["parameters"]["PageAfter"];
                 "page[size]"?: components["parameters"]["PageSize"];
                 sort?: components["parameters"]["Sort"];
-                filter?: components["parameters"]["Filter"];
+                "filter[status]"?: components["parameters"]["FilterStatus"];
             };
             header?: never;
             path?: never;
@@ -3188,7 +3368,7 @@ export interface operations {
             200: components["responses"]["SkuPage"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3210,10 +3390,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3234,7 +3414,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3259,10 +3439,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3274,7 +3454,7 @@ export interface operations {
                 "page[after]"?: components["parameters"]["PageAfter"];
                 "page[size]"?: components["parameters"]["PageSize"];
                 sort?: components["parameters"]["Sort"];
-                filter?: components["parameters"]["Filter"];
+                "filter[status]"?: components["parameters"]["FilterStatus"];
             };
             header?: never;
             path?: never;
@@ -3285,7 +3465,7 @@ export interface operations {
             200: components["responses"]["OrderPage"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3307,10 +3487,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3331,7 +3511,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3356,10 +3536,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3384,10 +3564,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3399,7 +3579,9 @@ export interface operations {
                 "page[after]"?: components["parameters"]["PageAfter"];
                 "page[size]"?: components["parameters"]["PageSize"];
                 sort?: components["parameters"]["Sort"];
-                filter?: components["parameters"]["Filter"];
+                "filter[status]"?: components["parameters"]["FilterStatus"];
+                "filter[skuId]"?: components["parameters"]["FilterSkuId"];
+                "filter[locationId]"?: components["parameters"]["FilterLocationId"];
             };
             header?: never;
             path?: never;
@@ -3410,7 +3592,7 @@ export interface operations {
             200: components["responses"]["InventoryBalancePage"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3422,7 +3604,9 @@ export interface operations {
                 "page[after]"?: components["parameters"]["PageAfter"];
                 "page[size]"?: components["parameters"]["PageSize"];
                 sort?: components["parameters"]["Sort"];
-                filter?: components["parameters"]["Filter"];
+                "filter[status]"?: components["parameters"]["FilterStatus"];
+                "filter[skuId]"?: components["parameters"]["FilterSkuId"];
+                "filter[locationId]"?: components["parameters"]["FilterLocationId"];
             };
             header?: never;
             path?: never;
@@ -3433,7 +3617,7 @@ export interface operations {
             200: components["responses"]["InventoryMovementPage"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3445,7 +3629,9 @@ export interface operations {
                 "page[after]"?: components["parameters"]["PageAfter"];
                 "page[size]"?: components["parameters"]["PageSize"];
                 sort?: components["parameters"]["Sort"];
-                filter?: components["parameters"]["Filter"];
+                "filter[status]"?: components["parameters"]["FilterStatus"];
+                "filter[skuId]"?: components["parameters"]["FilterSkuId"];
+                "filter[locationId]"?: components["parameters"]["FilterLocationId"];
             };
             header?: never;
             path?: never;
@@ -3456,7 +3642,7 @@ export interface operations {
             200: components["responses"]["InventoryReservationPage"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3478,10 +3664,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3502,7 +3688,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3527,10 +3713,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3542,7 +3728,9 @@ export interface operations {
                 "page[after]"?: components["parameters"]["PageAfter"];
                 "page[size]"?: components["parameters"]["PageSize"];
                 sort?: components["parameters"]["Sort"];
-                filter?: components["parameters"]["Filter"];
+                "filter[status]"?: components["parameters"]["FilterStatus"];
+                "filter[skuId]"?: components["parameters"]["FilterSkuId"];
+                "filter[locationId]"?: components["parameters"]["FilterLocationId"];
             };
             header?: never;
             path?: never;
@@ -3553,7 +3741,7 @@ export interface operations {
             200: components["responses"]["InventoryObservationPage"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3575,10 +3763,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3599,7 +3787,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3621,10 +3809,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3646,10 +3834,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3671,10 +3859,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3696,10 +3884,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3724,10 +3912,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3739,7 +3927,8 @@ export interface operations {
                 "page[after]"?: components["parameters"]["PageAfter"];
                 "page[size]"?: components["parameters"]["PageSize"];
                 sort?: components["parameters"]["Sort"];
-                filter?: components["parameters"]["Filter"];
+                "filter[status]"?: components["parameters"]["FilterStatus"];
+                "filter[orderId]"?: components["parameters"]["FilterOrderId"];
             };
             header?: never;
             path?: never;
@@ -3750,7 +3939,7 @@ export interface operations {
             200: components["responses"]["PaymentPage"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3772,10 +3961,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3796,7 +3985,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3821,10 +4010,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3849,10 +4038,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3877,10 +4066,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3905,10 +4094,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3929,7 +4118,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3951,10 +4140,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -3979,10 +4168,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4004,9 +4193,9 @@ export interface operations {
             201: components["responses"]["CreatedFile"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4018,7 +4207,7 @@ export interface operations {
                 "page[after]"?: components["parameters"]["PageAfter"];
                 "page[size]"?: components["parameters"]["PageSize"];
                 sort?: components["parameters"]["Sort"];
-                filter?: components["parameters"]["Filter"];
+                "filter[status]"?: components["parameters"]["FilterStatus"];
             };
             header?: never;
             path: {
@@ -4031,7 +4220,7 @@ export interface operations {
             200: components["responses"]["DocumentPage"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4056,10 +4245,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4080,7 +4269,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4105,10 +4294,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4133,10 +4322,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4161,10 +4350,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4189,10 +4378,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4217,10 +4406,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4245,10 +4434,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4273,10 +4462,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4301,10 +4490,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4316,7 +4505,8 @@ export interface operations {
                 "page[after]"?: components["parameters"]["PageAfter"];
                 "page[size]"?: components["parameters"]["PageSize"];
                 sort?: components["parameters"]["Sort"];
-                filter?: components["parameters"]["Filter"];
+                "filter[status]"?: components["parameters"]["FilterStatus"];
+                "filter[assigneeUserId]"?: components["parameters"]["FilterAssigneeUserId"];
             };
             header?: never;
             path?: never;
@@ -4327,7 +4517,7 @@ export interface operations {
             200: components["responses"]["TaskPage"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4349,10 +4539,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4373,7 +4563,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4398,10 +4588,10 @@ export interface operations {
             202: components["responses"]["CommandStatusInProgress"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            403: components["responses"]["CsrfFailed"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
@@ -4413,7 +4603,9 @@ export interface operations {
                 "page[after]"?: components["parameters"]["PageAfter"];
                 "page[size]"?: components["parameters"]["PageSize"];
                 sort?: components["parameters"]["Sort"];
-                filter?: components["parameters"]["Filter"];
+                "filter[actorUserId]"?: components["parameters"]["FilterActorUserId"];
+                "filter[action]"?: components["parameters"]["FilterAction"];
+                "filter[resourceType]"?: components["parameters"]["FilterResourceType"];
             };
             header?: never;
             path?: never;
@@ -4424,7 +4616,7 @@ export interface operations {
             200: components["responses"]["AuditEventPage"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
             503: components["responses"]["Problem"];

@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import SwaggerParser from '@apidevtools/swagger-parser';
 import { parse } from 'yaml';
 import { EXPECTED_CONTRACT_SHAPES, EXPECTED_OPERATION_MANIFEST, assertOperationManifest } from '../../packages/contracts/openapi/contract-manifest.js';
+import { operations } from '../../packages/contracts/openapi/generated-client.js';
 
 const artifactPath = new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url);
 type Operation = {
@@ -80,6 +81,24 @@ describe('machine-readable Joint Contract v1 artifact', () => {
     expect(JSON.stringify(createDocument)).toContain('IfMatchHeader');
     expect(JSON.stringify(createDocument)).toContain('DocumentCreateRequest');
     expect(JSON.stringify(document)).not.toContain('requestBody: { $ref: \'#/components/requestBodies/JsonObject\' }');
+  });
+
+  it('freezes typed public 403/429 responses and endpoint filter allowlists', () => {
+    const listOperationIds = ['listCustomers', 'listProducts', 'listSkus', 'listOrders', 'listInventoryBalances', 'listInventoryMovements', 'listInventoryReservations', 'listInventoryObservations', 'listPayments', 'listDocuments', 'listTasks', 'listAuditEvents'];
+    for (const [operationId, operation] of Object.entries(operations)) {
+      const responses = operation.responses as Readonly<Record<string, { schema?: string; headers: Readonly<Record<string, { required: boolean }>> }>>;
+      const forbidden = responses['403'];
+      if (forbidden !== undefined) expect(forbidden.schema).toBe('Problem');
+      const rateLimited = responses['429'];
+      expect(rateLimited?.schema).toBe('Problem');
+      expect(rateLimited?.headers['Retry-After']).toMatchObject({ required: true });
+      expect(rateLimited?.headers['X-Request-ID']).toMatchObject({ required: true });
+      if (listOperationIds.includes(operationId)) {
+        const queryNames = Object.keys(operation.queryParams);
+        expect(queryNames).not.toContain('filter');
+        expect(queryNames.some((name) => name.startsWith('filter['))).toBe(true);
+      }
+    }
   });
 });
 

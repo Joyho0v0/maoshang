@@ -58,12 +58,21 @@ describe('problem exception operation boundary', () => {
     expect(state.body).toMatchObject({ status: 500, code: 'INTERNAL_ERROR' });
   });
 
-  it('does not let a generic permission problem bypass the operation-specific CSRF response schema', async () => {
+  it('accepts a typed permission problem through the generic public 403 response', async () => {
     const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
     const filter = new ProblemExceptionFilter(createContractValidator(document));
     const state: FilterState = { headers: {} };
     filter.catch(new ProblemError(buildProblem({ status: 403, code: 'PERMISSION_DENIED', title: 'Permission denied', requestId: 'f8b6e3a9-3a0a-4c1c-b3f3-8a8225e7f019', retryable: false })), hostFor({ method: 'POST', url: '/api/v1/auth/sessions', routeOptions: { url: '/api/v1/auth/sessions' }, headers: {} }, state));
-    expect(state.status).toBe(500);
-    expect(state.body).toMatchObject({ status: 500, code: 'INTERNAL_ERROR' });
+    expect(state.status).toBe(403);
+    expect(state.body).toMatchObject({ status: 403, code: 'PERMISSION_DENIED' });
+  });
+
+  it('emits the required Retry-After value for a declared rate-limit response', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const filter = new ProblemExceptionFilter(createContractValidator(document));
+    const state: FilterState = { headers: {} };
+    filter.catch(new ProblemError(buildProblem({ status: 429, code: 'RATE_LIMITED', title: 'Rate limited', requestId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', retryable: true })), hostFor({ method: 'GET', url: '/api/v1/products', routeOptions: { url: '/api/v1/products' }, headers: {} }, state));
+    expect(state.status).toBe(429);
+    expect(state.headers['Retry-After']).toBe('60');
   });
 });

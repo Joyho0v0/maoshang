@@ -18,6 +18,7 @@ export class ProblemExceptionFilter implements ExceptionFilter<unknown> {
       ? exception.problem
       : toProblem(exception, requestId);
     response.header('X-Request-ID', candidate.requestId).header('Cache-Control', 'no-store').type('application/problem+json');
+    if (candidate.status === 429) response.header('Retry-After', '60');
     const operation = operationForRequest(request);
     const problem = this.validator === undefined || operation === undefined
       ? this.validator?.validate('Problem', candidate) === false

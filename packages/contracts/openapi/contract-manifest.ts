@@ -24,14 +24,15 @@ export interface ExpectedContractShape {
  * this second manifest freezes the high-risk query/body/response shapes that
  * must not drift while templates are refactored.
  */
-const PAGE_QUERY = ['page[after]', 'page[size]', 'sort', 'filter'] as const;
+const PAGE_QUERY = ['page[after]', 'page[size]', 'sort'] as const;
 const PAGE_DEFAULTS = { sort: '-updatedAt,-id' } as const;
-const ASYNC_HEADERS = { '202': ['Retry-After', 'Cache-Control', 'Content-Location'] } as const;
-const PROBLEM_HEADERS = { '403': 'CsrfFailedProblem', '409': 'Problem', '428': 'PreconditionRequiredProblem' } as const;
+const ASYNC_HEADERS = { '202': ['X-Request-ID', 'Retry-After', 'Cache-Control', 'Content-Location'] } as const;
+const PROBLEM_HEADERS = { '403': 'Problem', '409': 'Problem', '428': 'PreconditionRequiredProblem' } as const;
 const REQUEST_ID = 'Uuid';
 const ETAG = { type: 'string', pattern: '^"v[1-9][0-9]*"$' } as const;
 const HREF = 'Href';
 const RETRY_AFTER = { type: 'string' } as const;
+const RATE_LIMIT_RETRY_AFTER = { type: 'string', pattern: '^[1-9][0-9]*$' } as const;
 const NO_STORE = { type: 'string', const: 'no-store' } as const;
 const IDEMPOTENT_REPLAY = { type: 'string', enum: ['true'] } as const;
 const RESOURCE_HEADERS = ['X-Request-ID', 'ETag', 'Idempotent-Replay'] as const;
@@ -39,33 +40,33 @@ const LIST_HEADERS = ['X-Request-ID', 'Cache-Control'] as const;
 const ASYNC_RESPONSE_HEADERS = ['X-Request-ID', 'Retry-After', 'Cache-Control', 'Content-Location'] as const;
 const COMMON_PROBLEM_STATUSES = ['400', '401', '429', '500', '502', '503'] as const;
 const COMMON_PROBLEM_RESPONSE_SCHEMAS = Object.fromEntries(COMMON_PROBLEM_STATUSES.map((status) => [status, 'Problem'])) as Readonly<Record<string, string>>;
-const COMMON_PROBLEM_RESPONSE_HEADERS = Object.fromEntries(COMMON_PROBLEM_STATUSES.map((status) => [status, ['X-Request-ID'] as const])) as Readonly<Record<string, readonly string[]>>;
-const COMMON_PROBLEM_HEADER_SCHEMAS = Object.fromEntries(COMMON_PROBLEM_STATUSES.map((status) => [status, { 'X-Request-ID': REQUEST_ID }])) as Readonly<Record<string, Readonly<Record<string, string>>>>;
+const COMMON_PROBLEM_RESPONSE_HEADERS = Object.fromEntries(COMMON_PROBLEM_STATUSES.map((status) => [status, status === '429' ? ['X-Request-ID', 'Retry-After'] as const : ['X-Request-ID'] as const])) as Readonly<Record<string, readonly string[]>>;
+const COMMON_PROBLEM_HEADER_SCHEMAS = Object.fromEntries(COMMON_PROBLEM_STATUSES.map((status) => [status, status === '429' ? { 'X-Request-ID': REQUEST_ID, 'Retry-After': RATE_LIMIT_RETRY_AFTER } : { 'X-Request-ID': REQUEST_ID }])) as Readonly<Record<string, Readonly<Record<string, string | Readonly<Record<string, unknown>>>>>>;
 
-function listHeaders(schema: string): ExpectedContractShape {
-  return { queryParams: PAGE_QUERY, queryDefaults: PAGE_DEFAULTS, responseSchemas: { '200': schema }, responseHeaders: { '200': LIST_HEADERS }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': { type: 'string' } } } };
+function listHeaders(schema: string, filters: readonly string[]): ExpectedContractShape {
+  return { queryParams: [...PAGE_QUERY, ...filters], queryDefaults: PAGE_DEFAULTS, responseSchemas: { '200': schema }, responseHeaders: { '200': LIST_HEADERS }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': { type: 'string' } } } };
 }
 function responseShapes(status: string, schema: string, includeAsync: boolean, includeCreated: boolean): Pick<ExpectedContractShape, 'responseSchemas' | 'responseHeaders' | 'headerSchemas' | 'requiredResponseHeaders'> {
   const responseSchemas: Record<string, string> = { [status]: schema, ...includeAsync ? { '202': 'CommandStatusInProgress' } : {}, ...PROBLEM_HEADERS };
   const responseHeaders: Record<string, readonly string[]> = {
     [status]: includeCreated ? ['X-Request-ID', 'ETag', 'Location', 'Idempotent-Replay'] : RESOURCE_HEADERS,
     ...includeAsync ? { '202': ASYNC_RESPONSE_HEADERS } : {},
-    '403': [],
+    '403': ['X-Request-ID'],
     '409': ['X-Request-ID'],
-    '428': [],
+    '428': ['X-Request-ID'],
   };
   const headerSchemas: Record<string, Readonly<Record<string, string | Readonly<Record<string, unknown>>>> > = {
     [status]: includeCreated ? { 'X-Request-ID': REQUEST_ID, ETag: ETAG, Location: HREF, 'Idempotent-Replay': IDEMPOTENT_REPLAY } : { 'X-Request-ID': REQUEST_ID, ETag: ETAG, 'Idempotent-Replay': IDEMPOTENT_REPLAY },
     ...includeAsync ? { '202': { 'X-Request-ID': REQUEST_ID, 'Retry-After': RETRY_AFTER, 'Cache-Control': NO_STORE, 'Content-Location': HREF } } : {},
-    '403': {},
+    '403': { 'X-Request-ID': REQUEST_ID },
     '409': { 'X-Request-ID': REQUEST_ID },
-    '428': {},
+    '428': { 'X-Request-ID': REQUEST_ID },
   };
-  return { responseSchemas, responseHeaders, headerSchemas, requiredResponseHeaders: includeAsync ? { ...(includeCreated ? { [status]: ['Location'] } : {}), ...ASYNC_HEADERS } : includeCreated ? { [status]: ['Location'] } : {} };
+  return { responseSchemas, responseHeaders, headerSchemas, requiredResponseHeaders: includeAsync ? { [status]: includeCreated ? ['X-Request-ID', 'ETag', 'Location'] : ['X-Request-ID', 'ETag'], '202': ASYNC_HEADERS['202'] } : includeCreated ? { [status]: ['X-Request-ID', 'ETag', 'Location'] } : { [status]: ['X-Request-ID', 'ETag'] } };
 }
 
-function listShape(schema: string): ExpectedContractShape {
-  return listHeaders(schema);
+function listShape(schema: string, filters: readonly string[]): ExpectedContractShape {
+  return listHeaders(schema, filters);
 }
 function getShape(schema: string): ExpectedContractShape {
   return { responseSchemas: { '200': schema, '404': 'Problem' }, responseHeaders: { '200': RESOURCE_HEADERS, '404': ['X-Request-ID'] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, ETag: ETAG, 'Idempotent-Replay': IDEMPOTENT_REPLAY }, '404': { 'X-Request-ID': REQUEST_ID } } };
@@ -81,17 +82,17 @@ function commandShape(schema: string, requestSchema: string): ExpectedContractSh
 }
 
 export const EXPECTED_CONTRACT_SHAPES: Readonly<Record<string, ExpectedContractShape>> = {
-  getCsrfToken: { responseSchemas: { '200': 'CsrfToken' }, responseHeaders: { '200': ['Cache-Control'] }, headerSchemas: { '200': { 'Cache-Control': NO_STORE } }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
-  createSession: { requestSchema: 'SessionRequest', responseSchemas: { '201': 'Session', '400': 'Problem', '401': 'Problem', '403': 'CsrfFailedProblem', '503': 'Problem' }, responseHeaders: { '201': ['X-Request-ID', 'Cache-Control'], '400': ['X-Request-ID'], '401': ['X-Request-ID'], '403': [], '503': ['X-Request-ID'] }, headerSchemas: { '201': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': NO_STORE }, '400': { 'X-Request-ID': REQUEST_ID }, '401': { 'X-Request-ID': REQUEST_ID }, '403': {}, '503': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '201': ['Cache-Control'] } },
-  getCurrentSession: { responseSchemas: { '200': 'Session', '401': 'Problem' }, responseHeaders: { '200': ['X-Request-ID', 'Cache-Control'], '401': ['X-Request-ID'] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': NO_STORE }, '401': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
-  deleteCurrentSession: { responseSchemas: { '204': null, '401': 'Problem', '403': 'CsrfFailedProblem' }, responseHeaders: { '204': [], '401': ['X-Request-ID'], '403': [] }, headerSchemas: { '204': {}, '401': { 'X-Request-ID': REQUEST_ID }, '403': {} } },
-  getCommandStatus: { responseSchemas: { '200': 'CommandStatus', '400': 'Problem', '401': 'Problem', '404': 'CommandNotFoundProblem' }, responseHeaders: { '200': ['X-Request-ID', 'Retry-After', 'Cache-Control', 'Idempotent-Replay', 'Content-Location'], '400': ['X-Request-ID'], '401': ['X-Request-ID'], '404': [] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Retry-After': RETRY_AFTER, 'Cache-Control': NO_STORE, 'Idempotent-Replay': IDEMPOTENT_REPLAY, 'Content-Location': HREF }, '400': { 'X-Request-ID': REQUEST_ID }, '401': { 'X-Request-ID': REQUEST_ID }, '404': {} }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
+  getCsrfToken: { responseSchemas: { '200': 'CsrfToken' }, responseHeaders: { '200': ['X-Request-ID', 'Cache-Control'] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': NO_STORE } }, requiredResponseHeaders: { '200': ['X-Request-ID', 'Cache-Control'] } },
+  createSession: { requestSchema: 'SessionRequest', responseSchemas: { '201': 'Session', '400': 'Problem', '401': 'Problem', '403': 'Problem', '503': 'Problem' }, responseHeaders: { '201': ['X-Request-ID', 'Cache-Control'], '400': ['X-Request-ID'], '401': ['X-Request-ID'], '403': ['X-Request-ID'], '503': ['X-Request-ID'] }, headerSchemas: { '201': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': NO_STORE }, '400': { 'X-Request-ID': REQUEST_ID }, '401': { 'X-Request-ID': REQUEST_ID }, '403': { 'X-Request-ID': REQUEST_ID }, '503': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '201': ['X-Request-ID', 'Cache-Control'] } },
+  getCurrentSession: { responseSchemas: { '200': 'Session', '401': 'Problem' }, responseHeaders: { '200': ['X-Request-ID', 'Cache-Control'], '401': ['X-Request-ID'] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': NO_STORE }, '401': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '200': ['X-Request-ID', 'Cache-Control'] } },
+  deleteCurrentSession: { responseSchemas: { '204': null, '401': 'Problem', '403': 'Problem' }, responseHeaders: { '204': ['X-Request-ID'], '401': ['X-Request-ID'], '403': ['X-Request-ID'] }, headerSchemas: { '204': { 'X-Request-ID': REQUEST_ID }, '401': { 'X-Request-ID': REQUEST_ID }, '403': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '204': ['X-Request-ID'] } },
+  getCommandStatus: { responseSchemas: { '200': 'CommandStatus', '400': 'Problem', '401': 'Problem', '404': 'CommandNotFoundProblem' }, responseHeaders: { '200': ['X-Request-ID', 'Retry-After', 'Cache-Control', 'Idempotent-Replay', 'Content-Location'], '400': ['X-Request-ID'], '401': ['X-Request-ID'], '404': ['X-Request-ID'] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Retry-After': { type: 'string' }, 'Cache-Control': NO_STORE, 'Idempotent-Replay': IDEMPOTENT_REPLAY, 'Content-Location': HREF }, '400': { 'X-Request-ID': REQUEST_ID }, '401': { 'X-Request-ID': REQUEST_ID }, '404': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '200': ['X-Request-ID', 'Cache-Control'] } },
   getUser: getShape('User'),
   createUser: createShape('User', 'UserCreateRequest'),
   updateUserRoleBindings: updateShape('User', 'RoleBindingsUpdateRequest'),
   updateUserDataScopeGrants: updateShape('User', 'DataScopeUpdateRequest'),
-  disableUser: { responseSchemas: { '202': 'CommandStatusInProgress', ...PROBLEM_HEADERS }, responseHeaders: { '202': ASYNC_RESPONSE_HEADERS, '403': [], '409': ['X-Request-ID'], '428': [] }, headerSchemas: { '202': { 'X-Request-ID': REQUEST_ID, 'Retry-After': RETRY_AFTER, 'Cache-Control': NO_STORE, 'Content-Location': HREF }, '403': {}, '409': { 'X-Request-ID': REQUEST_ID }, '428': {} }, requiredResponseHeaders: ASYNC_HEADERS },
-  listCustomers: listShape('CustomerPage'),
+  disableUser: { responseSchemas: { '202': 'CommandStatusInProgress', ...PROBLEM_HEADERS }, responseHeaders: { '202': ASYNC_RESPONSE_HEADERS, '403': ['X-Request-ID'], '409': ['X-Request-ID'], '428': ['X-Request-ID'] }, headerSchemas: { '202': { 'X-Request-ID': REQUEST_ID, 'Retry-After': RETRY_AFTER, 'Cache-Control': NO_STORE, 'Content-Location': HREF }, '403': { 'X-Request-ID': REQUEST_ID }, '409': { 'X-Request-ID': REQUEST_ID }, '428': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: ASYNC_HEADERS },
+  listCustomers: listShape('CustomerPage', ['filter[status]', 'filter[groupId]', 'filter[ownerUserId]']),
   createCustomer: createShape('Customer', 'CustomerCreateRequest'),
   getCustomer: getShape('Customer'),
   updateCustomer: updateShape('Customer', 'CustomerUpdateRequest'),
@@ -99,26 +100,26 @@ export const EXPECTED_CONTRACT_SHAPES: Readonly<Record<string, ExpectedContractS
   approveCustomer: commandShape('Customer', 'CustomerCommandRequest'),
   rejectCustomer: commandShape('Customer', 'CustomerCommandRequest'),
   reassignCustomer: commandShape('Customer', 'CustomerCommandRequest'),
-  listProducts: listShape('ProductPage'),
+  listProducts: listShape('ProductPage', ['filter[status]']),
   createProduct: createShape('Product', 'ProductCreateRequest'),
   getProduct: getShape('Product'),
   updateProduct: updateShape('Product', 'ProductUpdateRequest'),
-  listSkus: listShape('SkuPage'),
+  listSkus: listShape('SkuPage', ['filter[status]']),
   createSku: createShape('Sku', 'SkuCreateRequest'),
   getSku: getShape('Sku'),
   updateSku: updateShape('Sku', 'SkuUpdateRequest'),
-  listOrders: listShape('OrderPage'),
+  listOrders: listShape('OrderPage', ['filter[status]']),
   createOrder: createShape('Order', 'OrderCreateRequest'),
   getOrder: getShape('Order'),
   updateOrder: updateShape('Order', 'OrderUpdateRequest'),
   transitionOrder: commandShape('Order', 'OrderCommandRequest'),
-  listInventoryBalances: listShape('InventoryBalancePage'),
-  listInventoryMovements: listShape('InventoryMovementPage'),
-  listInventoryReservations: listShape('InventoryReservationPage'),
+  listInventoryBalances: listShape('InventoryBalancePage', ['filter[status]', 'filter[skuId]', 'filter[locationId]']),
+  listInventoryMovements: listShape('InventoryMovementPage', ['filter[status]', 'filter[skuId]', 'filter[locationId]']),
+  listInventoryReservations: listShape('InventoryReservationPage', ['filter[status]', 'filter[skuId]', 'filter[locationId]']),
   createInventoryReservation: createShape('InventoryReservation', 'InventoryReservationCreateRequest'),
   getInventory: getShape('InventoryReservation'),
   releaseInventoryReservation: commandShape('InventoryOperation', 'InventoryCommandRequestTyped'),
-  listInventoryObservations: listShape('InventoryObservationPage'),
+  listInventoryObservations: listShape('InventoryObservationPage', ['filter[status]', 'filter[skuId]', 'filter[locationId]']),
   createInventoryObservation: createShape('InventoryObservation', 'InventoryObservationCreateRequest'),
   getInventoryOperation: getShape('InventoryOperation'),
   createInitialReceipt: createShape('InventoryOperation', 'InventoryOperationCreateRequest'),
@@ -126,7 +127,7 @@ export const EXPECTED_CONTRACT_SHAPES: Readonly<Record<string, ExpectedContractS
   createInventoryAdjustment: createShape('InventoryOperation', 'InventoryOperationCreateRequest'),
   issueInventory: createShape('InventoryOperation', 'InventoryOperationCreateRequest'),
   reverseInventoryOperation: createShape('InventoryOperation', 'InventoryCommandRequest'),
-  listPayments: listShape('PaymentPage'),
+  listPayments: listShape('PaymentPage', ['filter[status]', 'filter[orderId]']),
   createPayment: createShape('Payment', 'PaymentCreateRequest'),
   getPayment: getShape('Payment'),
   attachPaymentProof: commandShape('Payment', 'PaymentCommandRequest'),
@@ -136,8 +137,8 @@ export const EXPECTED_CONTRACT_SHAPES: Readonly<Record<string, ExpectedContractS
   getFile: getShape('File'),
   createUploadIntent: createShape('File', 'FileCreateRequest'),
   completeUpload: commandShape('File', 'FileCommandRequest'),
-  createDownloadIntent: { responseSchemas: { '201': 'File', '403': 'CsrfFailedProblem', '404': 'Problem' }, responseHeaders: { '201': ['X-Request-ID', 'ETag', 'Location', 'Idempotent-Replay'], '403': [], '404': ['X-Request-ID'] }, headerSchemas: { '201': { 'X-Request-ID': REQUEST_ID, ETag: ETAG, Location: HREF, 'Idempotent-Replay': IDEMPOTENT_REPLAY }, '403': {}, '404': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '201': ['Location'] } },
-  listDocuments: listShape('DocumentPage'),
+  createDownloadIntent: { responseSchemas: { '201': 'File', '403': 'Problem', '404': 'Problem' }, responseHeaders: { '201': ['X-Request-ID', 'ETag', 'Location', 'Idempotent-Replay'], '403': ['X-Request-ID'], '404': ['X-Request-ID'] }, headerSchemas: { '201': { 'X-Request-ID': REQUEST_ID, ETag: ETAG, Location: HREF, 'Idempotent-Replay': IDEMPOTENT_REPLAY }, '403': { 'X-Request-ID': REQUEST_ID }, '404': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '201': ['X-Request-ID', 'ETag', 'Location'] } },
+  listDocuments: listShape('DocumentPage', ['filter[status]']),
   createDocument: createShape('Document', 'DocumentCreateRequest'),
   getDocument: getShape('Document'),
   updateDocument: updateShape('Document', 'DocumentUpdateRequest'),
@@ -148,11 +149,11 @@ export const EXPECTED_CONTRACT_SHAPES: Readonly<Record<string, ExpectedContractS
   finalizeDocument: commandShape('Document', 'DocumentCommandRequest'),
   issueDocument: commandShape('Document', 'DocumentCommandRequest'),
   voidDocument: commandShape('Document', 'DocumentCommandRequest'),
-  listTasks: listShape('TaskPage'),
+  listTasks: listShape('TaskPage', ['filter[status]', 'filter[assigneeUserId]']),
   createTask: createShape('Task', 'TaskCreateRequest'),
   getTask: getShape('Task'),
   completeTask: commandShape('Task', 'TaskCommandRequest'),
-  listAuditEvents: listShape('AuditEventPage'),
+  listAuditEvents: listShape('AuditEventPage', ['filter[actorUserId]', 'filter[action]', 'filter[resourceType]']),
 };
 
 export const EXPECTED_OPERATION_MANIFEST =   [
@@ -942,16 +943,18 @@ function assertFrozenResponseHeaders(operationId: string, operation: AnyRecord, 
   const responses = isRecord(operation.responses) ? operation.responses : {};
   for (const [status, expected] of Object.entries(expectedRequiredResponseHeaders(operationId, responses))) {
     const response = resolveComponent(responses[status], document, 'responses');
-    const actual = isRecord(response?.headers) ? Object.entries(response.headers).filter(([, header]) => isRecord(header) && header['x-required'] === true).map(([name]) => name) : [];
+    const actual = isRecord(response?.headers) ? Object.entries(response.headers).filter(([, header]) => resolveComponent(header, document, 'headers')?.['x-required'] === true).map(([name]) => name) : [];
     if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${operationId} required response header mismatch: expected ${JSON.stringify(expected)}, observed ${JSON.stringify(actual)}.`);
   }
 }
 
 function expectedRequiredResponseHeaders(operationId: string, responses: AnyRecord): Readonly<Record<string, readonly string[]>> {
   const expected: Record<string, readonly string[]> = {};
-  if (responses['200'] !== undefined && ['getCsrfToken', 'getCurrentSession', 'getCommandStatus'].includes(operationId)) expected['200'] = ['Cache-Control'];
-  if (responses['201'] !== undefined) expected['201'] = operationId === 'createSession' ? ['Cache-Control'] : ['Location'];
-  if (responses['202'] !== undefined) expected['202'] = ['Retry-After', 'Cache-Control', 'Content-Location'];
+  if (responses['200'] !== undefined && ['getCsrfToken', 'getCurrentSession'].includes(operationId)) expected['200'] = ['X-Request-ID', 'Cache-Control'];
+  if (responses['200'] !== undefined && operationId === 'getCommandStatus') expected['200'] = ['X-Request-ID', 'Cache-Control'];
+  if (responses['201'] !== undefined) expected['201'] = operationId === 'createSession' ? ['X-Request-ID', 'Cache-Control'] : ['X-Request-ID', 'ETag', 'Location'];
+  if (responses['202'] !== undefined) expected['202'] = ['X-Request-ID', 'Retry-After', 'Cache-Control', 'Content-Location'];
+  if (responses['204'] !== undefined) expected['204'] = ['X-Request-ID'];
   return expected;
 }
 
@@ -1013,7 +1016,7 @@ function assertContractShape(operationId: string, operation: AnyRecord, paramete
     const responses = isRecord(operation.responses) ? operation.responses : {};
     const actual = Object.fromEntries(Object.entries(responses).filter(([status]) => expected.requiredResponseHeaders?.[status] !== undefined).map(([status, value]) => {
       const response = resolveComponent(value, document, 'responses');
-      const headers = isRecord(response?.headers) ? Object.entries(response.headers).filter(([, header]) => isRecord(header) && header['x-required'] === true).map(([name]) => name) : [];
+      const headers = isRecord(response?.headers) ? Object.entries(response.headers).filter(([, header]) => resolveComponent(header, document, 'headers')?.['x-required'] === true).map(([name]) => name) : [];
       return [status, headers];
     }));
     if (JSON.stringify(actual) !== JSON.stringify(expected.requiredResponseHeaders)) throw new Error(`${operationId} required response header mismatch: expected ${JSON.stringify(expected.requiredResponseHeaders)}, observed ${JSON.stringify(actual)}.`);
@@ -1052,7 +1055,7 @@ function resolveComponent(value: unknown, document: AnyRecord, component: string
   const name = ref.split('/').at(-1);
   const components = isRecord(document.components) && isRecord(document.components[component]) ? document.components[component] : {};
   const resolved = name === undefined ? undefined : components[name];
-  return isRecord(resolved) ? resolved : undefined;
+  return isRecord(resolved) ? { ...resolved, ...value } : undefined;
 }
 
 function schemaComponentName(value: AnyRecord): string | undefined {

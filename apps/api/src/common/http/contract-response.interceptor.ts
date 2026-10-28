@@ -15,6 +15,7 @@ export class ContractResponseValidationInterceptor implements NestInterceptor {
     const operation = operationForRequest(request);
     if (operation === undefined) return next.handle();
     const response = context.switchToHttp().getResponse<FastifyReply>();
+    if (response.getHeader('X-Request-ID') === undefined && typeof response.header === 'function') response.header('X-Request-ID', normalizeRequestId(request.headers['x-request-id']));
     return next.handle().pipe(map((value: unknown) => {
       const status = String(response.statusCode ?? 200);
       const responseContract = (operation as GeneratedOperation).responses[status];

@@ -11,7 +11,7 @@ describe('generated contract client', () => {
     const client = new GeneratedApiClient({
       fetch: async (_input, init) => {
         calls.push(init ?? {});
-        return new Response(JSON.stringify({ csrfToken: 'csrf-token-value', expiresAt: '2026-10-28T05:00:00Z' }), { status: 200, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+        return new Response(JSON.stringify({ csrfToken: 'csrf-token-value', expiresAt: '2026-10-28T05:00:00Z' }), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', 'cache-control': 'no-store' } });
       },
       validator: createContractValidator(document),
     });
@@ -25,7 +25,7 @@ describe('generated contract client', () => {
     const client = new GeneratedApiClient({
       fetch: async () => {
         fetchCalls += 1;
-        return new Response(JSON.stringify({ unexpected: true }), { status: 200, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+        return new Response(JSON.stringify({ unexpected: true }), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', 'cache-control': 'no-store' } });
       },
       validator: createContractValidator(document),
     });
@@ -37,11 +37,11 @@ describe('generated contract client', () => {
   it('validates an operation-specific Problem response by status and media type', async () => {
     const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
     const client = new GeneratedApiClient({
-      fetch: async () => new Response(JSON.stringify({ type: 'urn:autoflow:problem:csrf-failed', title: 'CSRF failed', status: 403, code: 'CSRF_FAILED', requestId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', retryable: true }), { status: 403, headers: { 'content-type': 'application/problem+json' } }),
+      fetch: async () => new Response(JSON.stringify({ type: 'urn:autoflow:problem:csrf-failed', title: 'CSRF failed', status: 403, code: 'CSRF_FAILED', requestId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', retryable: true, meta: { refreshHref: '/api/v1/auth/csrf' } }), { status: 403, headers: { 'content-type': 'application/problem+json', 'x-request-id': 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2' } }),
       validator: createContractValidator(document),
     });
 
-    await expect(client.call('createSession', { headers: { 'X-CSRF-Token': 'csrf-token-value' }, body: { provider: 'LOCAL_PASSWORD' } })).rejects.toThrow(/Invalid CsrfFailedProblem response/);
+    await expect(client.call('createSession', { headers: { 'X-CSRF-Token': 'csrf-token-value' }, body: { provider: 'LOCAL_PASSWORD' } })).rejects.toBeInstanceOf(ApiProblemError);
   });
 
   it('exposes a declared dependency failure as a typed Problem instead of an undeclared-status error', async () => {
@@ -69,6 +69,7 @@ describe('generated contract client', () => {
         status: 'ACTIVE',
       }), { status: 201, headers: {
         'content-type': 'application/json',
+        'x-request-id': 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2',
         etag: '"v1"',
         location: '/api/v1/products/f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2',
         'idempotent-replay': 'true',
@@ -97,6 +98,20 @@ describe('generated contract client', () => {
     });
 
     await expect(client.call('deleteCurrentSession', { headers: { 'X-CSRF-Token': 'csrf-token-value' } })).rejects.toThrow(/unexpected response content type/i);
+  });
+
+  it('exposes the typed Retry-After header on a rate-limit Problem', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const client = new GeneratedApiClient({
+      fetch: async () => new Response(JSON.stringify({ type: 'urn:autoflow:problem:rate-limited', title: 'Rate limited', status: 429, code: 'RATE_LIMITED', requestId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', retryable: true, meta: null }), { status: 429, headers: { 'content-type': 'application/problem+json', 'x-request-id': 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', 'retry-after': '60' } }),
+      validator: createContractValidator(document),
+    });
+
+    await expect(client.call('listProducts', {})).rejects.toMatchObject({
+      name: 'ApiProblemError',
+      status: 429,
+      headers: { 'X-Request-ID': 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', 'Retry-After': '60' },
+    });
   });
 
   it('rejects invalid path, body, and required safety headers before fetch', async () => {

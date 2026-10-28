@@ -136,4 +136,62 @@ describe('idempotency execution interceptor', () => {
 
     expect(persistedResult).toMatchObject({ resource: { type: 'INVENTORY_OBSERVATION', id: observationId, href: `/api/v1/inventory/observations/${observationId}` } });
   });
+
+  it('projects released reservations to the returned inventory operation href', async () => {
+    let persistedResult: unknown;
+    const repository = {
+      execute: async (_input: unknown, work: (client: unknown, claim: unknown) => Promise<unknown>) => {
+        persistedResult = await work({}, { commandId: 'command-release', claimRole: 'OWNER' });
+        return persistedResult;
+      },
+    };
+    const interceptor = new IdempotencyExecutionInterceptor(repository as never);
+    const reservationId = 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2';
+    const operationId = '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019';
+    const request = {
+      method: 'POST',
+      url: `/api/v1/inventory/reservations/${reservationId}/release`,
+      routeOptions: { url: '/api/v1/inventory/reservations/:id/release' },
+      params: { id: reservationId },
+      query: {},
+      body: { reason: 'manual' },
+      headers: { 'idempotency-key': 'release-key', 'x-csrf-token': 'csrf-token-value', 'if-match': '"1"' },
+      user: { id: reservationId, organizationId: operationId },
+    };
+    const response = { statusCode: 200, getHeader: () => undefined, header: () => response };
+    const context = { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as never;
+
+    await lastValueFrom(interceptor.intercept(context, { handle: () => of({ id: operationId }) } as never));
+
+    expect(persistedResult).toMatchObject({ resource: { type: 'INVENTORY_OPERATION', id: operationId, href: `/api/v1/inventory/operations/${operationId}` } });
+  });
+
+  it('projects reversed inventory operations to the new operation href', async () => {
+    let persistedResult: unknown;
+    const repository = {
+      execute: async (_input: unknown, work: (client: unknown, claim: unknown) => Promise<unknown>) => {
+        persistedResult = await work({}, { commandId: 'command-reverse', claimRole: 'OWNER' });
+        return persistedResult;
+      },
+    };
+    const interceptor = new IdempotencyExecutionInterceptor(repository as never);
+    const sourceOperationId = 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2';
+    const reversalOperationId = '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019';
+    const request = {
+      method: 'POST',
+      url: `/api/v1/inventory/operations/${sourceOperationId}/reverse`,
+      routeOptions: { url: '/api/v1/inventory/operations/:operationId/reverse' },
+      params: { operationId: sourceOperationId },
+      query: {},
+      body: { operationType: 'REVERSAL', lines: [{ skuId: sourceOperationId, quantity: '1' }] },
+      headers: { 'idempotency-key': 'reverse-key', 'x-csrf-token': 'csrf-token-value', 'if-match': '"v1"' },
+      user: { id: sourceOperationId, organizationId: reversalOperationId },
+    };
+    const response = { statusCode: 201, getHeader: () => undefined, header: () => response };
+    const context = { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as never;
+
+    await lastValueFrom(interceptor.intercept(context, { handle: () => of({ id: reversalOperationId }) } as never));
+
+    expect(persistedResult).toMatchObject({ resource: { type: 'INVENTORY_OPERATION', id: reversalOperationId, href: `/api/v1/inventory/operations/${reversalOperationId}` } });
+  });
 });

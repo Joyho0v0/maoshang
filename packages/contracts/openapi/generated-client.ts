@@ -13,6 +13,10 @@ export const operations = {
         "schema": "CsrfToken",
         "contentType": "application/json",
         "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          },
           "Cache-Control": {
             "required": true,
             "schema": {
@@ -22,6 +26,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Cache-Control"
         ]
       },
@@ -30,66 +35,86 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -116,7 +141,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Cache-Control": {
@@ -128,6 +153,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Cache-Control"
         ]
       },
@@ -136,72 +162,99 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -217,7 +270,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Cache-Control": {
@@ -229,6 +282,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Cache-Control"
         ]
       },
@@ -237,66 +291,86 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -318,80 +392,114 @@ export const operations = {
     },
     "responses": {
       "204": {
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -427,7 +535,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -458,6 +566,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Cache-Control"
         ]
       },
@@ -466,72 +575,99 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "404": {
         "schema": "CommandNotFoundProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -552,11 +688,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -572,84 +708,109 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "404": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -695,11 +856,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -720,6 +881,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -728,7 +891,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -750,6 +913,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -760,89 +924,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -892,11 +1092,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -912,14 +1112,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -941,6 +1144,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -951,89 +1155,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -1083,11 +1323,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -1103,14 +1343,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -1132,6 +1375,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -1142,89 +1386,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -1273,7 +1553,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -1295,6 +1575,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -1305,89 +1586,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -1425,7 +1742,7 @@ export const operations = {
         },
         "type": "string"
       },
-      "filter": {
+      "filter[status]": {
         "required": false,
         "schema": {
           "type": "array",
@@ -1434,7 +1751,31 @@ export const operations = {
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256
+            "maxLength": 64
+          }
+        },
+        "type": "array"
+      },
+      "filter[groupId]": {
+        "required": false,
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/components/schemas/Uuid"
+          }
+        },
+        "type": "array"
+      },
+      "filter[ownerUserId]": {
+        "required": false,
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/components/schemas/Uuid"
           }
         },
         "type": "array"
@@ -1447,7 +1788,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Cache-Control": {
@@ -1457,73 +1798,95 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -1564,11 +1927,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -1589,6 +1952,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -1597,7 +1962,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -1619,6 +1984,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -1629,89 +1995,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -1732,11 +2134,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -1752,84 +2154,109 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "404": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -1879,11 +2306,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -1899,14 +2326,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -1928,6 +2358,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -1938,89 +2369,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -2070,11 +2537,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -2090,14 +2557,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -2119,6 +2589,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -2129,89 +2600,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -2261,11 +2768,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -2281,14 +2788,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -2310,6 +2820,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -2320,89 +2831,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -2452,11 +2999,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -2472,14 +3019,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -2501,6 +3051,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -2511,89 +3062,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -2643,11 +3230,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -2663,14 +3250,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -2692,6 +3282,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -2702,89 +3293,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -2822,7 +3449,7 @@ export const operations = {
         },
         "type": "string"
       },
-      "filter": {
+      "filter[status]": {
         "required": false,
         "schema": {
           "type": "array",
@@ -2831,7 +3458,7 @@ export const operations = {
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256
+            "maxLength": 64
           }
         },
         "type": "array"
@@ -2844,7 +3471,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Cache-Control": {
@@ -2854,73 +3481,95 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -2957,11 +3606,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -2982,6 +3631,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -2990,7 +3641,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -3012,6 +3663,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -3022,89 +3674,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -3125,11 +3813,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -3145,84 +3833,109 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "404": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -3272,11 +3985,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -3292,14 +4005,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -3321,6 +4037,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -3331,89 +4048,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -3451,7 +4204,7 @@ export const operations = {
         },
         "type": "string"
       },
-      "filter": {
+      "filter[status]": {
         "required": false,
         "schema": {
           "type": "array",
@@ -3460,7 +4213,7 @@ export const operations = {
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256
+            "maxLength": 64
           }
         },
         "type": "array"
@@ -3473,7 +4226,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Cache-Control": {
@@ -3483,73 +4236,95 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -3586,11 +4361,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -3611,6 +4386,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -3619,7 +4396,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -3641,6 +4418,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -3651,89 +4429,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -3754,11 +4568,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -3774,84 +4588,109 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "404": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -3901,11 +4740,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -3921,14 +4760,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -3950,6 +4792,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -3960,89 +4803,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -4080,7 +4959,7 @@ export const operations = {
         },
         "type": "string"
       },
-      "filter": {
+      "filter[status]": {
         "required": false,
         "schema": {
           "type": "array",
@@ -4089,7 +4968,7 @@ export const operations = {
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256
+            "maxLength": 64
           }
         },
         "type": "array"
@@ -4102,7 +4981,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Cache-Control": {
@@ -4112,73 +4991,95 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -4215,11 +5116,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -4240,6 +5141,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -4248,7 +5151,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -4270,6 +5173,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -4280,89 +5184,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -4383,11 +5323,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -4403,84 +5343,109 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "404": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -4530,11 +5495,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -4550,14 +5515,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -4579,6 +5547,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -4589,89 +5558,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -4721,11 +5726,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -4741,14 +5746,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -4770,6 +5778,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -4780,89 +5789,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -4900,7 +5945,7 @@ export const operations = {
         },
         "type": "string"
       },
-      "filter": {
+      "filter[status]": {
         "required": false,
         "schema": {
           "type": "array",
@@ -4909,7 +5954,31 @@ export const operations = {
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256
+            "maxLength": 64
+          }
+        },
+        "type": "array"
+      },
+      "filter[skuId]": {
+        "required": false,
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/components/schemas/Uuid"
+          }
+        },
+        "type": "array"
+      },
+      "filter[locationId]": {
+        "required": false,
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/components/schemas/Uuid"
           }
         },
         "type": "array"
@@ -4922,7 +5991,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Cache-Control": {
@@ -4932,73 +6001,95 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -5036,7 +6127,7 @@ export const operations = {
         },
         "type": "string"
       },
-      "filter": {
+      "filter[status]": {
         "required": false,
         "schema": {
           "type": "array",
@@ -5045,7 +6136,31 @@ export const operations = {
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256
+            "maxLength": 64
+          }
+        },
+        "type": "array"
+      },
+      "filter[skuId]": {
+        "required": false,
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/components/schemas/Uuid"
+          }
+        },
+        "type": "array"
+      },
+      "filter[locationId]": {
+        "required": false,
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/components/schemas/Uuid"
           }
         },
         "type": "array"
@@ -5058,7 +6173,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Cache-Control": {
@@ -5068,73 +6183,95 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -5172,7 +6309,7 @@ export const operations = {
         },
         "type": "string"
       },
-      "filter": {
+      "filter[status]": {
         "required": false,
         "schema": {
           "type": "array",
@@ -5181,7 +6318,31 @@ export const operations = {
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256
+            "maxLength": 64
+          }
+        },
+        "type": "array"
+      },
+      "filter[skuId]": {
+        "required": false,
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/components/schemas/Uuid"
+          }
+        },
+        "type": "array"
+      },
+      "filter[locationId]": {
+        "required": false,
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/components/schemas/Uuid"
           }
         },
         "type": "array"
@@ -5194,7 +6355,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Cache-Control": {
@@ -5204,73 +6365,95 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -5307,11 +6490,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -5332,6 +6515,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -5340,7 +6525,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -5362,6 +6547,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -5372,89 +6558,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -5475,11 +6697,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -5495,84 +6717,109 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "404": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -5622,11 +6869,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -5642,14 +6889,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -5671,6 +6921,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -5681,89 +6932,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -5801,7 +7088,7 @@ export const operations = {
         },
         "type": "string"
       },
-      "filter": {
+      "filter[status]": {
         "required": false,
         "schema": {
           "type": "array",
@@ -5810,7 +7097,31 @@ export const operations = {
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256
+            "maxLength": 64
+          }
+        },
+        "type": "array"
+      },
+      "filter[skuId]": {
+        "required": false,
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/components/schemas/Uuid"
+          }
+        },
+        "type": "array"
+      },
+      "filter[locationId]": {
+        "required": false,
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/components/schemas/Uuid"
           }
         },
         "type": "array"
@@ -5823,7 +7134,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Cache-Control": {
@@ -5833,73 +7144,95 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -5936,11 +7269,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -5961,6 +7294,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -5969,7 +7304,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -5991,6 +7326,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -6001,89 +7337,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -6104,11 +7476,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -6124,84 +7496,109 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "404": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -6238,11 +7635,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -6263,6 +7660,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -6271,7 +7670,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -6293,6 +7692,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -6303,89 +7703,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -6422,11 +7858,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -6447,6 +7883,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -6455,7 +7893,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -6477,6 +7915,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -6487,89 +7926,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -6606,11 +8081,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -6631,6 +8106,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -6639,7 +8116,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -6661,6 +8138,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -6671,89 +8149,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -6790,11 +8304,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -6815,6 +8329,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -6823,7 +8339,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -6845,6 +8361,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -6855,89 +8372,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -6987,11 +8540,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -7012,6 +8565,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -7020,7 +8575,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -7042,6 +8597,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -7052,89 +8608,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -7172,7 +8764,7 @@ export const operations = {
         },
         "type": "string"
       },
-      "filter": {
+      "filter[status]": {
         "required": false,
         "schema": {
           "type": "array",
@@ -7181,7 +8773,19 @@ export const operations = {
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256
+            "maxLength": 64
+          }
+        },
+        "type": "array"
+      },
+      "filter[orderId]": {
+        "required": false,
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/components/schemas/Uuid"
           }
         },
         "type": "array"
@@ -7194,7 +8798,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Cache-Control": {
@@ -7204,73 +8808,95 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -7307,11 +8933,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -7332,6 +8958,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -7340,7 +8968,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -7362,6 +8990,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -7372,89 +9001,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -7475,11 +9140,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -7495,84 +9160,109 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "404": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -7622,11 +9312,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -7642,14 +9332,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -7671,6 +9364,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -7681,89 +9375,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -7813,11 +9543,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -7833,14 +9563,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -7862,6 +9595,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -7872,89 +9606,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -8004,11 +9774,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -8024,14 +9794,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -8053,6 +9826,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -8063,89 +9837,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -8195,11 +10005,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -8215,14 +10025,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -8244,6 +10057,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -8254,89 +10068,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -8357,11 +10207,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -8377,84 +10227,109 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "404": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -8491,11 +10366,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -8516,6 +10391,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -8524,7 +10401,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -8546,6 +10423,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -8556,89 +10434,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -8688,11 +10602,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -8708,14 +10622,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -8737,6 +10654,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -8747,89 +10665,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -8860,11 +10814,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -8885,6 +10839,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -8893,83 +10849,112 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "404": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -9012,7 +10997,7 @@ export const operations = {
         },
         "type": "string"
       },
-      "filter": {
+      "filter[status]": {
         "required": false,
         "schema": {
           "type": "array",
@@ -9021,7 +11006,7 @@ export const operations = {
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256
+            "maxLength": 64
           }
         },
         "type": "array"
@@ -9034,7 +11019,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Cache-Control": {
@@ -9044,73 +11029,95 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -9160,11 +11167,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -9185,6 +11192,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -9193,7 +11202,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -9215,6 +11224,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -9225,89 +11235,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -9328,11 +11374,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -9348,84 +11394,109 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "404": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -9475,11 +11546,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -9495,14 +11566,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -9524,6 +11598,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -9534,89 +11609,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -9666,11 +11777,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -9686,14 +11797,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -9715,6 +11829,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -9725,89 +11840,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -9857,11 +12008,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -9877,14 +12028,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -9906,6 +12060,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -9916,89 +12071,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -10048,11 +12239,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -10068,14 +12259,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -10097,6 +12291,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -10107,89 +12302,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -10239,11 +12470,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -10259,14 +12490,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -10288,6 +12522,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -10298,89 +12533,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -10430,11 +12701,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -10450,14 +12721,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -10479,6 +12753,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -10489,89 +12764,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -10621,11 +12932,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -10641,14 +12952,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -10670,6 +12984,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -10680,89 +12995,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -10812,11 +13163,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -10832,14 +13183,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -10861,6 +13215,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -10871,89 +13226,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -10991,7 +13382,7 @@ export const operations = {
         },
         "type": "string"
       },
-      "filter": {
+      "filter[status]": {
         "required": false,
         "schema": {
           "type": "array",
@@ -11000,7 +13391,19 @@ export const operations = {
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256
+            "maxLength": 64
+          }
+        },
+        "type": "array"
+      },
+      "filter[assigneeUserId]": {
+        "required": false,
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/components/schemas/Uuid"
           }
         },
         "type": "array"
@@ -11013,7 +13416,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Cache-Control": {
@@ -11023,73 +13426,95 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -11126,11 +13551,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -11151,6 +13576,8 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
+          "ETag",
           "Location"
         ]
       },
@@ -11159,7 +13586,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -11181,6 +13608,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -11191,89 +13619,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -11294,11 +13758,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -11314,84 +13778,109 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "404": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -11441,11 +13930,11 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "ETag": {
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
@@ -11461,14 +13950,17 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "ETag"
+        ]
       },
       "202": {
         "schema": "CommandStatusInProgress",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Retry-After": {
@@ -11490,6 +13982,7 @@ export const operations = {
           }
         },
         "requiredHeaders": [
+          "X-Request-ID",
           "Retry-After",
           "Cache-Control",
           "Content-Location"
@@ -11500,89 +13993,125 @@ export const operations = {
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "403": {
-        "schema": "CsrfFailedProblem",
+        "schema": "Problem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "428": {
         "schema": "PreconditionRequiredProblem",
         "contentType": "application/problem+json",
-        "headers": {},
-        "requiredHeaders": []
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   },
@@ -11620,7 +14149,19 @@ export const operations = {
         },
         "type": "string"
       },
-      "filter": {
+      "filter[actorUserId]": {
+        "required": false,
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/components/schemas/Uuid"
+          }
+        },
+        "type": "array"
+      },
+      "filter[action]": {
         "required": false,
         "schema": {
           "type": "array",
@@ -11629,7 +14170,19 @@ export const operations = {
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256
+            "maxLength": 128
+          }
+        },
+        "type": "array"
+      },
+      "filter[resourceType]": {
+        "required": false,
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/components/schemas/ResourceType"
           }
         },
         "type": "array"
@@ -11642,7 +14195,7 @@ export const operations = {
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           },
           "Cache-Control": {
@@ -11652,73 +14205,95 @@ export const operations = {
             }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "400": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "401": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "429": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
+          },
+          "Retry-After": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID",
+          "Retry-After"
+        ]
       },
       "500": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "502": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       },
       "503": {
         "schema": "Problem",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
-            "required": false,
+            "required": true,
             "schema": "Uuid"
           }
         },
-        "requiredHeaders": []
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
       }
     }
   }
@@ -11735,7 +14310,7 @@ export type OperationInputMap = {
   "updateUserRoleBindings": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["RoleBindingsUpdateRequest"] };
   "updateUserDataScopeGrants": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["DataScopeUpdateRequest"] };
   "disableUser": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string } };
-  "listCustomers": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter"?: string[] } };
+  "listCustomers": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter[status]"?: string[]; "filter[groupId]"?: string[]; "filter[ownerUserId]"?: string[] } };
   "createCustomer": { headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string }; body: components["schemas"]["CustomerCreateRequest"] };
   "getCustomer": { pathParams: { "id": string } };
   "updateCustomer": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["CustomerUpdateRequest"] };
@@ -11743,26 +14318,26 @@ export type OperationInputMap = {
   "approveCustomer": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["CustomerCommandRequest"] };
   "rejectCustomer": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["CustomerCommandRequest"] };
   "reassignCustomer": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["CustomerCommandRequest"] };
-  "listProducts": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter"?: string[] } };
+  "listProducts": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter[status]"?: string[] } };
   "createProduct": { headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string }; body: components["schemas"]["ProductCreateRequest"] };
   "getProduct": { pathParams: { "id": string } };
   "updateProduct": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["ProductUpdateRequest"] };
-  "listSkus": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter"?: string[] } };
+  "listSkus": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter[status]"?: string[] } };
   "createSku": { headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string }; body: components["schemas"]["SkuCreateRequest"] };
   "getSku": { pathParams: { "id": string } };
   "updateSku": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["SkuUpdateRequest"] };
-  "listOrders": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter"?: string[] } };
+  "listOrders": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter[status]"?: string[] } };
   "createOrder": { headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string }; body: components["schemas"]["OrderCreateRequest"] };
   "getOrder": { pathParams: { "id": string } };
   "updateOrder": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["OrderUpdateRequest"] };
   "transitionOrder": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["OrderCommandRequest"] };
-  "listInventoryBalances": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter"?: string[] } };
-  "listInventoryMovements": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter"?: string[] } };
-  "listInventoryReservations": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter"?: string[] } };
+  "listInventoryBalances": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter[status]"?: string[]; "filter[skuId]"?: string[]; "filter[locationId]"?: string[] } };
+  "listInventoryMovements": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter[status]"?: string[]; "filter[skuId]"?: string[]; "filter[locationId]"?: string[] } };
+  "listInventoryReservations": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter[status]"?: string[]; "filter[skuId]"?: string[]; "filter[locationId]"?: string[] } };
   "createInventoryReservation": { headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string }; body: components["schemas"]["InventoryReservationCreateRequest"] };
   "getInventory": { pathParams: { "id": string } };
   "releaseInventoryReservation": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["InventoryCommandRequestTyped"] };
-  "listInventoryObservations": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter"?: string[] } };
+  "listInventoryObservations": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter[status]"?: string[]; "filter[skuId]"?: string[]; "filter[locationId]"?: string[] } };
   "createInventoryObservation": { headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string }; body: components["schemas"]["InventoryObservationCreateRequest"] };
   "getInventoryOperation": { pathParams: { "id": string } };
   "createInitialReceipt": { headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string }; body: components["schemas"]["InventoryOperationCreateRequest"] };
@@ -11770,7 +14345,7 @@ export type OperationInputMap = {
   "createInventoryAdjustment": { headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string }; body: components["schemas"]["InventoryOperationCreateRequest"] };
   "issueInventory": { headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string }; body: components["schemas"]["InventoryOperationCreateRequest"] };
   "reverseInventoryOperation": { pathParams: { "operationId": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["InventoryCommandRequest"] };
-  "listPayments": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter"?: string[] } };
+  "listPayments": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter[status]"?: string[]; "filter[orderId]"?: string[] } };
   "createPayment": { headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string }; body: components["schemas"]["PaymentCreateRequest"] };
   "getPayment": { pathParams: { "id": string } };
   "attachPaymentProof": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["PaymentCommandRequest"] };
@@ -11781,7 +14356,7 @@ export type OperationInputMap = {
   "createUploadIntent": { headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string }; body: components["schemas"]["FileCreateRequest"] };
   "completeUpload": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["FileCommandRequest"] };
   "createDownloadIntent": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string } };
-  "listDocuments": { pathParams: { "orderId": string }; query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter"?: string[] } };
+  "listDocuments": { pathParams: { "orderId": string }; query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter[status]"?: string[] } };
   "createDocument": { pathParams: { "orderId": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["DocumentCreateRequest"] };
   "getDocument": { pathParams: { "id": string } };
   "updateDocument": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["DocumentUpdateRequest"] };
@@ -11792,85 +14367,85 @@ export type OperationInputMap = {
   "finalizeDocument": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["DocumentCommandRequest"] };
   "issueDocument": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["DocumentCommandRequest"] };
   "voidDocument": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["DocumentCommandRequest"] };
-  "listTasks": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter"?: string[] } };
+  "listTasks": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter[status]"?: string[]; "filter[assigneeUserId]"?: string[] } };
   "createTask": { headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string }; body: components["schemas"]["TaskCreateRequest"] };
   "getTask": { pathParams: { "id": string } };
   "completeTask": { pathParams: { "id": string }; headers: Record<string, string> & { "X-CSRF-Token": string; "Idempotency-Key": string; "If-Match": string }; body: components["schemas"]["TaskCommandRequest"] };
-  "listAuditEvents": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter"?: string[] } };
+  "listAuditEvents": { query?: { "page[after]"?: string; "page[size]"?: number; "sort"?: string; "filter[actorUserId]"?: string[]; "filter[action]"?: string[]; "filter[resourceType]"?: string[] } };
 };
 export type OperationResponseMap = {
-  "getCsrfToken": ContractResponse<components["schemas"]["CsrfToken"], { "Cache-Control": "no-store" }, 200>;
-  "createSession": ContractResponse<components["schemas"]["Session"], { "X-Request-ID"?: string; "Cache-Control": "no-store" }, 201>;
-  "getCurrentSession": ContractResponse<components["schemas"]["Session"], { "X-Request-ID"?: string; "Cache-Control": "no-store" }, 200>;
-  "deleteCurrentSession": ContractResponse<void, Record<never, never>, 204>;
-  "getCommandStatus": ContractResponse<components["schemas"]["CommandStatus"], { "X-Request-ID"?: string; "Retry-After"?: string; "Cache-Control": "no-store"; "Idempotent-Replay"?: "true"; "Content-Location"?: string }, 200>;
-  "getUser": ContractResponse<components["schemas"]["User"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
-  "createUser": ContractResponse<components["schemas"]["User"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "updateUserRoleBindings": ContractResponse<components["schemas"]["User"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "updateUserDataScopeGrants": ContractResponse<components["schemas"]["User"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "disableUser": ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "listCustomers": ContractResponse<components["schemas"]["CustomerPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
-  "updateCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "submitCustomerApproval": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "approveCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "rejectCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "reassignCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "listProducts": ContractResponse<components["schemas"]["ProductPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createProduct": ContractResponse<components["schemas"]["Product"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getProduct": ContractResponse<components["schemas"]["Product"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
-  "updateProduct": ContractResponse<components["schemas"]["Product"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "listSkus": ContractResponse<components["schemas"]["SkuPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createSku": ContractResponse<components["schemas"]["Sku"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getSku": ContractResponse<components["schemas"]["Sku"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
-  "updateSku": ContractResponse<components["schemas"]["Sku"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "listOrders": ContractResponse<components["schemas"]["OrderPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
-  "updateOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "transitionOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "listInventoryBalances": ContractResponse<components["schemas"]["InventoryBalancePage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "listInventoryMovements": ContractResponse<components["schemas"]["InventoryMovementPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "listInventoryReservations": ContractResponse<components["schemas"]["InventoryReservationPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createInventoryReservation": ContractResponse<components["schemas"]["InventoryReservation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getInventory": ContractResponse<components["schemas"]["InventoryReservation"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
-  "releaseInventoryReservation": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "listInventoryObservations": ContractResponse<components["schemas"]["InventoryObservationPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createInventoryObservation": ContractResponse<components["schemas"]["InventoryObservation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getInventoryOperation": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
-  "createInitialReceipt": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "createInventoryReceipt": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "createInventoryAdjustment": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "issueInventory": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "reverseInventoryOperation": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "listPayments": ContractResponse<components["schemas"]["PaymentPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createPayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getPayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
-  "attachPaymentProof": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "submitPaymentReview": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "reviewPayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "reversePayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getFile": ContractResponse<components["schemas"]["File"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
-  "createUploadIntent": ContractResponse<components["schemas"]["File"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "completeUpload": ContractResponse<components["schemas"]["File"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "createDownloadIntent": ContractResponse<components["schemas"]["File"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201>;
-  "listDocuments": ContractResponse<components["schemas"]["DocumentPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
-  "updateDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "createDocumentVersion": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "submitDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "approveDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "rejectDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "finalizeDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "issueDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "voidDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "listTasks": ContractResponse<components["schemas"]["TaskPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createTask": ContractResponse<components["schemas"]["Task"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getTask": ContractResponse<components["schemas"]["Task"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
-  "completeTask": ContractResponse<components["schemas"]["Task"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "listAuditEvents": ContractResponse<components["schemas"]["AuditEventPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
+  "getCsrfToken": ContractResponse<components["schemas"]["CsrfToken"], { "X-Request-ID": string; "Cache-Control": "no-store" }, 200>;
+  "createSession": ContractResponse<components["schemas"]["Session"], { "X-Request-ID": string; "Cache-Control": "no-store" }, 201>;
+  "getCurrentSession": ContractResponse<components["schemas"]["Session"], { "X-Request-ID": string; "Cache-Control": "no-store" }, 200>;
+  "deleteCurrentSession": ContractResponse<void, { "X-Request-ID": string }, 204>;
+  "getCommandStatus": ContractResponse<components["schemas"]["CommandStatus"], { "X-Request-ID": string; "Retry-After"?: string; "Cache-Control": "no-store"; "Idempotent-Replay"?: "true"; "Content-Location"?: string }, 200>;
+  "getUser": ContractResponse<components["schemas"]["User"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200>;
+  "createUser": ContractResponse<components["schemas"]["User"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "updateUserRoleBindings": ContractResponse<components["schemas"]["User"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "updateUserDataScopeGrants": ContractResponse<components["schemas"]["User"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "disableUser": ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "listCustomers": ContractResponse<components["schemas"]["CustomerPage"], { "X-Request-ID": string; "Cache-Control"?: string }, 200>;
+  "createCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200>;
+  "updateCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "submitCustomerApproval": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "approveCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "rejectCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "reassignCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "listProducts": ContractResponse<components["schemas"]["ProductPage"], { "X-Request-ID": string; "Cache-Control"?: string }, 200>;
+  "createProduct": ContractResponse<components["schemas"]["Product"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getProduct": ContractResponse<components["schemas"]["Product"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200>;
+  "updateProduct": ContractResponse<components["schemas"]["Product"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "listSkus": ContractResponse<components["schemas"]["SkuPage"], { "X-Request-ID": string; "Cache-Control"?: string }, 200>;
+  "createSku": ContractResponse<components["schemas"]["Sku"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getSku": ContractResponse<components["schemas"]["Sku"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200>;
+  "updateSku": ContractResponse<components["schemas"]["Sku"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "listOrders": ContractResponse<components["schemas"]["OrderPage"], { "X-Request-ID": string; "Cache-Control"?: string }, 200>;
+  "createOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200>;
+  "updateOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "transitionOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "listInventoryBalances": ContractResponse<components["schemas"]["InventoryBalancePage"], { "X-Request-ID": string; "Cache-Control"?: string }, 200>;
+  "listInventoryMovements": ContractResponse<components["schemas"]["InventoryMovementPage"], { "X-Request-ID": string; "Cache-Control"?: string }, 200>;
+  "listInventoryReservations": ContractResponse<components["schemas"]["InventoryReservationPage"], { "X-Request-ID": string; "Cache-Control"?: string }, 200>;
+  "createInventoryReservation": ContractResponse<components["schemas"]["InventoryReservation"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getInventory": ContractResponse<components["schemas"]["InventoryReservation"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200>;
+  "releaseInventoryReservation": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "listInventoryObservations": ContractResponse<components["schemas"]["InventoryObservationPage"], { "X-Request-ID": string; "Cache-Control"?: string }, 200>;
+  "createInventoryObservation": ContractResponse<components["schemas"]["InventoryObservation"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getInventoryOperation": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200>;
+  "createInitialReceipt": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createInventoryReceipt": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createInventoryAdjustment": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "issueInventory": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "reverseInventoryOperation": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "listPayments": ContractResponse<components["schemas"]["PaymentPage"], { "X-Request-ID": string; "Cache-Control"?: string }, 200>;
+  "createPayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getPayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200>;
+  "attachPaymentProof": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "submitPaymentReview": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "reviewPayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "reversePayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getFile": ContractResponse<components["schemas"]["File"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200>;
+  "createUploadIntent": ContractResponse<components["schemas"]["File"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "completeUpload": ContractResponse<components["schemas"]["File"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createDownloadIntent": ContractResponse<components["schemas"]["File"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201>;
+  "listDocuments": ContractResponse<components["schemas"]["DocumentPage"], { "X-Request-ID": string; "Cache-Control"?: string }, 200>;
+  "createDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200>;
+  "updateDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createDocumentVersion": ContractResponse<components["schemas"]["Document"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "submitDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "approveDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "rejectDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "finalizeDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "issueDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "voidDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "listTasks": ContractResponse<components["schemas"]["TaskPage"], { "X-Request-ID": string; "Cache-Control"?: string }, 200>;
+  "createTask": ContractResponse<components["schemas"]["Task"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getTask": ContractResponse<components["schemas"]["Task"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200>;
+  "completeTask": ContractResponse<components["schemas"]["Task"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "listAuditEvents": ContractResponse<components["schemas"]["AuditEventPage"], { "X-Request-ID": string; "Cache-Control"?: string }, 200>;
 };
 
 export class GeneratedApiClient extends ContractApiClient {

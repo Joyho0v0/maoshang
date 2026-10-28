@@ -51,7 +51,7 @@ export interface ContractApiClientOptions {
 }
 
 export class ApiProblemError extends Error {
-  constructor(readonly status: number, readonly problem: components['schemas']['Problem']) {
+  constructor(readonly status: number, readonly problem: components['schemas']['Problem'], readonly headers: Readonly<Record<string, string>> = {}) {
     super('API request failed.');
     this.name = 'ApiProblemError';
   }
@@ -104,7 +104,7 @@ export class ContractApiClient {
       const schema = responseContract.schema;
       if (!isRecord(payload) || typeof payload.status !== 'number' || payload.status !== response.status) throw new Error(`Problem status does not match HTTP status ${response.status}.`);
       if (schema === undefined || !validator.validate(schema, payload)) throw new Error(`Invalid ${schema ?? 'error'} response.`);
-      throw new ApiProblemError(response.status, payload as components['schemas']['Problem']);
+      throw new ApiProblemError(response.status, payload as components['schemas']['Problem'], collectResponseHeaders(response, responseContract));
     }
     if (responseContract.schema !== undefined && !validator.validate(responseContract.schema, payload)) throw new Error(`Invalid ${responseContract.schema} response.`);
     return { status: response.status, data: payload as TResponse, headers: collectResponseHeaders(response, responseContract) } as TResponse;

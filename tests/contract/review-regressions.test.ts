@@ -45,7 +45,7 @@ describe('third-review contract regressions', () => {
     const client = new GeneratedApiClient({
       fetch: async () => new Response(JSON.stringify({ csrfToken: 'csrf-token-value', expiresAt: '2026-10-28T05:00:00Z' }), {
         status: 200,
-        headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+        headers: { 'content-type': 'application/json', 'x-request-id': requestId, 'cache-control': 'no-store' },
       }),
       validator,
     });
@@ -53,13 +53,13 @@ describe('third-review contract regressions', () => {
     await expect(client.call('getCsrfToken', {})).resolves.toEqual({
       status: 200,
       data: { csrfToken: 'csrf-token-value', expiresAt: '2026-10-28T05:00:00Z' },
-      headers: { 'Cache-Control': 'no-store' },
+      headers: { 'X-Request-ID': requestId, 'Cache-Control': 'no-store' },
     });
 
     const badClient = new GeneratedApiClient({
       fetch: async () => new Response(JSON.stringify({ csrfToken: 'csrf-token-value', expiresAt: '2026-10-28T05:00:00Z' }), {
         status: 200,
-        headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=86400' },
+        headers: { 'content-type': 'application/json', 'x-request-id': requestId, 'cache-control': 'public, max-age=86400' },
       }),
       validator,
     });
@@ -71,13 +71,13 @@ describe('third-review contract regressions', () => {
     const problem = { type: 'urn:autoflow:problem:business-rule-violation', title: 'Conflict', status: 409, code: 'BUSINESS_RULE_VIOLATION', requestId, retryable: false };
     const input = { headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': 'key-1' }, body: { name: 'Acme', ownerUserId: resourceId } };
     const badMediaClient = new GeneratedApiClient({
-      fetch: async () => new Response(JSON.stringify(problem), { status: 409, headers: { 'content-type': 'application/json' } }),
+      fetch: async () => new Response(JSON.stringify(problem), { status: 409, headers: { 'content-type': 'application/json', 'x-request-id': requestId } }),
       validator,
     });
     await expect(badMediaClient.call('createCustomer', input)).rejects.toThrow(/Unexpected response content type/);
 
     const mismatched = new GeneratedApiClient({
-      fetch: async () => new Response(JSON.stringify({ ...problem, status: 500 }), { status: 409, headers: { 'content-type': 'application/problem+json' } }),
+      fetch: async () => new Response(JSON.stringify({ ...problem, status: 500 }), { status: 409, headers: { 'content-type': 'application/problem+json', 'x-request-id': requestId } }),
       validator,
     });
     await expect(mismatched.call('createCustomer', input)).rejects.toThrow(/status does not match/);
@@ -102,9 +102,9 @@ describe('third-review contract regressions', () => {
       },
       validator,
     });
-    await client.call('listProducts', { query: { filter: ['status=ACTIVE', 'owner=me'] } });
+    await client.call('listProducts', { query: { 'filter[status]': ['ACTIVE', 'INACTIVE'] } });
     expect(requested).toContain('sort=-updatedAt%2C-id');
-    expect(requested.match(/filter=/g)).toHaveLength(2);
+    expect(requested.match(/filter%5Bstatus%5D=/g)).toHaveLength(2);
   });
 
   it('keeps Problem and CommandStatus closed and status-consistent at runtime', async () => {
