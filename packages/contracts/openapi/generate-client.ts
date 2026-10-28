@@ -79,7 +79,7 @@ export class TransferExecutor {
   }
 
   async upload(intent: UploadIntent, payload: TransferPayload): Promise<Response> {
-    assertTransferIntent(intent, this.now);
+    assertTransferIntent(intent, this.now, 'UploadIntent');
     const transfer = intent.transfer;
     if (transfer.kind === 'HTTP_PUT') {
       return await this.fetchImpl(transfer.locator, {
@@ -103,7 +103,7 @@ export class TransferExecutor {
   }
 
   async download(intent: DownloadIntent): Promise<Response> {
-    assertTransferIntent(intent, this.now);
+    assertTransferIntent(intent, this.now, 'DownloadIntent');
     return await this.fetchImpl(intent.transfer.locator, {
       method: 'GET',
       credentials: 'omit',
@@ -113,13 +113,13 @@ export class TransferExecutor {
   }
 }
 
-function assertTransferIntent(intent: UploadIntent | DownloadIntent, now: () => Date): void {
+function assertTransferIntent(intent: UploadIntent | DownloadIntent, now: () => Date, intentKind: 'UploadIntent' | 'DownloadIntent'): void {
   const transfer = intent.transfer as { kind?: unknown; expiresAt?: unknown; headers?: Record<string, string> };
   if (typeof transfer.expiresAt !== 'string' || !Number.isFinite(Date.parse(transfer.expiresAt)) || Date.parse(transfer.expiresAt) <= now().getTime()) throw new Error('Transfer descriptor expired.');
   const forbidden = new Set(['cookie', 'authorization', 'x-csrf-token', 'idempotency-key', 'if-match']);
   if (transfer.kind === 'HTTP_MULTIPART_POST') forbidden.add('content-type');
   if (transfer.headers !== undefined && Object.keys(transfer.headers).some((name) => forbidden.has(name.toLowerCase()))) throw new Error('Transfer descriptor contains a forbidden application header.');
-  if (!validateIntentPayload(intent, now)) throw new Error('Invalid transfer intent descriptor.');
+  if (!validateIntentPayload(intent, now, intentKind)) throw new Error('Invalid transfer intent descriptor.');
 }
 `, 'utf8');
 process.stdout.write('Generated client/types from expanded Joint Contract artifact.\n');

@@ -59,6 +59,8 @@ export function validateIntentPayload(value: unknown, now: () => Date = () => ne
   if (typeof value.file.href !== 'undefined' && value.file.href !== canonicalHref) return false;
   if (expectedKind === 'UploadIntent' && value.file.href !== canonicalHref) return false;
   if (expectedKind === 'DownloadIntent' && value.file.status !== 'AVAILABLE') return false;
+  if (expectedKind === 'UploadIntent' && transfer.kind !== 'HTTP_PUT' && transfer.kind !== 'HTTP_MULTIPART_POST') return false;
+  if (expectedKind === 'DownloadIntent' && transfer.kind !== 'HTTP_GET') return false;
   if (typeof transfer.locator !== 'string' || !isFutureDate(transfer.expiresAt, now) || !isHttpsLocator(transfer.locator) || !validTransferHeaders(transfer.headers)) return false;
   const forbidden = forbiddenHeader(transfer.headers, transfer.kind);
   if (forbidden !== undefined) return false;

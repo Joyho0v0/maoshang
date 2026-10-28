@@ -216,6 +216,8 @@ describe('file intent contract', () => {
     await expect(executor.download(downloadIntent({ ...downloadTransfer, expiresAt: '2020-10-28T05:00:00Z' }) as never)).rejects.toThrow(/expired/i);
     await expect(executor.download(downloadIntent({ ...downloadTransfer, headers: { 'X-CSRF-Token': 'leaked' } }) as never)).rejects.toThrow(/forbidden/i);
     await expect(executor.upload(uploadIntent({ ...multipartTransfer, headers: { 'CONTENT-TYPE': 'multipart/form-data' } }) as never, new Blob(['bytes']))).rejects.toThrow(/forbidden|content-type/i);
+    await expect(executor.download(uploadIntent(multipartTransfer) as never)).rejects.toThrow(/Invalid transfer intent|direction/i);
+    await expect(executor.upload(downloadIntent(downloadTransfer) as never, new Blob(['bytes']))).rejects.toThrow(/Invalid transfer intent|direction/i);
     expect(calls).toHaveLength(beforeInvalid);
   });
 });
