@@ -148,7 +148,7 @@ function allOfFlattenedInto(previous: RecordValue, next: RecordValue): boolean {
   return true;
 }
 
-function schemaContainsCompatibleOption(candidate: unknown, previousOption: unknown, inheritedRequired = new Set<string>()): boolean {
+function schemaContainsCompatibleOption(candidate: unknown, previousOption: unknown, inheritedRequired = new Set<string>(), schemaContext = true): boolean {
   if (!isRecord(candidate) || !isRecord(previousOption)) return false;
 
   if (equivalentAfterAllOfFlattening(candidate, previousOption)) return true;
@@ -159,7 +159,7 @@ function schemaContainsCompatibleOption(candidate: unknown, previousOption: unkn
     // wrappers are additive only when they do not add root requirements or
     // sibling constraints which narrow every value in the nested branch.
     if (Array.isArray(candidate.allOf)) return false;
-    if (candidateAddsNarrowingRootConstraint(candidate, previousOption)) return false;
+    if (candidateAddsNarrowingRootConstraint(candidate, previousOption, schemaContext)) return false;
     return true;
   }
 
@@ -167,7 +167,7 @@ function schemaContainsCompatibleOption(candidate: unknown, previousOption: unkn
   // branches. Compare the effective merged shape, rather than treating the
   // composition wrapper as an unrelated one-to-one option.
   if (Array.isArray(candidate.allOf) && !Array.isArray(previousOption.allOf)) {
-    return schemaContainsCompatibleOption(flattenAllOfForContainment(candidate), previousOption, inheritedRequired);
+    return schemaContainsCompatibleOption(flattenAllOfForContainment(candidate), previousOption, inheritedRequired, schemaContext);
   }
 
   // A candidate-only composition can narrow an option even when the ordinary
@@ -205,7 +205,7 @@ function hasBreakingChange(previous: unknown, next: unknown, path: string): bool
 function hasBreakingChangeInternal(previous: unknown, next: unknown, path: string): boolean {
   const changes: BreakingChange[] = [];
   collectionLimits.set(changes, 1);
-  collectValue(previous, next, path, changes);
+  collectValue(previous, next, path, changes, true);
   return changes.length > 0;
 }
 
@@ -315,8 +315,8 @@ function collectUnsupportedSchemaKeywords(previous: RecordValue, next: RecordVal
   }
 }
 
-function candidateAddsNarrowingRootConstraint(candidate: RecordValue, previousOption: RecordValue): boolean {
-  if (hasUnsupportedSchemaKeyword(candidate)) return true;
+function candidateAddsNarrowingRootConstraint(candidate: RecordValue, previousOption: RecordValue, schemaContext = true): boolean {
+  if (hasUnsupportedSchemaKeyword(candidate, schemaContext)) return true;
   for (const key of containmentConstraintKeys) {
     const candidateValue = inheritedConstraint(candidate, key);
     if (candidateValue === undefined) continue;
@@ -512,7 +512,9 @@ function collectValueObject(previous: RecordValue, next: RecordValue, path: stri
 
   collectCommonSchemaConstraints(previous, next, path, changes, schemaContext);
   if (shouldStop(changes)) return;
-  collectComposition(previous, next, path, changes);
+  collectComposition(previous, next, path, changes, schemaContext);
+  if (shouldStop(changes)) return;
+  collectSchemaValuedChildren(previous, next, path, changes, schemaContext);
   if (shouldStop(changes)) return;
 
   const previousRequired = new Set(effectiveRequired(previous));
@@ -546,6 +548,32 @@ function collectValueObject(previous: RecordValue, next: RecordValue, path: stri
   if (previous.requestBody !== undefined) collectRequestBody(previous.requestBody, next.requestBody, `${path}.requestBody`, changes);
   if (previous.responses !== undefined) collectResponses(previous.responses, next.responses, `${path}.responses`, changes);
   if (previous.security !== undefined) collectSecurity(previous.security, next.security, `${path}.security`, changes);
+}
+
+function collectSchemaValuedChildren(
+  previous: RecordValue,
+  next: RecordValue,
+  path: string,
+  changes: BreakingChange[],
+  schemaContext: boolean,
+): void {
+  if (!schemaContext) return;
+
+  const previousContentSchema = previous.contentSchema;
+  const nextContentSchema = next.contentSchema;
+  if (isRecord(previousContentSchema) && isRecord(nextContentSchema)) {
+    collectValue(previousContentSchema, nextContentSchema, `${path}.contentSchema`, changes, true);
+  }
+
+  const previousDefs = isRecord(previous.$defs) ? previous.$defs : undefined;
+  const nextDefs = isRecord(next.$defs) ? next.$defs : undefined;
+  if (previousDefs === undefined || nextDefs === undefined) return;
+  for (const [name, previousSchema] of Object.entries(previousDefs)) {
+    const nextSchema = nextDefs[name];
+    if (isRecord(previousSchema) && isRecord(nextSchema)) {
+      collectValue(previousSchema, nextSchema, `${path}.$defs.${name}`, changes, true);
+    }
+  }
 }
 
 function collectOpenApiDocument(previous: RecordValue, next: RecordValue, changes: BreakingChange[]): void {
@@ -622,7 +650,7 @@ function collectNamedCollection(previousValue: unknown, nextValue: unknown, iden
     if (previousEntry.required !== true && match.required === true) addChange(changes, `${entryPath}.required`, 'optional parameter became required.', previousEntry.required ?? false, true, identityValue, previousEntry);
     if (previousEntry.schema !== undefined) {
       if (match.schema === undefined) addChange(changes, `${entryPath}.schema`, 'parameter schema was removed.', previousEntry.schema, undefined, identityValue);
-      else collectValue(previousEntry.schema, match.schema, `${entryPath}.schema`, changes);
+      else collectValue(previousEntry.schema, match.schema, `${entryPath}.schema`, changes, true);
     }
   }
 }
@@ -672,6 +700,13 @@ function collectHeaders(previous: unknown, next: unknown, path: string, changes:
       continue;
     }
     collectValue(previousHeader, nextHeader, headerPath, changes);
+    if (isRecord(previousHeader) && isRecord(nextHeader) && previousHeader.schema !== undefined) {
+      if (nextHeader.schema === undefined) {
+        addChange(changes, `${headerPath}.schema`, 'header schema was removed.', previousHeader.schema, undefined, name);
+      } else {
+        collectValue(previousHeader.schema, nextHeader.schema, `${headerPath}.schema`, changes, true);
+      }
+    }
   }
 }
 
@@ -730,7 +765,7 @@ function collectCommonSchemaConstraints(previous: RecordValue, next: RecordValue
     && nextAdditionalProperties !== undefined && nextAdditionalProperties !== true) {
     addChange(changes, `${path}.additionalProperties`, 'additional properties were narrowed.', previousAdditionalProperties ?? true, nextAdditionalProperties, 'additionalProperties', previous);
   } else if (isRecord(previousAdditionalProperties) && isRecord(nextAdditionalProperties)) {
-    collectValue(previousAdditionalProperties, nextAdditionalProperties, `${path}.additionalProperties`, changes);
+    collectValue(previousAdditionalProperties, nextAdditionalProperties, `${path}.additionalProperties`, changes, true);
   }
 
   const previousEnumValue = inheritedConstraint(previous, 'enum');
@@ -745,7 +780,7 @@ function collectCommonSchemaConstraints(previous: RecordValue, next: RecordValue
   }
 }
 
-function collectComposition(previous: RecordValue, next: RecordValue, path: string, changes: BreakingChange[]): void {
+function collectComposition(previous: RecordValue, next: RecordValue, path: string, changes: BreakingChange[], schemaContext: boolean): void {
   if (shouldStop(changes)) return;
   for (const key of ['oneOf', 'anyOf', 'allOf'] as const) {
     if (shouldStop(changes)) return;
@@ -767,7 +802,7 @@ function collectComposition(previous: RecordValue, next: RecordValue, path: stri
     }
 
     const inheritedRequired = new Set(effectiveRequired(previous));
-    const matchedPreviousIndexes = matchCompositionOptions(previousOptions, nextOptions, inheritedRequired);
+    const matchedPreviousIndexes = matchCompositionOptions(previousOptions, nextOptions, inheritedRequired, schemaContext);
     for (let index = 0; index < previousOptions.length; index += 1) {
       if (matchedPreviousIndexes.has(index)) continue;
       const previousOption = previousOptions[index];
@@ -776,7 +811,7 @@ function collectComposition(previous: RecordValue, next: RecordValue, path: stri
   }
 }
 
-function matchCompositionOptions(previousOptions: unknown[], nextOptions: unknown[], inheritedRequired: Set<string>): Set<number> {
+function matchCompositionOptions(previousOptions: unknown[], nextOptions: unknown[], inheritedRequired: Set<string>, schemaContext: boolean): Set<number> {
   const matchedPrevious = new Set<number>();
   const reusableCandidates = new Set<number>();
 
@@ -785,13 +820,13 @@ function matchCompositionOptions(previousOptions: unknown[], nextOptions: unknow
   // option that happens to match it.
   for (let candidateIndex = 0; candidateIndex < nextOptions.length; candidateIndex += 1) {
     const candidate = nextOptions[candidateIndex];
-    const covered = previousOptions.filter((previousOption) => schemaContainsCompatibleOption(candidate, previousOption, inheritedRequired));
+    const covered = previousOptions.filter((previousOption) => schemaContainsCompatibleOption(candidate, previousOption, inheritedRequired, schemaContext));
     if (covered.length < 2 || !isRecord(candidate)) continue;
     const hasNestedComposition = ['oneOf', 'anyOf', 'allOf'].some((key) => Array.isArray(candidate[key]));
     if (!hasNestedComposition) continue;
     reusableCandidates.add(candidateIndex);
     for (let index = 0; index < previousOptions.length; index += 1) {
-      if (schemaContainsCompatibleOption(candidate, previousOptions[index], inheritedRequired)) matchedPrevious.add(index);
+      if (schemaContainsCompatibleOption(candidate, previousOptions[index], inheritedRequired, schemaContext)) matchedPrevious.add(index);
     }
   }
 
@@ -802,7 +837,7 @@ function matchCompositionOptions(previousOptions: unknown[], nextOptions: unknow
   const match = (previousIndex: number, visited: Set<number>): boolean => {
     for (let candidateIndex = 0; candidateIndex < nextOptions.length; candidateIndex += 1) {
       if (reusableCandidates.has(candidateIndex) || visited.has(candidateIndex)) continue;
-      if (!schemaContainsCompatibleOption(nextOptions[candidateIndex], previousOptions[previousIndex], inheritedRequired)) continue;
+      if (!schemaContainsCompatibleOption(nextOptions[candidateIndex], previousOptions[previousIndex], inheritedRequired, schemaContext)) continue;
       visited.add(candidateIndex);
       const assignedPrevious = assignedCandidate.get(candidateIndex);
       if (assignedPrevious === undefined || match(assignedPrevious, visited)) {

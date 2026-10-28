@@ -226,6 +226,83 @@ describe('OpenAPI compatibility gate', () => {
     expect(collectBreakingChanges(normalizedBaseline, normalizedCandidate)).not.toEqual([]);
   });
 
+  it('propagates schema context through every known Schema Object entry point', async () => {
+    const makeDocument = (kind: 'parameter' | 'header' | 'additionalProperties' | 'oneOf' | 'contentSchema', schema: Record<string, unknown>) => {
+      const document: Record<string, unknown> = {
+        openapi: '3.1.0',
+        info: { title: `schema context ${kind}`, version: '1.0.0' },
+        paths: {},
+        components: { schemas: { FreeForm: {} } },
+      };
+
+      if (kind === 'parameter') {
+        document.paths = {
+          '/probe': {
+            get: {
+              operationId: 'probeParameterSchema',
+              parameters: [{ name: 'filter', in: 'query', schema }],
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+        };
+      } else if (kind === 'header') {
+        document.paths = {
+          '/probe': {
+            get: {
+              operationId: 'probeHeaderSchema',
+              responses: { '200': { description: 'ok', headers: { 'X-Probe': { schema } } } },
+            },
+          },
+        };
+      } else if (kind === 'additionalProperties') {
+        (document.components as Record<string, unknown>).schemas = { FreeForm: { additionalProperties: schema } };
+      } else if (kind === 'oneOf') {
+        (document.components as Record<string, unknown>).schemas = { FreeForm: { oneOf: [schema] } };
+      } else {
+        (document.components as Record<string, unknown>).schemas = { FreeForm: { contentSchema: schema } };
+      }
+
+      return document;
+    };
+
+    const probes: Array<{ name: 'parameter' | 'header' | 'additionalProperties' | 'oneOf' | 'contentSchema'; previous: Record<string, unknown>; candidate: Record<string, unknown> }> = [
+      {
+        name: 'parameter',
+        previous: makeDocument('parameter', {}),
+        candidate: makeDocument('parameter', { futureAssertion: { limit: 1 } }),
+      },
+      {
+        name: 'header',
+        previous: makeDocument('header', { type: 'string' }),
+        candidate: makeDocument('header', { type: 'string', maxLength: 5 }),
+      },
+      {
+        name: 'additionalProperties',
+        previous: makeDocument('additionalProperties', {}),
+        candidate: makeDocument('additionalProperties', { futureAssertion: { limit: 1 } }),
+      },
+      {
+        name: 'oneOf',
+        previous: makeDocument('oneOf', {}),
+        candidate: makeDocument('oneOf', { futureAssertion: { limit: 1 } }),
+      },
+      {
+        name: 'contentSchema',
+        previous: makeDocument('contentSchema', {}),
+        candidate: makeDocument('contentSchema', { futureAssertion: { limit: 1 } }),
+      },
+    ];
+
+    for (const probe of probes) {
+      const [normalizedPrevious, normalizedCandidate] = await Promise.all([
+        normalizeDocument(probe.previous),
+        normalizeDocument(probe.candidate),
+      ]);
+      expect(() => assertNoBreakingChanges(normalizedPrevious, normalizedCandidate), probe.name).toThrow();
+      expect(collectBreakingChanges(normalizedPrevious, normalizedCandidate), probe.name).not.toEqual([]);
+    }
+  });
+
   it('treats direct allOf merge and split as equivalent in both directions', () => {
     const merged = {
       type: 'object',
