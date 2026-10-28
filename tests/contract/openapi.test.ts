@@ -55,7 +55,9 @@ describe('machine-readable Joint Contract v1 artifact', () => {
 
     for (const operation of unsafe) {
       expect(operation.responses?.['403']).toBeDefined();
-      expect(operation.responses?.['428']).toBeDefined();
+      const safety = operation['x-safety'] as { idempotency?: string; ifMatch?: string } | undefined;
+      if (safety?.idempotency === 'required' || safety?.ifMatch === 'required') expect(operation.responses?.['428']).toBeDefined();
+      else expect(operation.responses?.['428']).toBeUndefined();
     }
   });
 

@@ -22,6 +22,26 @@ delete source['x-operationTemplates'];
 
 const ast = await openapiTS(source);
 await writeFile(new URL('./generated.ts', import.meta.url), astToString(ast), 'utf8');
+const operations = Object.entries(source.paths ?? {}).flatMap(([path, pathItem]) =>
+  Object.entries(pathItem)
+    .filter(([method]) => ['get', 'put', 'post', 'delete', 'patch', 'options', 'head', 'trace'].includes(method))
+    .map(([method, operation]) => ({ operationId: (operation as OperationObject).operationId, method: method.toUpperCase(), path })),
+).filter((operation): operation is { operationId: string; method: string; path: string } => typeof operation.operationId === 'string');
+await writeFile(new URL('./generated-client.ts', import.meta.url), `import { ContractApiClient, type ClientCallInput, type ContractApiClientOptions } from './client.js';
+
+export const operations = ${JSON.stringify(Object.fromEntries(operations.map(({ operationId, method, path }) => [operationId, { method, path }])), null, 2)} as const;
+export type OperationId = keyof typeof operations;
+
+export class GeneratedApiClient extends ContractApiClient {
+  constructor(options: ContractApiClientOptions = {}) {
+    super(options);
+  }
+
+  call<TResponse>(operationId: OperationId, input: ClientCallInput = {}): Promise<TResponse> {
+    return super.execute<TResponse>(operations[operationId], input);
+  }
+}
+`, 'utf8');
 process.stdout.write('Generated client/types from expanded Joint Contract artifact.\n');
 
 function resolve(operation: OperationObject & { $ref?: string }, available: Record<string, OperationObject & { $ref?: string }>): OperationObject {

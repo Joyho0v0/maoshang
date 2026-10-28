@@ -775,7 +775,9 @@ export function assertOperationManifest(document: AnyRecord): void {
         if (safety.idempotency === 'required' && headers.get('Idempotency-Key') !== true) throw new Error(`${operationId} must require Idempotency-Key.`);
         if (safety.ifMatch === 'required' && headers.get('If-Match') !== true) throw new Error(`${operationId} must require If-Match.`);
         const responses = operation.responses as AnyRecord | undefined;
-        if (responses?.['403'] === undefined || responses['428'] === undefined) throw new Error(`${operationId} must declare 403 and 428.`);
+        if (responses?.['403'] === undefined) throw new Error(`${operationId} must declare 403.`);
+        if ((safety.idempotency === 'required' || safety.ifMatch === 'required') && responses?.['428'] === undefined) throw new Error(`${operationId} must declare 428.`);
+        if (safety.idempotency !== 'required' && safety.ifMatch !== 'required' && responses?.['428'] !== undefined) throw new Error(`${operationId} must not declare unreachable 428.`);
       }
     }
   }

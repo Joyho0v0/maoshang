@@ -42,7 +42,6 @@ paths:
         '201': { $ref: '#/components/responses/Session' }
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/CsrfFailed' }
-        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /auth/sessions/current:
     get:
       tags: [auth]
@@ -59,7 +58,6 @@ paths:
         '204': { description: Session deleted. }
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/CsrfFailed' }
-        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /commands/status:
     get:
       tags: [commands]
@@ -280,7 +278,7 @@ paths:
       operationId: createDownloadIntent
       x-safety: { csrf: required, idempotency: exempt, ifMatch: exempt }
       parameters: [{ $ref: '#/components/parameters/ResourceId' }, { $ref: '#/components/parameters/CsrfHeader' }]
-      responses: { '201': { $ref: '#/components/responses/Resource' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '404': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
+      responses: { '201': { $ref: '#/components/responses/Resource' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '404': { $ref: '#/components/responses/Problem' } }
 
   /orders/{orderId}/documents:
     get: { $ref: '#/x-operationTemplates/listDocuments' }
@@ -499,12 +497,18 @@ components:
       properties: { items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/Resource' } }, page: { $ref: '#/components/schemas/PageMeta' } }
       additionalProperties: false
     User:
-      allOf:
-        - $ref: '#/components/schemas/ResourceMeta'
-        - type: object
-          required: [username, role, status]
-          properties: { username: { type: string, minLength: 1, maxLength: 320 }, role: { type: string, minLength: 1, maxLength: 128 }, status: { type: string, enum: [ACTIVE, DISABLED] } }
-          additionalProperties: false
+      type: object
+      required: [id, organizationId, version, createdAt, updatedAt, username, role, status]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        organizationId: { $ref: '#/components/schemas/Uuid' }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        username: { type: string, minLength: 1, maxLength: 320 }
+        role: { type: string, minLength: 1, maxLength: 128 }
+        status: { type: string, enum: [ACTIVE, DISABLED] }
+      additionalProperties: false
     Money:
       type: object
       required: [amount, currency]
@@ -681,17 +685,36 @@ components:
       properties: { latestOutcome: { type: string, enum: [PENDING, APPROVED, REJECTED] }, attemptId: { $ref: '#/components/schemas/Uuid' }, attemptNo: { type: integer, minimum: 1 }, reason: { type: string }, decidedAt: { type: string, format: date-time }, decidedBy: { $ref: '#/components/schemas/Uuid' }, canResubmit: { type: boolean } }
       additionalProperties: false
     Customer:
-      allOf:
-        - $ref: '#/components/schemas/ResourceMeta'
-        - type: object
-          required: [status, capabilities]
-          properties: { status: { type: string, enum: [DRAFT, PENDING_APPROVAL, APPROVED, INACTIVE] }, ownerUserId: { $ref: '#/components/schemas/Uuid' }, businessGroupId: { $ref: '#/components/schemas/Uuid' }, contacts: { type: array, items: { $ref: '#/components/schemas/JsonObject' } }, approvalSummary: { $ref: '#/components/schemas/CustomerApprovalSummary' }, capabilities: { type: array, items: { $ref: '#/components/schemas/Capability' } } }
+      type: object
+      required: [id, organizationId, version, createdAt, updatedAt, status, capabilities]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        organizationId: { $ref: '#/components/schemas/Uuid' }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        status: { type: string, enum: [DRAFT, PENDING_APPROVAL, APPROVED, INACTIVE] }
+        ownerUserId: { $ref: '#/components/schemas/Uuid' }
+        businessGroupId: { $ref: '#/components/schemas/Uuid' }
+        contacts: { type: array, items: { $ref: '#/components/schemas/JsonObject' } }
+        approvalSummary: { $ref: '#/components/schemas/CustomerApprovalSummary' }
+        capabilities: { type: array, items: { $ref: '#/components/schemas/Capability' } }
+      additionalProperties: false
     InventoryOperation:
-      allOf:
-        - $ref: '#/components/schemas/ResourceMeta'
-        - type: object
-          required: [operationType, status, lines]
-          properties: { operationType: { type: string, enum: [INITIAL_RECEIPT, RECEIPT, ADJUSTMENT, ISSUE, REVERSAL] }, status: { type: string, enum: [DRAFT, POSTED, REVERSED, CANCELLED] }, reversalOperationId: { $ref: '#/components/schemas/Uuid' }, reversalHref: { type: string, pattern: '^/api/v1/' }, lines: { type: array, items: { $ref: '#/components/schemas/JsonObject' } } }
+      type: object
+      required: [id, organizationId, version, createdAt, updatedAt, operationType, status, lines]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        organizationId: { $ref: '#/components/schemas/Uuid' }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        operationType: { type: string, enum: [INITIAL_RECEIPT, RECEIPT, ADJUSTMENT, ISSUE, REVERSAL] }
+        status: { type: string, enum: [DRAFT, POSTED, REVERSED, CANCELLED] }
+        reversalOperationId: { $ref: '#/components/schemas/Uuid' }
+        reversalHref: { type: string, pattern: '^/api/v1/' }
+        lines: { type: array, items: { $ref: '#/components/schemas/JsonObject' } }
+      additionalProperties: false
     Href: { type: string, pattern: '^/api/v1/' }
 x-operationTemplates:
   genericParameters: [{ $ref: '#/components/parameters/ResourceId' }]

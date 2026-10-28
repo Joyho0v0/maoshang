@@ -1015,7 +1015,14 @@ export interface components {
             items: components["schemas"]["Resource"][];
             page: components["schemas"]["PageMeta"];
         };
-        User: components["schemas"]["ResourceMeta"] & {
+        User: {
+            id: components["schemas"]["Uuid"];
+            organizationId: components["schemas"]["Uuid"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
             username: string;
             role: string;
             /** @enum {string} */
@@ -1272,7 +1279,14 @@ export interface components {
             decidedBy?: components["schemas"]["Uuid"];
             canResubmit: boolean;
         };
-        Customer: components["schemas"]["ResourceMeta"] & {
+        Customer: {
+            id: components["schemas"]["Uuid"];
+            organizationId: components["schemas"]["Uuid"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
             /** @enum {string} */
             status: "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "INACTIVE";
             ownerUserId?: components["schemas"]["Uuid"];
@@ -1281,7 +1295,14 @@ export interface components {
             approvalSummary?: components["schemas"]["CustomerApprovalSummary"];
             capabilities: components["schemas"]["Capability"][];
         };
-        InventoryOperation: components["schemas"]["ResourceMeta"] & {
+        InventoryOperation: {
+            id: components["schemas"]["Uuid"];
+            organizationId: components["schemas"]["Uuid"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
             /** @enum {string} */
             operationType: "INITIAL_RECEIPT" | "RECEIPT" | "ADJUSTMENT" | "ISSUE" | "REVERSAL";
             /** @enum {string} */
@@ -1543,7 +1564,6 @@ export interface operations {
             201: components["responses"]["Session"];
             401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
-            428: components["responses"]["PreconditionRequired"];
         };
     };
     getCurrentSession: {
@@ -1579,7 +1599,6 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["CsrfFailed"];
-            428: components["responses"]["PreconditionRequired"];
         };
     };
     getCommandStatus: {
@@ -2570,7 +2589,6 @@ export interface operations {
             201: components["responses"]["Resource"];
             403: components["responses"]["CsrfFailed"];
             404: components["responses"]["Problem"];
-            428: components["responses"]["PreconditionRequired"];
         };
     };
     listDocuments: {

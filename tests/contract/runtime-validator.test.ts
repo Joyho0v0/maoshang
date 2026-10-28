@@ -33,4 +33,13 @@ describe('runtime contract validator', () => {
     expect(validator.validate('CommandStatus', { ...base, state: 'SUCCEEDED', completedAt: '2026-10-28T05:01:00Z', retryAfterMs: 0, httpStatus: 201, resource: { id: base.commandId }, resultHref: null, problem: null })).toBe(true);
     expect(validator.validate('CommandStatus', { ...base, state: 'FAILED', completedAt: '2026-10-28T05:01:00Z', retryAfterMs: 0, httpStatus: 409, resource: null, resultHref: null, problem: { type: 'urn:autoflow:problem:business-rule-violation', title: 'Conflict', status: 409, code: 'BUSINESS_RULE_VIOLATION', requestId: base.commandId, retryable: false } })).toBe(true);
   });
+
+  it('accepts complete Customer and InventoryOperation DTOs while rejecting extra fields', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const validator = createContractValidator(document);
+    const ids = { id: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' };
+    expect(validator.validate('Customer', { ...ids, version: 1, createdAt: '2026-10-28T05:00:00Z', updatedAt: '2026-10-28T05:00:00Z', status: 'DRAFT', capabilities: [] })).toBe(true);
+    expect(validator.validate('InventoryOperation', { ...ids, version: 1, createdAt: '2026-10-28T05:00:00Z', updatedAt: '2026-10-28T05:00:00Z', operationType: 'RECEIPT', status: 'POSTED', lines: [] })).toBe(true);
+    expect(validator.validate('Customer', { ...ids, version: 1, createdAt: '2026-10-28T05:00:00Z', updatedAt: '2026-10-28T05:00:00Z', status: 'DRAFT', capabilities: [], unknownField: true })).toBe(false);
+  });
 });

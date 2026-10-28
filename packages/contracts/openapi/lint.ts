@@ -28,7 +28,9 @@ for (const [path, methods] of Object.entries(paths)) {
       if (safety.idempotency === 'required' && !refs.includes('#/components/parameters/IdempotencyHeader')) throw new Error(`${operationId} must declare Idempotency-Key.`);
       if (safety.ifMatch === 'required' && !refs.includes('#/components/parameters/IfMatchHeader')) throw new Error(`${operationId} must declare If-Match.`);
       const responses = operation.responses as Record<string, unknown> | undefined;
-      if (responses?.['403'] === undefined || responses?.['428'] === undefined) throw new Error(`${operationId} must describe 403 and 428.`);
+      if (responses?.['403'] === undefined) throw new Error(`${operationId} must describe 403.`);
+      if ((safety.idempotency === 'required' || safety.ifMatch === 'required') && responses?.['428'] === undefined) throw new Error(`${operationId} must describe 428.`);
+      if (safety.idempotency !== 'required' && safety.ifMatch !== 'required' && responses?.['428'] !== undefined) throw new Error(`${operationId} must not describe unreachable 428.`);
     }
   }
 }
