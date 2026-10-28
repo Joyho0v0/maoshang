@@ -19,7 +19,11 @@ export interface BreakingChange {
 }
 
 const collectionLimits = new WeakMap<BreakingChange[], number>();
-const collectionContexts = new WeakMap<BreakingChange[], { readonly sourceIds: WeakMap<object, string>; nextSourceId: number }>();
+interface CollectionContext {
+  readonly sourceIds: WeakMap<object, string>;
+}
+
+const collectionContexts = new WeakMap<BreakingChange[], CollectionContext>();
 
 export function assertNoBreakingChanges(previous: unknown, next: unknown, path = 'root'): void {
   const first = collectBreakingChanges(previous, next, path)[0];
@@ -115,11 +119,18 @@ function schemaContainsCompatibleOption(candidate: unknown, previousOption: unkn
   if (schemaContainsOption(candidate, previousOption)) {
     // An allOf wrapper containing the old option can still add a mandatory
     // constraint to every value. It is not a containment proof. oneOf/anyOf
-    // wrappers are additive only when they do not add root requirements.
+    // wrappers are additive only when they do not add root requirements or
+    // sibling constraints which narrow every value in the nested branch.
     if (Array.isArray(candidate.allOf)) return false;
-    const previousRequired = new Set(effectiveRequired(previousOption));
-    if (arrayOfStrings(candidate.required).some((field) => !previousRequired.has(field))) return false;
+    if (candidateAddsNarrowingRootConstraint(candidate, previousOption)) return false;
     return true;
+  }
+
+  // The candidate may split a previously merged object into equivalent allOf
+  // branches. Compare the effective merged shape, rather than treating the
+  // composition wrapper as an unrelated one-to-one option.
+  if (Array.isArray(candidate.allOf) && !Array.isArray(previousOption.allOf)) {
+    return schemaContainsCompatibleOption(flattenAllOfForContainment(candidate), previousOption, inheritedRequired);
   }
 
   // A candidate-only composition can narrow an option even when the ordinary
@@ -163,6 +174,68 @@ function schemaContainsOption(candidate: unknown, previousOption: unknown): bool
   return false;
 }
 
+const containmentConstraintKeys = [
+  'type', 'format', 'pattern', 'const', 'enum', 'minLength', 'maxLength',
+  'minimum', 'maximum', 'minItems', 'maxItems', 'minProperties', 'maxProperties',
+  'uniqueItems', 'multipleOf', 'contains', 'propertyNames', 'dependentRequired',
+] as const;
+
+function candidateAddsNarrowingRootConstraint(candidate: RecordValue, previousOption: RecordValue): boolean {
+  for (const key of containmentConstraintKeys) {
+    const candidateValue = inheritedConstraint(candidate, key);
+    if (candidateValue === undefined) continue;
+    const previousValue = inheritedConstraint(previousOption, key);
+    if (previousValue === undefined) return true;
+    if (key === 'enum') {
+      const previousValues = new Set(arrayOfScalars(previousValue).map((value) => stableSerialize(value)));
+      const candidateValues = new Set(arrayOfScalars(candidateValue).map((value) => stableSerialize(value)));
+      if ([...previousValues].some((value) => !candidateValues.has(value))) return true;
+      continue;
+    }
+    if (key === 'maxLength' || key === 'maximum' || key === 'maxItems' || key === 'maxProperties') {
+      if (typeof previousValue === 'number' && typeof candidateValue === 'number' && candidateValue < previousValue) return true;
+      continue;
+    }
+    if (key === 'minLength' || key === 'minimum' || key === 'minItems' || key === 'minProperties') {
+      if (typeof previousValue === 'number' && typeof candidateValue === 'number' && candidateValue > previousValue) return true;
+      continue;
+    }
+    if (stableSerialize(previousValue) !== stableSerialize(candidateValue)) return true;
+  }
+
+  const previousRequired = new Set(effectiveRequired(previousOption));
+  if (arrayOfStrings(candidate.required).some((field) => !previousRequired.has(field))) return true;
+  if (candidate.additionalProperties === false && previousOption.additionalProperties !== false) return true;
+
+  const previousProperties = effectiveProperties(previousOption);
+  if (isRecord(candidate.properties)) {
+    for (const [property, candidateSchema] of Object.entries(candidate.properties)) {
+      const previousSchema = previousProperties[property];
+      if (previousSchema !== undefined && isRecord(candidateSchema) && isRecord(previousSchema) && hasBreakingChange(previousSchema, candidateSchema, `composition.properties.${property}`)) return true;
+    }
+  }
+  if (candidate.items !== undefined && previousOption.items === undefined) return true;
+  if (candidate.items !== undefined && previousOption.items !== undefined && hasBreakingChange(previousOption.items, candidate.items, 'composition.items')) return true;
+  return false;
+}
+
+function flattenAllOfForContainment(schema: RecordValue): RecordValue {
+  const flattened: RecordValue = { ...schema };
+  delete flattened.allOf;
+  const required = effectiveRequired(schema);
+  if (required.length > 0) flattened.required = required;
+  const properties = effectiveProperties(schema);
+  if (Object.keys(properties).length > 0) flattened.properties = properties;
+  for (const key of containmentConstraintKeys) {
+    const value = inheritedConstraint(schema, key);
+    if (value !== undefined) flattened[key] = value;
+  }
+  if (schema.additionalProperties === false || (Array.isArray(schema.allOf) && schema.allOf.some((branch) => isRecord(branch) && branch.additionalProperties === false))) {
+    flattened.additionalProperties = false;
+  }
+  return flattened;
+}
+
 /**
  * Collect every compatibility failure in a normalized artifact.
  *
@@ -173,7 +246,10 @@ function schemaContainsOption(candidate: unknown, previousOption: unknown): bool
  */
 export function collectBreakingChanges(previous: unknown, next: unknown, path = 'root'): BreakingChange[] {
   const changes: BreakingChange[] = [];
-  collectionContexts.set(changes, { sourceIds: new WeakMap<object, string>(), nextSourceId: 1 });
+  const context: CollectionContext = { sourceIds: new WeakMap<object, string>() };
+  collectionContexts.set(changes, context);
+  indexSourceObjects(previous, 'previous', context.sourceIds);
+  indexSourceObjects(next, 'next', context.sourceIds);
   collectValue(previous, next, path, changes);
   const unique = new Map<string, BreakingChange>();
   for (const change of changes) {
@@ -449,7 +525,7 @@ function collectComposition(previous: RecordValue, next: RecordValue, path: stri
     for (let index = 0; index < previousOptions.length; index += 1) {
       if (matchedPreviousIndexes.has(index)) continue;
       const previousOption = previousOptions[index];
-      addChange(changes, `${path}.${key}[${index}]`, `a ${key} option was removed.`, previousOption, undefined, `${key}[${index}]`);
+      addChange(changes, `${path}.${key}[${index}]`, `a ${key} option was removed.`, previousOption, undefined, `${key}:option:${fingerprint(previousOption)}`, previousOption);
     }
   }
 }
@@ -537,7 +613,7 @@ function addChange(
     oldValue,
     newValue,
     affectedPaths: [jsonPath],
-    stableIdentity: `${jsonPath}#${logicalIdentity}`,
+    stableIdentity: `${canonicalChangePath(jsonPath)}#${logicalIdentity}`,
     logicalIdentity,
     sourceIdentity,
   });
@@ -549,11 +625,7 @@ function getSourceIdentity(changes: BreakingChange[], source: unknown): string {
   if (context === undefined) return 'value';
   const object = source as object;
   const existing = context.sourceIds.get(object);
-  if (existing !== undefined) return existing;
-  const identity = `source-${context.nextSourceId}`;
-  context.nextSourceId += 1;
-  context.sourceIds.set(object, identity);
-  return identity;
+  return existing ?? `unindexed-${fingerprint(source)}`;
 }
 
 function objectValue(value: unknown): object | undefined {
@@ -565,7 +637,53 @@ function shouldStop(changes: BreakingChange[]): boolean {
 }
 
 function fingerprint(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(value) ?? 'undefined').digest('hex');
+  return createHash('sha256').update(stableSerialize(value)).digest('hex');
+}
+
+function canonicalChangePath(path: string): string {
+  return path.replace(/\.(oneOf|anyOf|allOf)\[\d+\]/g, '.$1[*]');
+}
+
+function stableSerialize(value: unknown, seen = new WeakSet<object>()): string {
+  if (value === undefined) return 'undefined';
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (seen.has(value)) return '"[Circular]"';
+  seen.add(value);
+  let serialized: string;
+  if (Array.isArray(value)) {
+    serialized = `[${value.map((item) => stableSerialize(item, seen)).join(',')}]`;
+  } else {
+    serialized = `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize((value as Record<string, unknown>)[key], seen)}`).join(',')}}`;
+  }
+  seen.delete(value);
+  return serialized;
+}
+
+function indexSourceObjects(value: unknown, rootPath: string, sourceIds: WeakMap<object, string>): void {
+  const visit = (current: unknown, path: string): void => {
+    if (isRecord(current)) {
+      if (sourceIds.has(current)) return;
+      sourceIds.set(current, path);
+      const keys = Object.keys(current).sort((left, right) => {
+        if (path === rootPath && left === 'components') return -1;
+        if (path === rootPath && right === 'components') return 1;
+        return left.localeCompare(right);
+      });
+      for (const key of keys) visit(current[key], `${path}.${key}`);
+      return;
+    }
+    if (!Array.isArray(current)) return;
+    const occurrences = new Map<string, number>();
+    current
+      .map((item) => ({ item, identity: fingerprint(item) }))
+      .sort((left, right) => left.identity.localeCompare(right.identity))
+      .forEach(({ item, identity }) => {
+        const occurrence = occurrences.get(identity) ?? 0;
+        occurrences.set(identity, occurrence + 1);
+        visit(item, `${path}[${identity}${occurrence === 0 ? '' : `~${occurrence}`}]`);
+      });
+  };
+  visit(value, rootPath);
 }
 
 function arrayOfStrings(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []; }

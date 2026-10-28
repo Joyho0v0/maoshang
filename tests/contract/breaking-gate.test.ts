@@ -56,6 +56,14 @@ describe('OpenAPI compatibility gate', () => {
     )).not.toThrow();
   });
 
+  it('treats equivalent allOf merge and split shapes as compatible composition options', () => {
+    const merged = { oneOf: [{ type: 'object', required: ['id', 'tenantId'], properties: { id: { type: 'string' }, tenantId: { type: 'string' } } }] };
+    const split = { oneOf: [{ allOf: [{ type: 'object', required: ['id'], properties: { id: { type: 'string' } } }, { type: 'object', required: ['tenantId'], properties: { tenantId: { type: 'string' } } }] }] };
+
+    expect(() => assertNoBreakingChanges(merged, split)).not.toThrow();
+    expect(() => assertNoBreakingChanges(split, merged)).not.toThrow();
+  });
+
   it('rejects a required field added while flattening an allOf schema', () => {
     expect(() => assertNoBreakingChanges(
       { allOf: [{ type: 'object', required: ['id'], properties: { id: { type: 'string' } } }] },
@@ -122,6 +130,14 @@ describe('OpenAPI compatibility gate', () => {
     expect(collectBreakingChanges(previous, wrapped)).toEqual([]);
   });
 
+  it('rejects narrowing constraints added beside a nested union wrapper', () => {
+    const previous = { oneOf: [{ type: 'string' }] };
+    const candidate = { oneOf: [{ oneOf: [{ type: 'string' }], minLength: 5 }] };
+
+    expect(() => assertNoBreakingChanges(previous, candidate)).toThrow();
+    expect(collectBreakingChanges(previous, candidate).length).toBeGreaterThan(0);
+  });
+
   it('reports the removed middle composition option rather than its successor', () => {
     const previous = { oneOf: [{ const: 'A' }, { const: 'B' }, { const: 'C' }] };
     const candidate = { oneOf: [{ const: 'A' }, { const: 'C' }] };
@@ -130,6 +146,36 @@ describe('OpenAPI compatibility gate', () => {
     expect(changes.filter((change) => change.reason.includes('option was removed'))).toEqual([
       expect.objectContaining({ oldValue: { const: 'B' } }),
     ]);
+  });
+
+  it('keeps removed-option identity stable across branch reordering', () => {
+    const first = collectBreakingChanges(
+      { oneOf: [{ const: 'A' }, { const: 'B' }, { const: 'C' }] },
+      { oneOf: [{ const: 'A' }, { const: 'C' }] },
+    ).find((change) => change.reason.includes('option was removed'));
+    const reordered = collectBreakingChanges(
+      { oneOf: [{ const: 'C' }, { const: 'A' }, { const: 'B' }] },
+      { oneOf: [{ const: 'C' }, { const: 'A' }] },
+    ).find((change) => change.reason.includes('option was removed'));
+
+    expect(first?.oldValue).toEqual({ const: 'B' });
+    expect(reordered?.oldValue).toEqual({ const: 'B' });
+    expect(reordered?.stableIdentity).toBe(first?.stableIdentity);
+    expect(reordered?.logicalIdentity).toBe(first?.logicalIdentity);
+  });
+
+  it('keeps identity stable when schema object key order changes', () => {
+    const first = collectBreakingChanges(
+      { type: 'object', properties: { id: { type: 'string' } }, required: [] },
+      { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+    )[0];
+    const reordered = collectBreakingChanges(
+      { required: [], properties: { id: { type: 'string' } }, type: 'object' },
+      { properties: { id: { type: 'string' } }, type: 'object', required: ['id'] },
+    )[0];
+
+    expect(first?.stableIdentity).toBe(reordered?.stableIdentity);
+    expect(first?.logicalIdentity).toBe(reordered?.logicalIdentity);
   });
 
   it('makes the fail-fast error the first structured event with identical values', () => {
