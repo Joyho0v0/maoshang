@@ -30,7 +30,7 @@ const operationDefinitions = Object.entries(source.paths ?? {}).flatMap(([path, 
 const operations = operationDefinitions.map(({ operationId, method, path, contract }) => ({ operationId, method, path, contract }));
 const inputTypes = operationDefinitions.map(({ operationId, operation }) => `  ${JSON.stringify(operationId)}: ${operationInputType(source as unknown as AnyRecord, operation)};`).join('\n');
 const responseTypes = operationDefinitions.map(({ operationId, operation }) => `  ${JSON.stringify(operationId)}: ${operationResponseType(source as unknown as AnyRecord, operation)};`).join('\n');
-await writeFile(new URL('./generated-client.ts', import.meta.url), `import { ContractApiClient, type ContractApiClientOptions, type GeneratedOperation } from './client.js';
+await writeFile(new URL('./generated-client.ts', import.meta.url), `import { ContractApiClient, type ContractApiClientOptions, type ContractResponse, type GeneratedOperation } from './client.js';
 import type { components } from './generated.js';
 
 export const operations = ${JSON.stringify(Object.fromEntries(operations.map(({ operationId, method, path, contract }) => [operationId, { method, path, ...contract }])), null, 2)} as const satisfies Record<string, GeneratedOperation>;
@@ -76,11 +76,19 @@ function operationContract(document: AnyRecord, operation: OperationObject): Any
     const mediaType = contentMap?.['application/json'] !== undefined ? 'application/json' : contentMap?.['application/problem+json'] !== undefined ? 'application/problem+json' : undefined;
     const content = mediaType === undefined || contentMap === undefined ? undefined : contentMap[mediaType];
     const schema = isRecord(content) && isRecord(content.schema) ? schemaName(content.schema) : undefined;
+    const headers = isRecord(resolved.headers) ? Object.fromEntries(Object.entries(resolved.headers).map(([name, header]) => {
+      const resolvedHeader = resolveRef(document, header as unknown as AnyRecord);
+      const headerSchema = isRecord(resolvedHeader.schema) ? resolvedHeader.schema : undefined;
+      return [name, {
+        required: resolvedHeader['x-required'] === true,
+        ...(headerSchema === undefined ? {} : { schema: schemaName(headerSchema) ?? headerSchema }),
+      }];
+    })) : {};
     return [status, {
       ...(schema === undefined ? {} : { schema }),
       ...(mediaType === undefined ? {} : { contentType: mediaType }),
-      headers: isRecord(resolved.headers) ? Object.keys(resolved.headers) : [],
-      requiredHeaders: isRecord(resolved.headers) ? Object.entries(resolved.headers).filter(([, header]) => isRecord(header) && header['x-required'] === true).map(([name]) => name) : [],
+      headers,
+      requiredHeaders: Object.entries(headers).filter(([, header]) => isRecord(header) && header.required === true).map(([name]) => name),
     }];
   }));
   const bodyContent = isRecord(requestBody?.content) ? requestBody.content['application/json'] : undefined;
@@ -120,12 +128,12 @@ function operationInputType(document: AnyRecord, operation: OperationObject): st
 function operationResponseType(document: AnyRecord, operation: OperationObject): string {
   const responseTypes = Object.entries(operation.responses ?? {})
     .filter(([status]) => /^2\d\d$/.test(status))
-    .map(([, response]) => {
+    .map(([status, response]) => {
       const resolved = resolveRef(document, response as unknown as AnyRecord);
       const contentMap = isRecord(resolved.content) ? resolved.content : undefined;
       const content = contentMap?.['application/json'] ?? contentMap?.['application/problem+json'];
       const schema = isRecord(content) && isRecord(content.schema) ? schemaName(content.schema) : undefined;
-      return schema === undefined ? 'void' : schemaType(schema);
+      return `ContractResponse<${schema === undefined ? 'void' : schemaType(schema)}, ${responseHeaderType(document, resolved)}, ${status}>`;
     });
   return [...new Set(responseTypes)].join(' | ') || 'never';
 }
@@ -135,6 +143,26 @@ function parameterType(parameter: AnyRecord): string {
   if (schema?.type === 'integer' || schema?.type === 'number') return 'number';
   if (schema?.type === 'boolean') return 'boolean';
   if (schema?.type === 'array') return 'string[]';
+  return 'string';
+}
+
+function responseHeaderType(document: AnyRecord, response: AnyRecord): string {
+  const headers = isRecord(response.headers) ? response.headers : {};
+  const fields = Object.entries(headers).map(([name, value]) => {
+    const header = resolveRef(document, value as AnyRecord);
+    const schema = isRecord(header.schema) ? header.schema : undefined;
+    const optional = header['x-required'] === true ? '' : '?';
+    return `${JSON.stringify(name)}${optional}: ${inlineType(schema)}`;
+  });
+  return fields.length === 0 ? 'Record<never, never>' : `{ ${fields.join('; ')} }`;
+}
+
+function inlineType(schema: AnyRecord | undefined): string {
+  if (schema === undefined) return 'string';
+  if (schema.const !== undefined) return JSON.stringify(schema.const);
+  if (Array.isArray(schema.enum)) return schema.enum.map((value) => JSON.stringify(value)).join(' | ');
+  if (schema.type === 'integer' || schema.type === 'number') return 'number';
+  if (schema.type === 'boolean') return 'boolean';
   return 'string';
 }
 
@@ -154,7 +182,7 @@ function parameterContract(parameter: AnyRecord): AnyRecord {
 function resolveRef(document: AnyRecord, value: AnyRecord): AnyRecord {
   if (typeof value.$ref !== 'string' || !value.$ref.startsWith('#/')) return value;
   const resolved = value.$ref.slice(2).split('/').reduce<unknown>((current, part) => isRecord(current) ? current[part] : undefined, document);
-  return isRecord(resolved) ? resolved : value;
+  return isRecord(resolved) ? { ...resolved, ...value } : value;
 }
 
 function schemaName(value: AnyRecord | undefined): string | undefined {

@@ -14,7 +14,7 @@ describe('generated contract client', () => {
       },
       validator: createContractValidator(document),
     });
-    await expect(client.call('getCsrfToken', {})).resolves.toMatchObject({ csrfToken: 'csrf-token-value' });
+    await expect(client.call('getCsrfToken', {})).resolves.toMatchObject({ data: { csrfToken: 'csrf-token-value' }, status: 200, headers: { 'Cache-Control': 'no-store' } });
     expect(calls[0]).toMatchObject({ method: 'GET', credentials: 'include' });
   });
 

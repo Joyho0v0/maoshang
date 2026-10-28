@@ -37,4 +37,15 @@ describe('OpenAPI compatibility gate', () => {
       { parameters: [{ name: 'If-Match', in: 'header', required: true }], responses: { '200': { content: { 'application/json': { schema: { type: 'string', format: 'uuid' } } } } }, security: [] },
     )).toThrow();
   });
+
+  it('rejects removed allOf branches and an implicit-to-closed additional property change', () => {
+    expect(() => assertNoBreakingChanges(
+      { allOf: [{ oneOf: [{ const: 'A' }, { const: 'B' }] }] },
+      { allOf: [{ oneOf: [{ const: 'A' }] }] },
+    )).toThrow(/allOf|oneOf/);
+    expect(() => assertNoBreakingChanges(
+      { type: 'object', properties: { id: { type: 'string' } } },
+      { type: 'object', additionalProperties: false, properties: { id: { type: 'string' } } },
+    )).toThrow(/additional properties/);
+  });
 });

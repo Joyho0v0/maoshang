@@ -170,7 +170,7 @@ function compareCommonSchemaConstraints(previous: RecordValue, next: RecordValue
     }
   }
 
-  if (previous.additionalProperties === true && next.additionalProperties === false) {
+  if ((previous.additionalProperties === true || previous.additionalProperties === undefined) && next.additionalProperties === false) {
     throw new Error(`Breaking change at ${path}: additional properties were disallowed.`);
   }
 
@@ -184,7 +184,7 @@ function compareCommonSchemaConstraints(previous: RecordValue, next: RecordValue
 }
 
 function compareComposition(previous: RecordValue, next: RecordValue, path: string): void {
-  for (const key of ['oneOf', 'anyOf'] as const) {
+  for (const key of ['oneOf', 'anyOf', 'allOf'] as const) {
     if (!Array.isArray(previous[key])) continue;
     if (!Array.isArray(next[key])) throw new Error(`Breaking change at ${path}: ${key} was removed.`);
     for (const previousOption of previous[key]) {
@@ -196,7 +196,7 @@ function compareComposition(previous: RecordValue, next: RecordValue, path: stri
 function schemaContainsOption(candidate: unknown, previousOption: unknown): boolean {
   if (JSON.stringify(candidate) === JSON.stringify(previousOption)) return true;
   if (!isRecord(candidate)) return false;
-  for (const key of ['oneOf', 'anyOf'] as const) {
+  for (const key of ['oneOf', 'anyOf', 'allOf'] as const) {
     const options = candidate[key];
     if (Array.isArray(options) && options.some((option) => schemaContainsOption(option, previousOption))) return true;
   }

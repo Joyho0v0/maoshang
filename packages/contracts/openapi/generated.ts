@@ -957,18 +957,115 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        ProductCreateRequest: components["schemas"]["ResourceCreateRequest"];
-        SkuCreateRequest: components["schemas"]["ResourceCreateRequest"];
-        OrderCreateRequest: components["schemas"]["ResourceCreateRequest"];
-        InventoryReservationCreateRequest: components["schemas"]["ResourceCreateRequest"];
-        InventoryObservationCreateRequest: components["schemas"]["ResourceCreateRequest"];
-        InventoryOperationCreateRequest: components["schemas"]["ResourceCreateRequest"];
-        PaymentCreateRequest: components["schemas"]["ResourceCreateRequest"];
-        FileCreateRequest: components["schemas"]["ResourceCreateRequest"];
-        TaskCreateRequest: components["schemas"]["ResourceCreateRequest"];
-        ProductUpdateRequest: components["schemas"]["ResourceUpdateRequest"];
-        SkuUpdateRequest: components["schemas"]["ResourceUpdateRequest"];
-        OrderUpdateRequest: components["schemas"]["ResourceUpdateRequest"];
+        ProductCreateRequest: {
+            name: string;
+            productCode: string;
+            unit: string;
+            description?: string;
+            categoryId?: components["schemas"]["Uuid"];
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        SkuCreateRequest: {
+            productId: components["schemas"]["Uuid"];
+            skuCode: string;
+            name: string;
+            unit: string;
+            price?: components["schemas"]["DecimalString"];
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        OrderCreateRequest: {
+            customerId: components["schemas"]["Uuid"];
+            orderNo: string;
+            currency: string;
+            lines: {
+                skuId: components["schemas"]["Uuid"];
+                quantity: components["schemas"]["DecimalString"];
+                unitPrice: components["schemas"]["DecimalString"];
+            }[];
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        InventoryReservationCreateRequest: {
+            skuId: components["schemas"]["Uuid"];
+            quantity: components["schemas"]["DecimalString"];
+            unit: string;
+            warehouseId?: components["schemas"]["Uuid"];
+        };
+        InventoryObservationCreateRequest: {
+            skuId: components["schemas"]["Uuid"];
+            observedQuantity: components["schemas"]["DecimalString"];
+            unit: string;
+            locationId?: components["schemas"]["Uuid"];
+        };
+        InventoryOperationCreateRequest: {
+            /** @enum {string} */
+            operationType: "INITIAL_RECEIPT" | "RECEIPT" | "ADJUSTMENT" | "ISSUE";
+            lines: {
+                skuId: components["schemas"]["Uuid"];
+                quantity: components["schemas"]["DecimalString"];
+                unit?: string;
+                locationId?: components["schemas"]["Uuid"];
+            }[];
+            reason?: string;
+        };
+        PaymentCreateRequest: {
+            orderId: components["schemas"]["Uuid"];
+            amount: components["schemas"]["DecimalString"];
+            currency: string;
+            /** @enum {string} */
+            method: "BANK_TRANSFER" | "CASH" | "CARD" | "OTHER";
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        FileCreateRequest: {
+            fileName: string;
+            contentType: string;
+            sizeBytes: number;
+            checksum?: string;
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        TaskCreateRequest: {
+            title: string;
+            taskType: string;
+            assigneeUserId?: components["schemas"]["Uuid"];
+            /** Format: date-time */
+            dueAt?: string;
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        ProductUpdateRequest: {
+            name?: string;
+            unit?: string;
+            description?: string;
+            categoryId?: components["schemas"]["Uuid"];
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        SkuUpdateRequest: {
+            name?: string;
+            unit?: string;
+            price?: components["schemas"]["DecimalString"];
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        OrderUpdateRequest: {
+            /** @enum {string} */
+            status?: "DRAFT" | "CONFIRMED" | "FULFILLED" | "CANCELLED";
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
         DocumentUpdateRequest: components["schemas"]["ResourceUpdateRequest"];
         OrderCommandRequest: components["schemas"]["ResourceCommandRequest"];
         InventoryCommandRequestTyped: components["schemas"]["ResourceCommandRequest"];
@@ -1046,14 +1143,155 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        Product: components["schemas"]["DomainResource"];
-        Sku: components["schemas"]["DomainResource"];
-        Order: components["schemas"]["DomainResource"];
-        Payment: components["schemas"]["DomainResource"];
-        File: components["schemas"]["DomainResource"];
-        Document: components["schemas"]["DomainResource"];
-        Task: components["schemas"]["DomainResource"];
-        InventoryReservation: components["schemas"]["DomainResource"];
+        Product: {
+            id: components["schemas"]["Uuid"];
+            organizationId: components["schemas"]["Uuid"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            name: string;
+            productCode: string;
+            unit: string;
+            categoryId?: components["schemas"]["Uuid"];
+            description?: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "INACTIVE";
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        Sku: {
+            id: components["schemas"]["Uuid"];
+            organizationId: components["schemas"]["Uuid"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            productId: components["schemas"]["Uuid"];
+            skuCode: string;
+            name: string;
+            unit: string;
+            price?: components["schemas"]["DecimalString"];
+            /** @enum {string} */
+            status: "ACTIVE" | "INACTIVE";
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        Order: {
+            id: components["schemas"]["Uuid"];
+            organizationId: components["schemas"]["Uuid"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            customerId: components["schemas"]["Uuid"];
+            orderNo: string;
+            currency: string;
+            /** @enum {string} */
+            status: "DRAFT" | "CONFIRMED" | "FULFILLED" | "CANCELLED";
+            lines: {
+                skuId: components["schemas"]["Uuid"];
+                quantity: components["schemas"]["DecimalString"];
+                unitPrice: components["schemas"]["DecimalString"];
+            }[];
+            totalAmount: components["schemas"]["DecimalString"];
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        Payment: {
+            id: components["schemas"]["Uuid"];
+            organizationId: components["schemas"]["Uuid"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            orderId: components["schemas"]["Uuid"];
+            amount: components["schemas"]["DecimalString"];
+            currency: string;
+            /** @enum {string} */
+            method: "BANK_TRANSFER" | "CASH" | "CARD" | "OTHER";
+            /** @enum {string} */
+            status: "PENDING" | "PAID" | "FAILED" | "REVERSED";
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        File: {
+            id: components["schemas"]["Uuid"];
+            organizationId: components["schemas"]["Uuid"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            fileName: string;
+            contentType: string;
+            sizeBytes: number;
+            checksum?: string;
+            /** @enum {string} */
+            status: "PENDING" | "READY" | "FAILED";
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        Document: {
+            id: components["schemas"]["Uuid"];
+            organizationId: components["schemas"]["Uuid"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            orderId?: components["schemas"]["Uuid"];
+            title: string;
+            documentType: string;
+            fileId?: components["schemas"]["Uuid"];
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "FINALIZED" | "ISSUED" | "VOID";
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        Task: {
+            id: components["schemas"]["Uuid"];
+            organizationId: components["schemas"]["Uuid"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            title: string;
+            taskType: string;
+            assigneeUserId?: components["schemas"]["Uuid"];
+            /** Format: date-time */
+            dueAt?: string;
+            /** @enum {string} */
+            status: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        InventoryReservation: {
+            id: components["schemas"]["Uuid"];
+            organizationId: components["schemas"]["Uuid"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            skuId: components["schemas"]["Uuid"];
+            quantity: components["schemas"]["DecimalString"];
+            unit: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "RELEASED" | "EXPIRED";
+        };
         InventoryBalance: components["schemas"]["DomainResource"];
         InventoryMovement: components["schemas"]["DomainResource"];
         InventoryObservation: components["schemas"]["DomainResource"];
@@ -1250,17 +1488,143 @@ export interface components {
             traceId?: string;
             retryable: boolean;
             violations?: components["schemas"]["ProblemViolation"][];
-            meta?: components["schemas"]["TypedProblemMeta"];
+            meta?: components["schemas"]["TypedProblemMeta"] | null;
         };
-        ProblemGeneric: components["schemas"]["ProblemFields"] & {
-            code?: unknown;
-            meta?: null;
-        } & {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            code: "ProblemGeneric";
+        ProblemInvalidCursor: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 400;
+            /** @constant */
+            code?: "INVALID_CURSOR";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemUnknownFilter: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 400;
+            /** @constant */
+            code?: "UNKNOWN_FILTER";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemInvalidTransition: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 409;
+            /** @constant */
+            code?: "INVALID_TRANSITION";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemAuthenticationRequired: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 401;
+            /** @constant */
+            code?: "AUTHENTICATION_REQUIRED";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemSessionExpired: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 401;
+            /** @constant */
+            code?: "SESSION_EXPIRED";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemInvalidCredentials: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 401;
+            /** @constant */
+            code?: "INVALID_CREDENTIALS";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemPermissionDenied: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 403;
+            /** @constant */
+            code?: "PERMISSION_DENIED";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemResourceNotFound: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 404;
+            /** @constant */
+            code?: "RESOURCE_NOT_FOUND";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemDuplicateBusinessKey: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 409;
+            /** @constant */
+            code?: "DUPLICATE_BUSINESS_KEY";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemFileTooLarge: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 413;
+            /** @constant */
+            code?: "FILE_TOO_LARGE";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemUnsupportedMediaType: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 415;
+            /** @constant */
+            code?: "UNSUPPORTED_MEDIA_TYPE";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemBusinessRuleViolation: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 409;
+            /** @constant */
+            code?: "BUSINESS_RULE_VIOLATION";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemDocumentInvalid: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 409;
+            /** @constant */
+            code?: "DOCUMENT_INVALID";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemRateLimited: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 429;
+            /** @constant */
+            code?: "RATE_LIMITED";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemDependencyFailure: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 502;
+            /** @constant */
+            code?: "DEPENDENCY_FAILURE";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemDependencyUnavailable: components["schemas"]["ProblemFields"] & {
+            /** @constant */
+            status?: 503;
+            /** @constant */
+            code?: "DEPENDENCY_UNAVAILABLE";
+            /** @constant */
+            meta?: unknown;
+        };
+        ProblemInternalError: components["schemas"]["ProblemFields"] & {
+            /** @enum {unknown} */
+            status?: 500 | 502 | 503;
+            /** @constant */
+            code?: "INTERNAL_ERROR";
+            /** @constant */
+            meta?: unknown;
         };
         ProblemValidationFailed: components["schemas"]["ProblemFields"] & {
             /** @enum {unknown} */
@@ -1268,12 +1632,6 @@ export interface components {
             /** @constant */
             code?: "VALIDATION_FAILED";
             meta: components["schemas"]["ValidationMeta"];
-        } & {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            code: "VALIDATION_FAILED";
         };
         ProblemVersionConflict: components["schemas"]["ProblemFields"] & {
             /** @constant */
@@ -1281,12 +1639,6 @@ export interface components {
             /** @constant */
             code?: "VERSION_CONFLICT";
             meta: components["schemas"]["VersionConflictMeta"];
-        } & {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            code: "VERSION_CONFLICT";
         };
         ProblemStateConflict: components["schemas"]["ProblemFields"] & {
             /** @constant */
@@ -1294,12 +1646,6 @@ export interface components {
             /** @constant */
             code?: "STATE_CONFLICT";
             meta: components["schemas"]["StateConflictMeta"];
-        } & {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            code: "STATE_CONFLICT";
         };
         ProblemIdempotencyKeyReused: components["schemas"]["ProblemFields"] & {
             /** @constant */
@@ -1307,12 +1653,6 @@ export interface components {
             /** @constant */
             code?: "IDEMPOTENCY_KEY_REUSED";
             meta: components["schemas"]["IdempotencyKeyReusedMeta"];
-        } & {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            code: "IDEMPOTENCY_KEY_REUSED";
         };
         ProblemInventoryInsufficient: components["schemas"]["ProblemFields"] & {
             /** @constant */
@@ -1320,12 +1660,6 @@ export interface components {
             /** @constant */
             code?: "INVENTORY_INSUFFICIENT";
             meta: components["schemas"]["InventoryInsufficientMeta"];
-        } & {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            code: "INVENTORY_INSUFFICIENT";
         };
         ProblemFileNotReady: components["schemas"]["ProblemFields"] & {
             /** @constant */
@@ -1333,12 +1667,6 @@ export interface components {
             /** @constant */
             code?: "FILE_NOT_READY";
             meta: components["schemas"]["FileNotReadyMeta"];
-        } & {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            code: "FILE_NOT_READY";
         };
         ProblemAlreadyReversed: components["schemas"]["ProblemFields"] & {
             /** @constant */
@@ -1346,12 +1674,6 @@ export interface components {
             /** @constant */
             code?: "OPERATION_ALREADY_REVERSED";
             meta: components["schemas"]["OperationAlreadyReversedMeta"];
-        } & {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            code: "OPERATION_ALREADY_REVERSED";
         };
         ProblemReversalInvariant: components["schemas"]["ProblemFields"] & {
             /** @constant */
@@ -1359,12 +1681,6 @@ export interface components {
             /** @constant */
             code?: "REVERSAL_WOULD_VIOLATE_INVARIANT";
             meta: components["schemas"]["ReversalInvariantMeta"];
-        } & {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            code: "REVERSAL_WOULD_VIOLATE_INVARIANT";
         };
         ProblemReversalNotAllowed: components["schemas"]["ProblemFields"] & {
             /** @constant */
@@ -1372,12 +1688,6 @@ export interface components {
             /** @constant */
             code?: "REVERSAL_NOT_ALLOWED";
             meta: components["schemas"]["ReversalNotAllowedMeta"];
-        } & {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            code: "REVERSAL_NOT_ALLOWED";
         };
         ProblemCustomerApprovalConflict: components["schemas"]["ProblemFields"] & {
             /** @constant */
@@ -1385,12 +1695,6 @@ export interface components {
             /** @constant */
             code?: "CUSTOMER_APPROVAL_STATE_CONFLICT";
             meta: components["schemas"]["CustomerApprovalConflictMeta"];
-        } & {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            code: "CUSTOMER_APPROVAL_STATE_CONFLICT";
         };
         ProblemCsrfFailed: components["schemas"]["ProblemFields"] & {
             /** @constant */
@@ -1398,12 +1702,6 @@ export interface components {
             /** @constant */
             code?: "CSRF_FAILED";
             meta: components["schemas"]["CsrfFailedMeta"];
-        } & {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            code: "CSRF_FAILED";
         };
         Problem: {
             /** Format: uri */
@@ -1419,7 +1717,7 @@ export interface components {
             retryable: boolean;
             violations?: components["schemas"]["ProblemViolation"][];
             meta?: components["schemas"]["TypedProblemMeta"] | null;
-        } & (components["schemas"]["ProblemGeneric"] | components["schemas"]["ProblemValidationFailed"] | components["schemas"]["ProblemVersionConflict"] | components["schemas"]["ProblemStateConflict"] | components["schemas"]["ProblemIdempotencyKeyReused"] | components["schemas"]["ProblemInventoryInsufficient"] | components["schemas"]["ProblemFileNotReady"] | components["schemas"]["ProblemAlreadyReversed"] | components["schemas"]["ProblemReversalInvariant"] | components["schemas"]["ProblemReversalNotAllowed"] | components["schemas"]["ProblemCustomerApprovalConflict"] | components["schemas"]["ProblemCsrfFailed"]);
+        } & (components["schemas"]["ProblemInvalidCursor"] | components["schemas"]["ProblemUnknownFilter"] | components["schemas"]["ProblemInvalidTransition"] | components["schemas"]["ProblemAuthenticationRequired"] | components["schemas"]["ProblemSessionExpired"] | components["schemas"]["ProblemInvalidCredentials"] | components["schemas"]["ProblemPermissionDenied"] | components["schemas"]["ProblemResourceNotFound"] | components["schemas"]["CommandNotFoundProblem"] | components["schemas"]["PreconditionRequiredProblem"] | components["schemas"]["ProblemValidationFailed"] | components["schemas"]["ProblemVersionConflict"] | components["schemas"]["ProblemStateConflict"] | components["schemas"]["ProblemIdempotencyKeyReused"] | components["schemas"]["ProblemInventoryInsufficient"] | components["schemas"]["ProblemFileNotReady"] | components["schemas"]["ProblemAlreadyReversed"] | components["schemas"]["ProblemReversalInvariant"] | components["schemas"]["ProblemReversalNotAllowed"] | components["schemas"]["ProblemCustomerApprovalConflict"] | components["schemas"]["ProblemCsrfFailed"] | components["schemas"]["ProblemDuplicateBusinessKey"] | components["schemas"]["ProblemFileTooLarge"] | components["schemas"]["ProblemUnsupportedMediaType"] | components["schemas"]["ProblemBusinessRuleViolation"] | components["schemas"]["ProblemDocumentInvalid"] | components["schemas"]["ProblemRateLimited"] | components["schemas"]["ProblemDependencyFailure"] | components["schemas"]["ProblemDependencyUnavailable"] | components["schemas"]["ProblemInternalError"]);
         CsrfFailedProblem: components["schemas"]["ProblemCsrfFailed"];
         PreconditionRequiredProblem: components["schemas"]["ProblemFields"] & {
             /** @constant */
@@ -1524,6 +1822,10 @@ export interface components {
             /** Format: date-time */
             completedAt: string;
             httpStatus: number;
+            /** @constant */
+            resource?: unknown;
+            /** @constant */
+            resultHref?: unknown;
             problem: components["schemas"]["Problem"];
         } & {
             /**
@@ -2119,7 +2421,7 @@ export interface components {
         PageAfter: string;
         PageSize: number;
         Sort: string;
-        Filter: string;
+        Filter: string[];
     };
     requestBodies: {
         JsonObject: {

@@ -99,4 +99,14 @@ describe('idempotency claim and replay foundation', () => {
       problem: null,
     });
   });
+
+  it('stores a resource reference separately from the replay response body', async () => {
+    const store = new InMemoryIdempotencyStore();
+    const claimed = store.claim({ actorId: 'actor-1', organizationId: 'org-1', operationId: 'createCustomer', idempotencyKey: 'resource-key', requestHash: 'request-a' });
+    const body = { id: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019', version: 1 };
+    const resource = { type: 'CUSTOMER' as const, id: body.id, version: 1, href: `/api/v1/customers/${body.id}` };
+    const status = store.complete(claimed.commandId, { status: 201, body, resource });
+    expect(status.resource).toEqual(resource);
+    expect(status.resource).not.toEqual(body);
+  });
 });

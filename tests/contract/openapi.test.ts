@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import SwaggerParser from '@apidevtools/swagger-parser';
 import { parse } from 'yaml';
-import { EXPECTED_OPERATION_MANIFEST, assertOperationManifest } from '../../packages/contracts/openapi/contract-manifest.js';
+import { EXPECTED_CONTRACT_SHAPES, EXPECTED_OPERATION_MANIFEST, assertOperationManifest } from '../../packages/contracts/openapi/contract-manifest.js';
 
 const artifactPath = new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url);
 type Operation = {
@@ -64,6 +64,7 @@ describe('machine-readable Joint Contract v1 artifact', () => {
   it('matches the independent frozen operation and safety manifest exactly', async () => {
     const document = parse(await readFile(artifactPath, 'utf8')) as Record<string, unknown>;
     expect(EXPECTED_OPERATION_MANIFEST).toHaveLength(72);
+    expect(Object.keys(EXPECTED_CONTRACT_SHAPES)).toHaveLength(72);
     expect(() => assertOperationManifest(document)).not.toThrow();
   });
 

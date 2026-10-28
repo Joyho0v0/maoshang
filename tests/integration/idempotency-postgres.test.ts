@@ -37,11 +37,14 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
     if (owner === undefined) throw new Error('Expected a claim.');
     const ownerToken = owner.ownerToken;
     if (ownerToken === undefined) throw new Error('Expected the first contender to own the claim.');
-    const result: CommandResult<{ id: string }> = { status: 201, body: { id: randomUUID() }, resultHref: '/api/v1/customers/1' };
+    const customerId = randomUUID();
+    const result: CommandResult<{ id: string; name: string }> = { status: 201, body: { id: customerId, name: 'Acme' }, resource: { type: 'CUSTOMER', id: customerId, href: `/api/v1/customers/${customerId}` }, resultHref: `/api/v1/customers/${customerId}` };
     await repository.withTransaction((client) => repository.complete(client, owner.commandId, ownerToken, result));
 
+    await expect(repository.withTransaction((client) => repository.statusByKey(client, input))).resolves.toMatchObject({ state: 'SUCCEEDED', resource: result.resource });
+
     await expect(repository.withTransaction((client) => repository.claim(client, { ...input, requestHash: 'request-b' }))).rejects.toBeInstanceOf(IdempotencyConflictError);
-    await expect(repository.execute(input, async () => ({ status: 500, body: {} }))).resolves.toMatchObject({ status: 201, resultHref: '/api/v1/customers/1' });
+    await expect(repository.execute(input, async () => ({ status: 500, body: {} }))).resolves.toMatchObject({ status: 201, body: result.body, resultHref: `/api/v1/customers/${customerId}` });
   });
 
   it('lets one expired contender take over while preserving the command identity', async () => {

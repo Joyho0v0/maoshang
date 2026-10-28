@@ -12,6 +12,8 @@ import { join } from 'node:path';
 import { parse } from 'yaml';
 import { createContractValidator } from '../../../packages/contracts/openapi/runtime-validator.js';
 import { ContractResponseValidationInterceptor } from './common/http/contract-response.interceptor.js';
+import { IdempotencyExecutionInterceptor } from './common/security/idempotency-execution.interceptor.js';
+import { IDEMPOTENCY_REPOSITORY } from './modules/integration/idempotency/postgres-idempotency-repository.js';
 
 export async function createApp(options: { config?: RuntimeConfig; env?: Record<string, string | undefined> } = {}): Promise<NestFastifyApplication> {
   const config = options.config ?? loadRuntimeConfig(options.env);
@@ -22,7 +24,7 @@ export async function createApp(options: { config?: RuntimeConfig; env?: Record<
   app.setGlobalPrefix('api/v1');
   app.useGlobalFilters(new ProblemExceptionFilter(contractValidator));
   app.useGlobalGuards(app.get(RequestSafetyGuard));
-  app.useGlobalInterceptors(new ContractResponseValidationInterceptor(contractValidator));
+  app.useGlobalInterceptors(new ContractResponseValidationInterceptor(contractValidator), new IdempotencyExecutionInterceptor(app.get(IDEMPOTENCY_REPOSITORY)));
   return app;
 }
 

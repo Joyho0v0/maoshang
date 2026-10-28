@@ -10,8 +10,11 @@ export interface ExpectedOperation {
 
 export interface ExpectedContractShape {
   readonly queryParams?: readonly string[];
+  readonly queryDefaults?: Readonly<Record<string, string | number | boolean>>;
   readonly requestSchema?: string;
   readonly responseSchemas?: Readonly<Record<string, string | null>>;
+  readonly responseHeaders?: Readonly<Record<string, readonly string[]>>;
+  readonly headerSchemas?: Readonly<Record<string, Readonly<Record<string, string | Readonly<Record<string, unknown>>>>>>;
   readonly requiredResponseHeaders?: Readonly<Record<string, readonly string[]>>;
 }
 
@@ -21,47 +24,131 @@ export interface ExpectedContractShape {
  * this second manifest freezes the high-risk query/body/response shapes that
  * must not drift while templates are refactored.
  */
+const PAGE_QUERY = ['page[after]', 'page[size]', 'sort', 'filter'] as const;
+const PAGE_DEFAULTS = { sort: '-updatedAt,-id' } as const;
+const ASYNC_HEADERS = { '202': ['Retry-After', 'Cache-Control', 'Content-Location'] } as const;
+const PROBLEM_HEADERS = { '403': 'CsrfFailedProblem', '409': 'Problem', '428': 'PreconditionRequiredProblem' } as const;
+const REQUEST_ID = 'Uuid';
+const ETAG = { type: 'string', pattern: '^"v[1-9][0-9]*"$' } as const;
+const HREF = 'Href';
+const RETRY_AFTER = { type: 'string' } as const;
+const NO_STORE = { type: 'string', const: 'no-store' } as const;
+const IDEMPOTENT_REPLAY = { type: 'string', enum: ['true'] } as const;
+const RESOURCE_HEADERS = ['X-Request-ID', 'ETag'] as const;
+const LIST_HEADERS = ['X-Request-ID', 'Cache-Control'] as const;
+const ASYNC_RESPONSE_HEADERS = ['X-Request-ID', 'Retry-After', 'Cache-Control', 'Content-Location'] as const;
+
+function listHeaders(schema: string): ExpectedContractShape {
+  return { queryParams: PAGE_QUERY, queryDefaults: PAGE_DEFAULTS, responseSchemas: { '200': schema }, responseHeaders: { '200': LIST_HEADERS }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': { type: 'string' } } } };
+}
+function responseShapes(status: string, schema: string, includeAsync: boolean, includeCreated: boolean): Pick<ExpectedContractShape, 'responseSchemas' | 'responseHeaders' | 'headerSchemas' | 'requiredResponseHeaders'> {
+  const responseSchemas: Record<string, string> = { [status]: schema, ...includeAsync ? { '202': 'CommandStatusInProgress' } : {}, ...PROBLEM_HEADERS };
+  const responseHeaders: Record<string, readonly string[]> = {
+    [status]: includeCreated ? ['X-Request-ID', 'ETag', 'Location'] : RESOURCE_HEADERS,
+    ...includeAsync ? { '202': ASYNC_RESPONSE_HEADERS } : {},
+    '403': [],
+    '409': ['X-Request-ID'],
+    '428': [],
+  };
+  const headerSchemas: Record<string, Readonly<Record<string, string | Readonly<Record<string, unknown>>>> > = {
+    [status]: includeCreated ? { 'X-Request-ID': REQUEST_ID, ETag: ETAG, Location: HREF } : { 'X-Request-ID': REQUEST_ID, ETag: ETAG },
+    ...includeAsync ? { '202': { 'X-Request-ID': REQUEST_ID, 'Retry-After': RETRY_AFTER, 'Cache-Control': NO_STORE, 'Content-Location': HREF } } : {},
+    '403': {},
+    '409': { 'X-Request-ID': REQUEST_ID },
+    '428': {},
+  };
+  return { responseSchemas, responseHeaders, headerSchemas, requiredResponseHeaders: includeAsync ? { ...(includeCreated ? { [status]: ['Location'] } : {}), ...ASYNC_HEADERS } : includeCreated ? { [status]: ['Location'] } : {} };
+}
+
+function listShape(schema: string): ExpectedContractShape {
+  return listHeaders(schema);
+}
+function getShape(schema: string): ExpectedContractShape {
+  return { responseSchemas: { '200': schema, '404': 'Problem' }, responseHeaders: { '200': RESOURCE_HEADERS, '404': ['X-Request-ID'] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, ETag: ETAG }, '404': { 'X-Request-ID': REQUEST_ID } } };
+}
+function createShape(schema: string, requestSchema: string): ExpectedContractShape {
+  return { requestSchema, ...responseShapes('201', schema, true, true) };
+}
+function updateShape(schema: string, requestSchema: string): ExpectedContractShape {
+  return { requestSchema, ...responseShapes('200', schema, true, false) };
+}
+function commandShape(schema: string, requestSchema: string): ExpectedContractShape {
+  return updateShape(schema, requestSchema);
+}
+
 export const EXPECTED_CONTRACT_SHAPES: Readonly<Record<string, ExpectedContractShape>> = {
-  getCsrfToken: { responseSchemas: { '200': 'CsrfToken' }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
-  createSession: { requestSchema: 'SessionRequest', responseSchemas: { '201': 'Session' }, requiredResponseHeaders: { '201': ['Cache-Control'] } },
-  getCurrentSession: { responseSchemas: { '200': 'Session' }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
-  getCommandStatus: { responseSchemas: { '200': 'CommandStatus' }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
-  listCustomers: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'CustomerPage' } },
-  listProducts: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'ProductPage' } },
-  listSkus: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'SkuPage' } },
-  listOrders: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'OrderPage' } },
-  listInventoryBalances: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'InventoryBalancePage' } },
-  listInventoryMovements: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'InventoryMovementPage' } },
-  listInventoryReservations: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'InventoryReservationPage' } },
-  listInventoryObservations: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'InventoryObservationPage' } },
-  listPayments: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'PaymentPage' } },
-  listDocuments: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'DocumentPage' } },
-  listTasks: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'TaskPage' } },
-  listAuditEvents: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'AuditEventPage' } },
-  createProduct: { requestSchema: 'ProductCreateRequest', responseSchemas: { '201': 'Product', '202': 'CommandStatusInProgress' } },
-  createSku: { requestSchema: 'SkuCreateRequest', responseSchemas: { '201': 'Sku', '202': 'CommandStatusInProgress' } },
-  createOrder: { requestSchema: 'OrderCreateRequest', responseSchemas: { '201': 'Order', '202': 'CommandStatusInProgress' } },
-  createInventoryReservation: { requestSchema: 'InventoryReservationCreateRequest', responseSchemas: { '201': 'InventoryReservation', '202': 'CommandStatusInProgress' } },
-  createInventoryObservation: { requestSchema: 'InventoryObservationCreateRequest', responseSchemas: { '201': 'InventoryObservation', '202': 'CommandStatusInProgress' } },
-  createInitialReceipt: { requestSchema: 'InventoryOperationCreateRequest', responseSchemas: { '201': 'InventoryOperation', '202': 'CommandStatusInProgress' } },
-  createInventoryReceipt: { requestSchema: 'InventoryOperationCreateRequest', responseSchemas: { '201': 'InventoryOperation', '202': 'CommandStatusInProgress' } },
-  createInventoryAdjustment: { requestSchema: 'InventoryOperationCreateRequest', responseSchemas: { '201': 'InventoryOperation', '202': 'CommandStatusInProgress' } },
-  issueInventory: { requestSchema: 'InventoryOperationCreateRequest', responseSchemas: { '201': 'InventoryOperation', '202': 'CommandStatusInProgress' } },
-  createPayment: { requestSchema: 'PaymentCreateRequest', responseSchemas: { '201': 'Payment', '202': 'CommandStatusInProgress' } },
-  createUploadIntent: { requestSchema: 'FileCreateRequest', responseSchemas: { '201': 'File', '202': 'CommandStatusInProgress' } },
-  createTask: { requestSchema: 'TaskCreateRequest', responseSchemas: { '201': 'Task', '202': 'CommandStatusInProgress' } },
-  updateProduct: { requestSchema: 'ProductUpdateRequest', responseSchemas: { '200': 'Product', '202': 'CommandStatusInProgress' } },
-  updateSku: { requestSchema: 'SkuUpdateRequest', responseSchemas: { '200': 'Sku', '202': 'CommandStatusInProgress' } },
-  updateOrder: { requestSchema: 'OrderUpdateRequest', responseSchemas: { '200': 'Order', '202': 'CommandStatusInProgress' } },
-  updateDocument: { requestSchema: 'DocumentUpdateRequest', responseSchemas: { '200': 'Document', '202': 'CommandStatusInProgress' } },
-  transitionOrder: { requestSchema: 'OrderCommandRequest', responseSchemas: { '200': 'Order', '202': 'CommandStatusInProgress' } },
-  releaseInventoryReservation: { requestSchema: 'InventoryCommandRequestTyped', responseSchemas: { '200': 'InventoryOperation', '202': 'CommandStatusInProgress' } },
-  attachPaymentProof: { requestSchema: 'PaymentCommandRequest', responseSchemas: { '200': 'Payment', '202': 'CommandStatusInProgress' } },
-  submitPaymentReview: { requestSchema: 'PaymentCommandRequest', responseSchemas: { '200': 'Payment', '202': 'CommandStatusInProgress' } },
-  reviewPayment: { requestSchema: 'PaymentCommandRequest', responseSchemas: { '200': 'Payment', '202': 'CommandStatusInProgress' } },
-  reversePayment: { requestSchema: 'PaymentCommandRequest', responseSchemas: { '200': 'Payment', '202': 'CommandStatusInProgress' } },
-  completeUpload: { requestSchema: 'FileCommandRequest', responseSchemas: { '200': 'File', '202': 'CommandStatusInProgress' } },
-  createDocument: { requestSchema: 'DocumentCreateRequest', responseSchemas: { '201': 'Document', '202': 'CommandStatusInProgress' }, requiredResponseHeaders: { '201': ['Location'], '202': ['Retry-After', 'Cache-Control', 'Content-Location'] } },
+  getCsrfToken: { responseSchemas: { '200': 'CsrfToken' }, responseHeaders: { '200': ['Cache-Control'] }, headerSchemas: { '200': { 'Cache-Control': NO_STORE } }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
+  createSession: { requestSchema: 'SessionRequest', responseSchemas: { '201': 'Session', '401': 'Problem', '403': 'CsrfFailedProblem' }, responseHeaders: { '201': ['X-Request-ID', 'Cache-Control'], '401': ['X-Request-ID'], '403': [] }, headerSchemas: { '201': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': NO_STORE }, '401': { 'X-Request-ID': REQUEST_ID }, '403': {} }, requiredResponseHeaders: { '201': ['Cache-Control'] } },
+  getCurrentSession: { responseSchemas: { '200': 'Session', '401': 'Problem' }, responseHeaders: { '200': ['X-Request-ID', 'Cache-Control'], '401': ['X-Request-ID'] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': NO_STORE }, '401': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
+  deleteCurrentSession: { responseSchemas: { '204': null, '401': 'Problem', '403': 'CsrfFailedProblem' }, responseHeaders: { '204': [], '401': ['X-Request-ID'], '403': [] }, headerSchemas: { '204': {}, '401': { 'X-Request-ID': REQUEST_ID }, '403': {} } },
+  getCommandStatus: { responseSchemas: { '200': 'CommandStatus', '404': 'CommandNotFoundProblem' }, responseHeaders: { '200': ['X-Request-ID', 'Retry-After', 'Cache-Control', 'Idempotent-Replay', 'Content-Location'], '404': [] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Retry-After': RETRY_AFTER, 'Cache-Control': NO_STORE, 'Idempotent-Replay': IDEMPOTENT_REPLAY, 'Content-Location': HREF }, '404': {} }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
+  getUser: getShape('User'),
+  createUser: createShape('User', 'UserCreateRequest'),
+  updateUserRoleBindings: updateShape('User', 'RoleBindingsUpdateRequest'),
+  updateUserDataScopeGrants: updateShape('User', 'DataScopeUpdateRequest'),
+  disableUser: { responseSchemas: { '202': 'CommandStatusInProgress', ...PROBLEM_HEADERS }, responseHeaders: { '202': ASYNC_RESPONSE_HEADERS, '403': [], '409': ['X-Request-ID'], '428': [] }, headerSchemas: { '202': { 'X-Request-ID': REQUEST_ID, 'Retry-After': RETRY_AFTER, 'Cache-Control': NO_STORE, 'Content-Location': HREF }, '403': {}, '409': { 'X-Request-ID': REQUEST_ID }, '428': {} }, requiredResponseHeaders: ASYNC_HEADERS },
+  listCustomers: listShape('CustomerPage'),
+  createCustomer: createShape('Customer', 'CustomerCreateRequest'),
+  getCustomer: getShape('Customer'),
+  updateCustomer: updateShape('Customer', 'CustomerUpdateRequest'),
+  submitCustomerApproval: commandShape('Customer', 'CustomerCommandRequest'),
+  approveCustomer: commandShape('Customer', 'CustomerCommandRequest'),
+  rejectCustomer: commandShape('Customer', 'CustomerCommandRequest'),
+  reassignCustomer: commandShape('Customer', 'CustomerCommandRequest'),
+  listProducts: listShape('ProductPage'),
+  createProduct: createShape('Product', 'ProductCreateRequest'),
+  getProduct: getShape('Product'),
+  updateProduct: updateShape('Product', 'ProductUpdateRequest'),
+  listSkus: listShape('SkuPage'),
+  createSku: createShape('Sku', 'SkuCreateRequest'),
+  getSku: getShape('Sku'),
+  updateSku: updateShape('Sku', 'SkuUpdateRequest'),
+  listOrders: listShape('OrderPage'),
+  createOrder: createShape('Order', 'OrderCreateRequest'),
+  getOrder: getShape('Order'),
+  updateOrder: updateShape('Order', 'OrderUpdateRequest'),
+  transitionOrder: commandShape('Order', 'OrderCommandRequest'),
+  listInventoryBalances: listShape('InventoryBalancePage'),
+  listInventoryMovements: listShape('InventoryMovementPage'),
+  listInventoryReservations: listShape('InventoryReservationPage'),
+  createInventoryReservation: createShape('InventoryReservation', 'InventoryReservationCreateRequest'),
+  getInventory: getShape('InventoryReservation'),
+  releaseInventoryReservation: commandShape('InventoryOperation', 'InventoryCommandRequestTyped'),
+  listInventoryObservations: listShape('InventoryObservationPage'),
+  createInventoryObservation: createShape('InventoryObservation', 'InventoryObservationCreateRequest'),
+  getInventoryOperation: getShape('InventoryOperation'),
+  createInitialReceipt: createShape('InventoryOperation', 'InventoryOperationCreateRequest'),
+  createInventoryReceipt: createShape('InventoryOperation', 'InventoryOperationCreateRequest'),
+  createInventoryAdjustment: createShape('InventoryOperation', 'InventoryOperationCreateRequest'),
+  issueInventory: createShape('InventoryOperation', 'InventoryOperationCreateRequest'),
+  reverseInventoryOperation: createShape('InventoryOperation', 'InventoryCommandRequest'),
+  listPayments: listShape('PaymentPage'),
+  createPayment: createShape('Payment', 'PaymentCreateRequest'),
+  getPayment: getShape('Payment'),
+  attachPaymentProof: commandShape('Payment', 'PaymentCommandRequest'),
+  submitPaymentReview: commandShape('Payment', 'PaymentCommandRequest'),
+  reviewPayment: commandShape('Payment', 'PaymentCommandRequest'),
+  reversePayment: commandShape('Payment', 'PaymentCommandRequest'),
+  getFile: getShape('File'),
+  createUploadIntent: createShape('File', 'FileCreateRequest'),
+  completeUpload: commandShape('File', 'FileCommandRequest'),
+  createDownloadIntent: { responseSchemas: { '201': 'File', '403': 'CsrfFailedProblem', '404': 'Problem' }, responseHeaders: { '201': ['X-Request-ID', 'ETag', 'Location'], '403': [], '404': ['X-Request-ID'] }, headerSchemas: { '201': { 'X-Request-ID': REQUEST_ID, ETag: ETAG, Location: HREF }, '403': {}, '404': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '201': ['Location'] } },
+  listDocuments: listShape('DocumentPage'),
+  createDocument: createShape('Document', 'DocumentCreateRequest'),
+  getDocument: getShape('Document'),
+  updateDocument: updateShape('Document', 'DocumentUpdateRequest'),
+  createDocumentVersion: commandShape('Document', 'DocumentCommandRequest'),
+  submitDocument: commandShape('Document', 'DocumentCommandRequest'),
+  approveDocument: commandShape('Document', 'DocumentCommandRequest'),
+  rejectDocument: commandShape('Document', 'DocumentCommandRequest'),
+  finalizeDocument: commandShape('Document', 'DocumentCommandRequest'),
+  issueDocument: commandShape('Document', 'DocumentCommandRequest'),
+  voidDocument: commandShape('Document', 'DocumentCommandRequest'),
+  listTasks: listShape('TaskPage'),
+  createTask: createShape('Task', 'TaskCreateRequest'),
+  getTask: getShape('Task'),
+  completeTask: commandShape('Task', 'TaskCommandRequest'),
+  listAuditEvents: listShape('AuditEventPage'),
 };
 
 export const EXPECTED_OPERATION_MANIFEST =   [
@@ -864,10 +951,17 @@ function expectedRequiredResponseHeaders(operationId: string, responses: AnyReco
   return expected;
 }
 
-function assertContractShape(operationId: string, operation: AnyRecord, parameters: Array<{ name: string; in: string; required?: boolean }>, document: AnyRecord, expected: ExpectedContractShape): void {
+function assertContractShape(operationId: string, operation: AnyRecord, parameters: Array<{ name: string; in: string; required?: boolean; schema?: AnyRecord }>, document: AnyRecord, expected: ExpectedContractShape): void {
   if (expected.queryParams !== undefined) {
     const actual = parameters.filter((parameter) => parameter.in === 'query').map((parameter) => parameter.name).sort();
     if (JSON.stringify(actual) !== JSON.stringify([...expected.queryParams].sort())) throw new Error(`${operationId} query contract mismatch: expected ${JSON.stringify(expected.queryParams)}, observed ${JSON.stringify(actual)}.`);
+  }
+  if (expected.queryDefaults !== undefined) {
+    for (const [name, defaultValue] of Object.entries(expected.queryDefaults)) {
+      const parameter = parameters.find((candidate) => candidate.in === 'query' && candidate.name === name);
+      const schema = parameter?.schema;
+      if (schema?.default !== defaultValue) throw new Error(`${operationId} query default mismatch for ${name}: expected ${String(defaultValue)}, observed ${String(schema?.default)}.`);
+    }
   }
   if (expected.requestSchema !== undefined) {
     const requestBody = resolveComponent(operation.requestBody, document, 'requestBodies');
@@ -877,13 +971,37 @@ function assertContractShape(operationId: string, operation: AnyRecord, paramete
   }
   if (expected.responseSchemas !== undefined) {
     const responses = isRecord(operation.responses) ? operation.responses : {};
-    const actual = Object.fromEntries(Object.entries(responses).filter(([status]) => /^2\d\d$/.test(status)).map(([status, value]) => {
+    const actual = Object.fromEntries(Object.entries(responses).map(([status, value]) => {
       const response = resolveComponent(value, document, 'responses');
       const content = isRecord(response?.content) ? response.content['application/json'] ?? response.content['application/problem+json'] : undefined;
       const schema = isRecord(content) && isRecord(content.schema) ? schemaComponentName(content.schema) : null;
       return [status, schema];
     }));
     if (JSON.stringify(actual) !== JSON.stringify(expected.responseSchemas)) throw new Error(`${operationId} response schema mismatch: expected ${JSON.stringify(expected.responseSchemas)}, observed ${JSON.stringify(actual)}.`);
+  }
+  if (expected.responseHeaders !== undefined) {
+    const responses = isRecord(operation.responses) ? operation.responses : {};
+    const actual = Object.fromEntries(Object.entries(responses).map(([status, value]) => {
+      const response = resolveComponent(value, document, 'responses');
+      const headers = isRecord(response?.headers) ? Object.keys(response.headers) : [];
+      return [status, headers];
+    }));
+    const normalizedActual = Object.fromEntries(Object.entries(actual).map(([status, headers]) => [status, [...headers].sort()]));
+    const normalizedExpected = Object.fromEntries(Object.entries(expected.responseHeaders).map(([status, headers]) => [status, [...headers].sort()]));
+    if (JSON.stringify(normalizedActual) !== JSON.stringify(normalizedExpected)) throw new Error(`${operationId} response header shape mismatch: expected ${JSON.stringify(normalizedExpected)}, observed ${JSON.stringify(normalizedActual)}.`);
+  }
+  if (expected.headerSchemas !== undefined) {
+    const responses = isRecord(operation.responses) ? operation.responses : {};
+    const actual = Object.fromEntries(Object.entries(responses).map(([status, value]) => {
+      const response = resolveComponent(value, document, 'responses');
+      const headers = isRecord(response?.headers) ? Object.fromEntries(Object.entries(response.headers).map(([name, value]) => {
+        const header = resolveComponent(value, document, 'headers');
+        const schema = isRecord(header?.schema) ? header.schema : undefined;
+        return [name, schemaComponentName(schema ?? {}) ?? schema];
+      })) : {};
+      return [status, headers];
+    }));
+    if (JSON.stringify(actual) !== JSON.stringify(expected.headerSchemas)) throw new Error(`${operationId} response header schema mismatch: expected ${JSON.stringify(expected.headerSchemas)}, observed ${JSON.stringify(actual)}.`);
   }
   if (expected.requiredResponseHeaders !== undefined) {
     const responses = isRecord(operation.responses) ? operation.responses : {};
@@ -909,7 +1027,7 @@ function resolve(value: unknown, templates: AnyRecord): AnyRecord {
   return { ...resolve(templates[name], templates), ...value };
 }
 
-function resolveParameters(operation: AnyRecord, document: AnyRecord): Array<{ name: string; in: string; required?: boolean }> {
+function resolveParameters(operation: AnyRecord, document: AnyRecord): Array<{ name: string; in: string; required?: boolean; schema?: AnyRecord }> {
   const parameters = Array.isArray(operation.parameters) ? operation.parameters : [];
   const components = isRecord(document.components) && isRecord(document.components.parameters) ? document.components.parameters : {};
   return parameters.map((value) => {
@@ -917,7 +1035,7 @@ function resolveParameters(operation: AnyRecord, document: AnyRecord): Array<{ n
     const ref = value['$ref'];
     const resolved = typeof ref === 'string' ? components[ref.split('/').at(-1) ?? ''] : value;
     if (!isRecord(resolved)) throw new Error(`Unknown parameter ${String(ref)}.`);
-    return { name: requireString(resolved.name, 'parameter name'), in: requireString(resolved.in, 'parameter location'), required: resolved.required === true };
+    return { name: requireString(resolved.name, 'parameter name'), in: requireString(resolved.in, 'parameter location'), required: resolved.required === true, ...(isRecord(resolved.schema) ? { schema: resolved.schema } : {}) };
   });
 }
 

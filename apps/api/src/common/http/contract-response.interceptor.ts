@@ -17,9 +17,8 @@ export class ContractResponseValidationInterceptor implements NestInterceptor {
     const response = context.switchToHttp().getResponse<FastifyReply>();
     return next.handle().pipe(map((value: unknown) => {
       const status = String(response.statusCode ?? 200);
-      const schemaName = (operation as GeneratedOperation).responses[status]?.schema;
-      if (schemaName === undefined) {
-        if (value === undefined) return value;
+      const responseContract = (operation as GeneratedOperation).responses[status];
+      if (responseContract === undefined) {
         throw new ProblemError(buildProblem({
           status: 500,
           code: 'INTERNAL_ERROR',
@@ -28,9 +27,23 @@ export class ContractResponseValidationInterceptor implements NestInterceptor {
           retryable: false,
         }));
       }
-      const responseContract = (operation as GeneratedOperation).responses[status];
-      for (const header of responseContract?.requiredHeaders ?? []) {
-        if (response.getHeader(header) === undefined) {
+      if (responseContract.contentType !== undefined) {
+        const contentType = String(response.getHeader('content-type') ?? '').split(';', 1)[0];
+        if (contentType !== responseContract.contentType) {
+          throw new ProblemError(buildProblem({
+            status: 500,
+            code: 'INTERNAL_ERROR',
+            title: 'Response content type contract validation failed',
+            requestId: normalizeRequestId(request.headers['x-request-id']),
+            retryable: false,
+          }));
+        }
+      }
+      for (const [headerName, headerContract] of Object.entries(responseContract.headers)) {
+        const rawValue = response.getHeader(headerName);
+        const headerValue = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+        if (headerValue === undefined || headerValue === null) {
+          if (!headerContract.required) continue;
           throw new ProblemError(buildProblem({
             status: 500,
             code: 'INTERNAL_ERROR',
@@ -39,8 +52,17 @@ export class ContractResponseValidationInterceptor implements NestInterceptor {
             retryable: false,
           }));
         }
+        if (headerContract.schema !== undefined && (typeof headerValue !== 'string' || !validateHeader(headerContract.schema, headerValue, this.validator))) {
+          throw new ProblemError(buildProblem({
+            status: 500,
+            code: 'INTERNAL_ERROR',
+            title: 'Response header value contract validation failed',
+            requestId: normalizeRequestId(request.headers['x-request-id']),
+            retryable: false,
+          }));
+        }
       }
-      if (this.validator.validate(schemaName, value)) return value;
+      if (responseContract.schema === undefined || this.validator.validate(responseContract.schema, value)) return value;
       throw new ProblemError(buildProblem({
         status: 500,
         code: 'INTERNAL_ERROR',
@@ -50,6 +72,10 @@ export class ContractResponseValidationInterceptor implements NestInterceptor {
       }));
     }));
   }
+}
+
+function validateHeader(schema: string | Readonly<Record<string, unknown>>, value: string, validator: ContractValidator): boolean {
+  return typeof schema === 'string' ? validator.validate(schema, value) : validator.validateSchema(schema, value);
 }
 
 function operationForRequest(request: FastifyRequest): GeneratedOperation | undefined {

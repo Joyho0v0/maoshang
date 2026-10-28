@@ -5,6 +5,7 @@ import {
   IdempotencyConflictError,
   type CommandResult,
   type CommandStatus,
+  type ResourceReference,
 } from './in-memory-idempotency-store.js';
 import { buildProblem, type ProblemDocument } from '../../../common/http/problem.js';
 
@@ -23,7 +24,7 @@ RETURNING id, state, attempt_count, lease_expires_at;
 export const IDEMPOTENCY_READ_SQL = `
 SELECT id, organization_id, actor_user_id, operation_id, key_hash, request_hash,
        state, owner_token, lease_expires_at, attempt_count, started_at,
-       completed_at, expires_at, http_status, response_body, problem_body,
+       completed_at, expires_at, http_status, response_body, resource_type, resource_id, resource_version, problem_body,
        resource_href
 FROM integration.idempotency_record
 WHERE organization_id = $1 AND actor_user_id = $2 AND operation_id = $3 AND key_hash = $4
@@ -40,7 +41,7 @@ RETURNING id, state, attempt_count, lease_expires_at;
 export const IDEMPOTENCY_COMPLETE_SQL = `
 UPDATE integration.idempotency_record
 SET state = 'SUCCEEDED', completed_at = now(), http_status = $3,
-    response_body = $4, resource_href = $5, lease_expires_at = now()
+    response_body = $4, resource_type = $5, resource_id = $6, resource_version = $7, resource_href = $8, lease_expires_at = now()
 WHERE id = $1 AND owner_token = $2 AND state = 'IN_PROGRESS'
 RETURNING id, state, attempt_count;
 `;
@@ -81,6 +82,9 @@ interface StoredIdempotencyRow extends QueryResultRow {
   expires_at: Date;
   http_status: number | null;
   response_body: unknown;
+  resource_type: string | null;
+  resource_id: string | null;
+  resource_version: number | null;
   problem_body: ProblemDocument | null;
   resource_href: string | null;
 }
@@ -134,7 +138,8 @@ export class PostgresIdempotencyRepository {
   }
 
   async complete(client: PoolClient, commandId: string, ownerToken: Buffer, result: CommandResult<unknown>): Promise<void> {
-    const updated = await client.query(IDEMPOTENCY_COMPLETE_SQL, [commandId, ownerToken, result.status, JSON.stringify(result.body), result.resultHref ?? extractHref(result.body)]);
+    const resource = result.resource;
+    const updated = await client.query(IDEMPOTENCY_COMPLETE_SQL, [commandId, ownerToken, result.status, JSON.stringify(result.body), resource?.type ?? null, resource?.id ?? null, resource?.version ?? null, result.resultHref ?? resource?.href ?? extractHref(result.body)]);
     if (updated.rowCount !== 1) throw new Error('Idempotency completion lost ownership.');
   }
 
@@ -150,7 +155,11 @@ export class PostgresIdempotencyRepository {
   async execute<T>(input: PostgresIdempotencyInput, work: (client: PoolClient, claim: PostgresClaim) => Promise<CommandResult<T>>): Promise<CommandResult<T> | CommandStatus> {
     const outcome = await this.withTransaction(async (client) => {
       const claim = await this.claim(client, input);
-      if (claim.state === 'SUCCEEDED') return { kind: 'result' as const, value: { status: claim.httpStatus ?? 200, body: claim.resource as T, ...(claim.resultHref === null ? {} : { resultHref: claim.resultHref }) } };
+      if (claim.state === 'SUCCEEDED') {
+        const stored = await this.readById(client, claim.commandId);
+        const resource = toResourceReference(stored);
+        return { kind: 'result' as const, value: { status: claim.httpStatus ?? 200, body: stored.response_body as T, ...(claim.resultHref === null ? {} : { resultHref: claim.resultHref }), ...(resource === null ? {} : { resource }) } };
+      }
       if (claim.state === 'FAILED') return { kind: 'failure' as const, error: new CommandFailureError(claim.problem ?? storedFailure()) };
       if (claim.claimRole !== 'OWNER') return { kind: 'terminal' as const, value: claim };
       await client.query('SAVEPOINT idempotency_command');
@@ -181,12 +190,12 @@ export class PostgresIdempotencyRepository {
   }
 
   async statusById(client: PoolClient, commandId: string): Promise<CommandStatus | undefined> {
-    const row = await client.query<StoredIdempotencyRow>('SELECT id, operation_id, key_hash, request_hash, state, owner_token, lease_expires_at, attempt_count, started_at, completed_at, expires_at, http_status, response_body, problem_body, resource_href FROM integration.idempotency_record WHERE id = $1', [commandId]);
+    const row = await client.query<StoredIdempotencyRow>('SELECT id, operation_id, key_hash, request_hash, state, owner_token, lease_expires_at, attempt_count, started_at, completed_at, expires_at, http_status, response_body, resource_type, resource_id, resource_version, problem_body, resource_href FROM integration.idempotency_record WHERE id = $1', [commandId]);
     return row.rows[0] === undefined ? undefined : toStatus(row.rows[0]);
   }
 
   private async readById(client: PoolClient, id: string): Promise<StoredIdempotencyRow> {
-    const result = await client.query<StoredIdempotencyRow>('SELECT id, operation_id, key_hash, request_hash, state, owner_token, lease_expires_at, attempt_count, started_at, completed_at, expires_at, http_status, response_body, problem_body, resource_href FROM integration.idempotency_record WHERE id = $1 FOR UPDATE', [id]);
+    const result = await client.query<StoredIdempotencyRow>('SELECT id, operation_id, key_hash, request_hash, state, owner_token, lease_expires_at, attempt_count, started_at, completed_at, expires_at, http_status, response_body, resource_type, resource_id, resource_version, problem_body, resource_href FROM integration.idempotency_record WHERE id = $1 FOR UPDATE', [id]);
     const row = result.rows[0];
     if (row === undefined) throw new Error('Idempotency row disappeared during takeover.');
     return row;
@@ -208,11 +217,16 @@ function toStatus(row: StoredIdempotencyRow): CommandStatus {
     expiresAt: row.expires_at.toISOString(),
     retryAfterMs: recovery ? 0 : row.state === 'IN_PROGRESS' ? Math.max(1, row.lease_expires_at.getTime() - Date.now()) : 0,
     httpStatus: row.http_status,
-    resource: row.response_body ?? null,
+    resource: toResourceReference(row),
     resultHref: row.resource_href,
     problem: row.problem_body,
     attemptCount: row.attempt_count,
   };
+}
+
+function toResourceReference(row: Pick<StoredIdempotencyRow, 'resource_type' | 'resource_id' | 'resource_version' | 'resource_href'>): ResourceReference | null {
+  if (row.resource_type === null || row.resource_id === null || row.resource_href === null) return null;
+  return { type: row.resource_type, id: row.resource_id, ...(row.resource_version === null ? {} : { version: row.resource_version }), href: row.resource_href };
 }
 
 function hashBuffer(value: string): Buffer {

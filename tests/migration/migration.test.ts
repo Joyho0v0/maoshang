@@ -15,6 +15,7 @@ describe('PostgreSQL foundation migration', () => {
     expect(sql).toMatch(/UNIQUE \(organization_id, id\)/i);
     expect(sql).toMatch(/FOREIGN KEY \(organization_id, actor_user_id\) REFERENCES core\.user_account \(organization_id, id\)/i);
     expect(sql).toMatch(/CREATE INDEX .*idempotency.*actor/i);
+    expect(sql).toMatch(/CLAIMED[\s\S]*claim_owner_token[\s\S]*claimed_at[\s\S]*claim_expires_at/i);
     expect(down).not.toMatch(/DROP SCHEMA/i);
     expect(down).not.toMatch(/CASCADE/i);
   });

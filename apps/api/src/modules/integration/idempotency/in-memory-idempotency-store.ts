@@ -14,6 +14,14 @@ export interface CommandResult<T = unknown> {
   status: number;
   body: T;
   resultHref?: string;
+  resource?: ResourceReference;
+}
+
+export interface ResourceReference {
+  type: string;
+  id: string;
+  version?: number;
+  href: string;
 }
 
 type RecordState = 'IN_PROGRESS' | 'SUCCEEDED' | 'FAILED';
@@ -34,6 +42,7 @@ interface CommandRecord {
   httpStatus: number | null;
   resource: unknown | null;
   resultHref: string | null;
+  resourceReference: ResourceReference | null;
   problem: ProblemDocument | null;
   result: CommandResult<unknown> | undefined;
   promise: Promise<CommandResult<unknown>> | undefined;
@@ -132,6 +141,7 @@ export class InMemoryIdempotencyStore {
     record.httpStatus = result.status;
     record.resource = result.body;
     record.resultHref = result.resultHref ?? extractHref(result.body);
+    record.resourceReference = result.resource ?? null;
     record.promise = undefined;
     return this.toStatus(record);
   }
@@ -144,6 +154,7 @@ export class InMemoryIdempotencyStore {
     record.problem = problem;
     record.result = undefined;
     record.resource = null;
+    record.resourceReference = null;
     record.resultHref = null;
     record.promise = undefined;
     return this.toStatus(record);
@@ -188,6 +199,7 @@ export class InMemoryIdempotencyStore {
       expiresAt: new Date(now + (this.options.retentionMs ?? 24 * 60 * 60 * 1000)).toISOString(),
       httpStatus: null,
       resource: null,
+      resourceReference: null,
       resultHref: null,
       problem: null,
       result: undefined,
@@ -233,7 +245,7 @@ export class InMemoryIdempotencyStore {
       expiresAt: record.expiresAt,
       retryAfterMs: recovery ? 0 : record.state === 'IN_PROGRESS' ? Math.max(1, record.leaseExpiresAt - Date.now()) : 0,
       httpStatus: record.httpStatus,
-      resource: record.resource,
+      resource: record.resourceReference,
       resultHref: record.resultHref,
       problem: record.problem,
       attemptCount: record.attemptCount,
