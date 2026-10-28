@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { parse } from 'yaml';
 import { expect, it } from 'vitest';
@@ -25,22 +26,14 @@ it('keeps the complete breaking inventory auditable and synchronized with both a
     generatedClientSha256: 'c32e0e08f80a96ca893882d70ad13fd3a96c134fa97bef8a6346e383f0b527ab',
     path: 'packages/contracts/openapi/openapi.yaml',
   });
-  expect((inventory as { comparator: { revision: string; sourceSha256: string; command: string } }).comparator).toEqual({
-    revision: 'cfa432c48f0461d0c4b44019076324aaf33b13f4',
-    sourceSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
-    command: 'npm run contract:breaking -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml',
-  });
-  expect((inventory as { generator: { revision: string; sourceSha256: string; command: string } }).generator).toEqual({
-    revision: 'cfa432c48f0461d0c4b44019076324aaf33b13f4',
-    sourceSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
-    command: 'npm run contract:breaking:inventory -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml',
-  });
-  expect((inventory as { comparator: { sourceSha256: string } }).comparator.sourceSha256).toBe(
-    createHash('sha256').update(await readFile(new URL('../../packages/contracts/openapi/breaking-gate.ts', import.meta.url))).digest('hex'),
-  );
-  expect((inventory as { generator: { sourceSha256: string } }).generator.sourceSha256).toBe(
-    createHash('sha256').update(await readFile(new URL('../../packages/contracts/openapi/breaking-inventory.ts', import.meta.url))).digest('hex'),
-  );
+  const comparator = inventory as typeof inventory & { comparator: { revision: string; sourceSha256: string; command: string } };
+  const generator = inventory as typeof inventory & { generator: { revision: string; sourceSha256: string; command: string } };
+  expect(comparator.comparator.revision).toMatch(/^[0-9a-f]{40}$/);
+  expect(generator.generator.revision).toMatch(/^[0-9a-f]{40}$/);
+  expect(comparator.comparator.sourceSha256).toBe(gitSourceDigest(comparator.comparator.revision, 'packages/contracts/openapi/breaking-gate.ts'));
+  expect(generator.generator.sourceSha256).toBe(gitSourceDigest(generator.generator.revision, 'packages/contracts/openapi/breaking-inventory.ts'));
+  expect(comparator.comparator.command).toContain(`sourceRevision=${comparator.comparator.revision}`);
+  expect(generator.generator.command).toContain(`sourceRevision=${generator.generator.revision}`);
   expect(new Set(persisted.entries.map((entry) => entry.jsonPath)).size).toBe(persisted.count);
   for (const pathPrefix of [
     'root.paths./auth/sessions.post.responses.403',
@@ -217,4 +210,8 @@ it('aggregates shared component paths but keeps equal inline schemas separate', 
 
 function digest(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+function gitSourceDigest(revision: string, path: string): string {
+  return createHash('sha256').update(execFileSync('git', ['show', `${revision}:${path}`])).digest('hex');
 }

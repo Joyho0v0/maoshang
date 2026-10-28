@@ -31,6 +31,7 @@ interface SourceOccurrence {
 }
 
 const collectionContexts = new WeakMap<BreakingChange[], CollectionContext>();
+const activeComparisons = new WeakMap<BreakingChange[], WeakMap<object, WeakSet<object>>>();
 
 export function assertNoBreakingChanges(previous: unknown, next: unknown, path = 'root'): void {
   const first = collectBreakingChanges(previous, next, path)[0];
@@ -217,10 +218,79 @@ const containmentConstraintKeys = [
   'minimum', 'maximum', 'minItems', 'maxItems', 'minProperties', 'maxProperties',
   'exclusiveMinimum', 'exclusiveMaximum', 'uniqueItems', 'multipleOf', 'contains',
   'propertyNames', 'dependentRequired', 'unevaluatedProperties', 'not',
-  'minContains', 'maxContains',
+  'minContains', 'maxContains', 'prefixItems', 'dependentSchemas',
+  'patternProperties', 'if', 'then', 'else', 'unevaluatedItems',
 ] as const;
 
+const supportedSchemaKeywords = new Set([
+  '$schema', '$id', '$ref', '$anchor', '$dynamicRef', '$dynamicAnchor', '$defs',
+  'type', 'format', 'pattern', 'const', 'enum', 'minLength', 'maxLength',
+  'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf',
+  'minItems', 'maxItems', 'uniqueItems', 'contains', 'minContains', 'maxContains',
+  'prefixItems', 'items', 'minProperties', 'maxProperties', 'required', 'properties',
+  'patternProperties', 'additionalProperties', 'propertyNames', 'dependentRequired',
+  'dependentSchemas', 'allOf', 'anyOf', 'oneOf', 'not', 'if', 'then', 'else',
+  'unevaluatedItems', 'unevaluatedProperties', 'contentEncoding', 'contentMediaType',
+  'contentSchema', 'title', 'description', 'default', 'deprecated', 'readOnly',
+  'writeOnly', 'examples', 'example', 'nullable', 'xml', 'discriminator', 'externalDocs',
+]);
+
+const schemaMarkerKeywords = new Set([
+  '$schema', '$id', '$ref', '$anchor', '$dynamicRef', '$dynamicAnchor', '$defs',
+  'type', 'format', 'pattern', 'const', 'enum', 'minLength', 'maxLength',
+  'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf',
+  'minItems', 'maxItems', 'uniqueItems', 'contains', 'minContains', 'maxContains',
+  'prefixItems', 'items', 'minProperties', 'maxProperties', 'properties',
+  'patternProperties', 'additionalProperties', 'propertyNames', 'dependentRequired',
+  'dependentSchemas', 'allOf', 'anyOf', 'oneOf', 'not', 'if', 'then', 'else',
+  'unevaluatedItems', 'unevaluatedProperties', 'contentEncoding', 'contentMediaType',
+  'contentSchema',
+]);
+
+const schemaChildKeywords = new Set([
+  '$defs', 'properties', 'patternProperties', 'additionalProperties', 'propertyNames',
+  'dependentSchemas', 'allOf', 'anyOf', 'oneOf', 'not', 'if', 'then', 'else',
+  'items', 'prefixItems', 'contains', 'unevaluatedItems', 'unevaluatedProperties',
+  'contentSchema',
+]);
+
+function hasUnsupportedSchemaKeyword(value: unknown, assumeSchema = false, seen = new WeakSet<object>()): boolean {
+  if (!isRecord(value) || seen.has(value)) return false;
+  seen.add(value);
+  const schemaLike = assumeSchema || Object.keys(value).some((key) => schemaMarkerKeywords.has(key));
+  if (schemaLike) {
+    for (const key of Object.keys(value)) {
+      if (!supportedSchemaKeywords.has(key) && !key.startsWith('x-')) return true;
+    }
+  }
+  for (const [key, child] of Object.entries(value)) {
+    if (!schemaChildKeywords.has(key)) continue;
+    if (['$defs', 'properties', 'patternProperties', 'dependentSchemas'].includes(key) && isRecord(child)) {
+      if (Object.values(child).some((item) => hasUnsupportedSchemaKeyword(item, true, seen))) return true;
+      continue;
+    }
+    if (Array.isArray(child)) {
+      if (child.some((item) => hasUnsupportedSchemaKeyword(item, true, seen))) return true;
+    } else if (hasUnsupportedSchemaKeyword(child, true, seen)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function collectUnsupportedSchemaKeywords(previous: RecordValue, next: RecordValue, path: string, changes: BreakingChange[]): void {
+  if (!hasUnsupportedSchemaKeyword(previous) && !hasUnsupportedSchemaKeyword(next)) return;
+  const previousKeys = new Set(Object.keys(previous));
+  const nextKeys = new Set(Object.keys(next));
+  const keys = [...new Set([...previousKeys, ...nextKeys])].filter((key) => !supportedSchemaKeywords.has(key) && !key.startsWith('x-'));
+  for (const key of keys) {
+    if (stableSerialize(previous[key]) === stableSerialize(next[key])) continue;
+    addChange(changes, `${path}.${key}`, `unsupported schema keyword ${key} changed; compatibility is not proven.`, previous[key], next[key], key, previous);
+  }
+}
+
 function candidateAddsNarrowingRootConstraint(candidate: RecordValue, previousOption: RecordValue): boolean {
+  if (hasUnsupportedSchemaKeyword(candidate)) return true;
   for (const key of containmentConstraintKeys) {
     const candidateValue = inheritedConstraint(candidate, key);
     if (candidateValue === undefined) continue;
@@ -250,7 +320,13 @@ function candidateAddsNarrowingRootConstraint(candidate: RecordValue, previousOp
 
   const previousRequired = new Set(effectiveRequired(previousOption));
   if (arrayOfStrings(candidate.required).some((field) => !previousRequired.has(field))) return true;
-  if (candidate.additionalProperties === false && previousOption.additionalProperties !== false) return true;
+  const candidateAdditionalProperties = inheritedConstraint(candidate, 'additionalProperties');
+  const previousAdditionalProperties = inheritedConstraint(previousOption, 'additionalProperties');
+  if (candidateAdditionalProperties !== undefined
+    && candidateAdditionalProperties !== true
+    && (previousAdditionalProperties === undefined || previousAdditionalProperties === true)) return true;
+  if (isRecord(candidateAdditionalProperties) && isRecord(previousAdditionalProperties)
+    && hasBreakingChange(previousAdditionalProperties, candidateAdditionalProperties, 'composition.additionalProperties')) return true;
 
   const previousProperties = effectiveProperties(previousOption);
   if (isRecord(candidate.properties)) {
@@ -259,8 +335,10 @@ function candidateAddsNarrowingRootConstraint(candidate: RecordValue, previousOp
       if (previousSchema !== undefined && isRecord(candidateSchema) && isRecord(previousSchema) && hasBreakingChange(previousSchema, candidateSchema, `composition.properties.${property}`)) return true;
     }
   }
-  if (candidate.items !== undefined && previousOption.items === undefined) return true;
-  if (candidate.items !== undefined && previousOption.items !== undefined && hasBreakingChange(previousOption.items, candidate.items, 'composition.items')) return true;
+  const candidateItems = inheritedConstraint(candidate, 'items');
+  const previousItems = inheritedConstraint(previousOption, 'items');
+  if (candidateItems !== undefined && previousItems === undefined) return true;
+  if (isRecord(candidateItems) && isRecord(previousItems) && hasBreakingChange(previousItems, candidateItems, 'composition.items')) return true;
   return false;
 }
 
@@ -281,9 +359,8 @@ function flattenAllOfForContainment(schema: RecordValue): RecordValue {
     const value = inheritedConstraint(schema, key);
     if (value !== undefined) flattened[key] = value;
   }
-  if (schema.additionalProperties === false || (Array.isArray(schema.allOf) && schema.allOf.some((branch) => isRecord(branch) && branch.additionalProperties === false))) {
-    flattened.additionalProperties = false;
-  }
+  const additionalProperties = inheritedConstraint(schema, 'additionalProperties');
+  if (additionalProperties !== undefined) flattened.additionalProperties = additionalProperties;
   return flattened;
 }
 
@@ -291,13 +368,14 @@ function equivalentAfterAllOfFlattening(left: RecordValue, right: RecordValue): 
   const leftHasAllOf = Array.isArray(left.allOf);
   const rightHasAllOf = Array.isArray(right.allOf);
   if (!leftHasAllOf && !rightHasAllOf) return false;
+  if (hasUnsupportedSchemaKeyword(left) || hasUnsupportedSchemaKeyword(right)) return false;
   return stableSerialize(canonicalAllOfSchema(left)) === stableSerialize(canonicalAllOfSchema(right));
 }
 
 function canonicalAllOfSchema(schema: RecordValue): RecordValue {
   const result: RecordValue = {};
   const allOfBranches = Array.isArray(schema.allOf) ? schema.allOf.filter(isRecord) : [];
-  const hasConflictingAllOfConstraint = allOfBranches.some((branch, index) => containmentConstraintKeys.some((key) => {
+  const hasConflictingAllOfConstraint = allOfBranches.some((branch, index) => [...containmentConstraintKeys, 'additionalProperties'].some((key) => {
     const value = inheritedConstraint(branch, key);
     if (value === undefined) return false;
     return allOfBranches.slice(index + 1).some((other) => {
@@ -309,9 +387,11 @@ function canonicalAllOfSchema(schema: RecordValue): RecordValue {
     const value = inheritedConstraint(schema, key);
     if (value !== undefined) result[key] = value;
   }
-  if (schema.additionalProperties !== undefined) result.additionalProperties = schema.additionalProperties;
-  if (Array.isArray(schema.allOf) && schema.allOf.some((branch) => isRecord(branch) && branch.additionalProperties === false)) {
-    result.additionalProperties = false;
+  const additionalProperties = inheritedConstraint(schema, 'additionalProperties');
+  if (additionalProperties !== undefined) {
+    result.additionalProperties = isRecord(additionalProperties)
+      ? canonicalAllOfSchema(additionalProperties)
+      : additionalProperties;
   }
   const required = effectiveRequired(schema);
   if (required.length > 0) result.required = [...new Set(required)].sort();
@@ -381,6 +461,23 @@ function collectValue(previous: unknown, next: unknown, path: string, changes: B
     if (JSON.stringify(previous) !== JSON.stringify(next)) addChange(changes, path, 'value changed.', previous, next);
     return;
   }
+  const previousObject = previous as object;
+  const nextObject = next as object;
+  const pairs = activeComparisons.get(changes) ?? new WeakMap<object, WeakSet<object>>();
+  activeComparisons.set(changes, pairs);
+  const nextObjects = pairs.get(previousObject) ?? new WeakSet<object>();
+  if (nextObjects.has(nextObject)) return;
+  nextObjects.add(nextObject);
+  pairs.set(previousObject, nextObjects);
+  try {
+    collectValueObject(previous, next, path, changes);
+  } finally {
+    nextObjects.delete(nextObject);
+  }
+}
+
+function collectValueObject(previous: RecordValue, next: RecordValue, path: string, changes: BreakingChange[]): void {
+  if (shouldStop(changes)) return;
 
   if (path === 'root' && (previous.openapi !== undefined || previous.paths !== undefined)) {
     collectOpenApiDocument(previous, next, changes);
@@ -572,11 +669,14 @@ function collectContent(previous: unknown, next: unknown, path: string, changes:
 
 function collectCommonSchemaConstraints(previous: RecordValue, next: RecordValue, path: string, changes: BreakingChange[]): void {
   if (shouldStop(changes)) return;
+  collectUnsupportedSchemaKeywords(previous, next, path, changes);
+  if (shouldStop(changes)) return;
   for (const key of [
     'type', 'format', 'pattern', 'const', 'minLength', 'maxLength', 'minimum', 'maximum',
     'exclusiveMinimum', 'exclusiveMaximum', 'minItems', 'maxItems', 'minProperties', 'maxProperties',
     'minContains', 'maxContains', 'contains', 'propertyNames', 'dependentRequired',
-    'unevaluatedProperties', 'not',
+    'dependentSchemas', 'prefixItems', 'patternProperties', 'unevaluatedItems',
+    'unevaluatedProperties', 'not', 'if', 'then', 'else',
   ] as const) {
     const previousValue = inheritedConstraint(previous, key);
     const nextValue = inheritedConstraint(next, key);
@@ -596,8 +696,13 @@ function collectCommonSchemaConstraints(previous: RecordValue, next: RecordValue
     if (narrowed) addChange(changes, `${path}.${key}`, `constraint ${key} was narrowed.`, previousValue, nextValue, key, previous);
   }
 
-  if ((previous.additionalProperties === true || previous.additionalProperties === undefined) && next.additionalProperties === false) {
-    addChange(changes, `${path}.additionalProperties`, 'additional properties were disallowed.', previous.additionalProperties ?? true, false, 'additionalProperties', previous);
+  const previousAdditionalProperties = inheritedConstraint(previous, 'additionalProperties');
+  const nextAdditionalProperties = inheritedConstraint(next, 'additionalProperties');
+  if ((previousAdditionalProperties === true || previousAdditionalProperties === undefined)
+    && nextAdditionalProperties !== undefined && nextAdditionalProperties !== true) {
+    addChange(changes, `${path}.additionalProperties`, 'additional properties were narrowed.', previousAdditionalProperties ?? true, nextAdditionalProperties, 'additionalProperties', previous);
+  } else if (isRecord(previousAdditionalProperties) && isRecord(nextAdditionalProperties)) {
+    collectValue(previousAdditionalProperties, nextAdditionalProperties, `${path}.additionalProperties`, changes);
   }
 
   const previousEnumValue = inheritedConstraint(previous, 'enum');
@@ -804,15 +909,21 @@ function indexSourceObjects(value: unknown, rootPath: string, context: Collectio
   const occurrenceVisited = new WeakMap<object, Set<string>>();
   const visit = (current: unknown, path: string, inheritedOccurrences: readonly SourceOccurrence[] = []): void => {
     if (isRecord(current)) {
+      let addedOccurrence = inheritedOccurrences.length === 0;
       for (const occurrence of inheritedOccurrences) {
         const seen = occurrenceVisited.get(current) ?? new Set<string>();
         if (seen.has(occurrence.sourceIdentity)) continue;
+        addedOccurrence = true;
         seen.add(occurrence.sourceIdentity);
         occurrenceVisited.set(current, seen);
         const sources = context.occurrenceSources.get(current) ?? [];
         if (!sources.some((candidate) => candidate.sourceIdentity === occurrence.sourceIdentity)) sources.push(occurrence);
         context.occurrenceSources.set(current, sources);
       }
+      // A recursive dereferenced $ref can revisit the same object through an
+      // already indexed occurrence. Do not descend into its children again;
+      // doing so would recurse forever while adding no new provenance.
+      if (!addedOccurrence) return;
       if (inheritedOccurrences.length === 0) {
         if (context.sourceIds.has(current)) return;
         context.sourceIds.set(current, path);

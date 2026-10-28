@@ -1,4 +1,5 @@
 import { assertNoBreakingChanges, collectBreakingChanges } from '../../packages/contracts/openapi/breaking-gate.js';
+import { normalizeDocument } from '../../packages/contracts/openapi/breaking-inventory.js';
 
 describe('OpenAPI compatibility gate', () => {
   it('allows additive optional response fields', () => {
@@ -174,6 +175,29 @@ describe('OpenAPI compatibility gate', () => {
       { type: 'string' },
       { type: 'string', not: { const: 'A' } },
     )).toThrow(/not/);
+
+    const unsupportedCandidates: Array<[Record<string, unknown>, Record<string, unknown>]> = [
+      [
+        { type: 'array' },
+        { allOf: [{ type: 'array' }, { prefixItems: [{ const: 'A' }] }] },
+      ],
+      [
+        { type: 'object' },
+        { allOf: [{ type: 'object' }, { dependentSchemas: { a: { required: ['b'] } } }] },
+      ],
+      [
+        { type: 'object' },
+        { allOf: [{ type: 'object' }, { patternProperties: { '^x': { type: 'string' } } }] },
+      ],
+      [
+        { type: 'object' },
+        { allOf: [{ type: 'object' }, { additionalProperties: { type: 'string' } }] },
+      ],
+    ];
+    for (const [previous, candidate] of unsupportedCandidates) {
+      expect(() => assertNoBreakingChanges(previous, candidate)).toThrow();
+      expect(collectBreakingChanges(previous, candidate).length).toBeGreaterThan(0);
+    }
   });
 
   it('treats direct allOf merge and split as equivalent in both directions', () => {
@@ -205,6 +229,42 @@ describe('OpenAPI compatibility gate', () => {
     expect(new Set(changes.map((change) => change.stableIdentity)).size).toBe(2);
     expect(new Set(changes.map((change) => change.sourceIdentity)).size).toBe(2);
     expect(changes.map((change) => change.sourceIdentity).some((identity) => identity.includes('~1'))).toBe(true);
+  });
+
+  it('indexes recursive dereferenced occurrences without overflowing the stack', async () => {
+    const baseline = {
+      openapi: '3.1.0',
+      info: { title: 'recursive occurrence test', version: '1.0.0' },
+      components: {
+        schemas: {
+          Shared: {
+            type: 'object',
+            properties: { self: { $ref: '#/components/schemas/Shared' } },
+          },
+          Wrapper: {
+            oneOf: [
+              { $ref: '#/components/schemas/Shared' },
+              { $ref: '#/components/schemas/Shared' },
+            ],
+          },
+        },
+      },
+      paths: {},
+    };
+    const candidate = structuredClone(baseline);
+    candidate.components.schemas.Wrapper.oneOf = [];
+    const [normalizedBaseline, normalizedCandidate] = await Promise.all([
+      normalizeDocument(baseline),
+      normalizeDocument(candidate),
+    ]);
+
+    const first = collectBreakingChanges(normalizedBaseline, normalizedCandidate)
+      .filter((change) => change.reason.includes('option was removed'));
+    const second = collectBreakingChanges(normalizedBaseline, normalizedCandidate)
+      .filter((change) => change.reason.includes('option was removed'));
+    expect(first).toHaveLength(2);
+    expect(new Set(first.map((change) => change.sourceIdentity)).size).toBe(2);
+    expect(first.map((change) => change.stableIdentity)).toEqual(second.map((change) => change.stableIdentity));
   });
 
   it('treats equivalent allOf property splits as compatible and added constraints as narrowing', () => {

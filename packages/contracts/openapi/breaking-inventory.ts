@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import SwaggerParser from '@apidevtools/swagger-parser';
 import { parse } from 'yaml';
@@ -254,21 +255,33 @@ async function main(): Promise<void> {
   const current = parse(await readFile(currentPath, 'utf8')) as RecordValue;
   const inventory = await collectBreakingInventory(previous, current);
   const digest = async (path: string) => createHash('sha256').update(await readFile(path)).digest('hex');
-  const comparatorSourceSha256 = await digest(fileURLToPath(new URL('./breaking-gate.ts', import.meta.url)));
-  const generatorSourceSha256 = await digest(fileURLToPath(new URL('./breaking-inventory.ts', import.meta.url)));
+  const comparatorSource = await sourceProvenance('packages/contracts/openapi/breaking-gate.ts', fileURLToPath(new URL('./breaking-gate.ts', import.meta.url)));
+  const generatorSource = await sourceProvenance('packages/contracts/openapi/breaking-inventory.ts', fileURLToPath(new URL('./breaking-inventory.ts', import.meta.url)));
   process.stdout.write(`${JSON.stringify(buildAuditDocument(inventory, {
     baseline: await digest(previousPath),
     candidate: await digest(currentPath),
     generated: 'b0be58f74d9118664e24d7df68c547235abdb3348fbbf894c6f4d7962c7a0831',
     generatedClient: 'c32e0e08f80a96ca893882d70ad13fd3a96c134fa97bef8a6346e383f0b527ab',
   }, {
-    comparatorRevision: 'cfa432c48f0461d0c4b44019076324aaf33b13f4',
-    generatorRevision: 'cfa432c48f0461d0c4b44019076324aaf33b13f4',
-    comparatorSourceSha256,
-    generatorSourceSha256,
-    comparatorCommand: COMPARATOR_COMMAND,
-    generatorCommand: GENERATOR_COMMAND,
+    comparatorRevision: comparatorSource.revision,
+    generatorRevision: generatorSource.revision,
+    comparatorSourceSha256: comparatorSource.sha256,
+    generatorSourceSha256: generatorSource.sha256,
+    comparatorCommand: `${COMPARATOR_COMMAND} [sourceRevision=${comparatorSource.revision}]`,
+    generatorCommand: `${GENERATOR_COMMAND} [sourceRevision=${generatorSource.revision}]`,
   }))}\n`);
+}
+
+async function sourceProvenance(relativePath: string, currentPath: string): Promise<{ revision: string; sha256: string }> {
+  const revision = execFileSync('git', ['log', '-1', '--format=%H', '--', relativePath], { encoding: 'utf8' }).trim();
+  if (revision.length === 0) throw new Error(`Cannot determine committed source revision for ${relativePath}.`);
+  const source = execFileSync('git', ['show', `${revision}:${relativePath}`]);
+  const sha256 = createHash('sha256').update(source).digest('hex');
+  const currentSha256 = createHash('sha256').update(await readFile(currentPath)).digest('hex');
+  if (currentSha256 !== sha256) {
+    throw new Error(`Working tree source differs from committed ${revision}:${relativePath}; commit source before generating inventory.`);
+  }
+  return { revision, sha256 };
 }
 
 if (fileURLToPath(import.meta.url) === process.argv[1]) {
