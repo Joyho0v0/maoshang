@@ -8,6 +8,62 @@ export interface ExpectedOperation {
   ifMatch: boolean;
 }
 
+export interface ExpectedContractShape {
+  readonly queryParams?: readonly string[];
+  readonly requestSchema?: string;
+  readonly responseSchemas?: Readonly<Record<string, string | null>>;
+  readonly requiredResponseHeaders?: Readonly<Record<string, readonly string[]>>;
+}
+
+/**
+ * Consumer-facing contract expectations are intentionally kept separate from
+ * the OpenAPI document. The safety manifest above freezes every operation;
+ * this second manifest freezes the high-risk query/body/response shapes that
+ * must not drift while templates are refactored.
+ */
+export const EXPECTED_CONTRACT_SHAPES: Readonly<Record<string, ExpectedContractShape>> = {
+  getCsrfToken: { responseSchemas: { '200': 'CsrfToken' }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
+  createSession: { requestSchema: 'SessionRequest', responseSchemas: { '201': 'Session' }, requiredResponseHeaders: { '201': ['Cache-Control'] } },
+  getCurrentSession: { responseSchemas: { '200': 'Session' }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
+  getCommandStatus: { responseSchemas: { '200': 'CommandStatus' }, requiredResponseHeaders: { '200': ['Cache-Control'] } },
+  listCustomers: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'CustomerPage' } },
+  listProducts: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'ProductPage' } },
+  listSkus: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'SkuPage' } },
+  listOrders: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'OrderPage' } },
+  listInventoryBalances: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'InventoryBalancePage' } },
+  listInventoryMovements: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'InventoryMovementPage' } },
+  listInventoryReservations: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'InventoryReservationPage' } },
+  listInventoryObservations: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'InventoryObservationPage' } },
+  listPayments: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'PaymentPage' } },
+  listDocuments: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'DocumentPage' } },
+  listTasks: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'TaskPage' } },
+  listAuditEvents: { queryParams: ['page[after]', 'page[size]', 'sort', 'filter'], responseSchemas: { '200': 'AuditEventPage' } },
+  createProduct: { requestSchema: 'ProductCreateRequest', responseSchemas: { '201': 'Product', '202': 'CommandStatusInProgress' } },
+  createSku: { requestSchema: 'SkuCreateRequest', responseSchemas: { '201': 'Sku', '202': 'CommandStatusInProgress' } },
+  createOrder: { requestSchema: 'OrderCreateRequest', responseSchemas: { '201': 'Order', '202': 'CommandStatusInProgress' } },
+  createInventoryReservation: { requestSchema: 'InventoryReservationCreateRequest', responseSchemas: { '201': 'InventoryReservation', '202': 'CommandStatusInProgress' } },
+  createInventoryObservation: { requestSchema: 'InventoryObservationCreateRequest', responseSchemas: { '201': 'InventoryObservation', '202': 'CommandStatusInProgress' } },
+  createInitialReceipt: { requestSchema: 'InventoryOperationCreateRequest', responseSchemas: { '201': 'InventoryOperation', '202': 'CommandStatusInProgress' } },
+  createInventoryReceipt: { requestSchema: 'InventoryOperationCreateRequest', responseSchemas: { '201': 'InventoryOperation', '202': 'CommandStatusInProgress' } },
+  createInventoryAdjustment: { requestSchema: 'InventoryOperationCreateRequest', responseSchemas: { '201': 'InventoryOperation', '202': 'CommandStatusInProgress' } },
+  issueInventory: { requestSchema: 'InventoryOperationCreateRequest', responseSchemas: { '201': 'InventoryOperation', '202': 'CommandStatusInProgress' } },
+  createPayment: { requestSchema: 'PaymentCreateRequest', responseSchemas: { '201': 'Payment', '202': 'CommandStatusInProgress' } },
+  createUploadIntent: { requestSchema: 'FileCreateRequest', responseSchemas: { '201': 'File', '202': 'CommandStatusInProgress' } },
+  createTask: { requestSchema: 'TaskCreateRequest', responseSchemas: { '201': 'Task', '202': 'CommandStatusInProgress' } },
+  updateProduct: { requestSchema: 'ProductUpdateRequest', responseSchemas: { '200': 'Product', '202': 'CommandStatusInProgress' } },
+  updateSku: { requestSchema: 'SkuUpdateRequest', responseSchemas: { '200': 'Sku', '202': 'CommandStatusInProgress' } },
+  updateOrder: { requestSchema: 'OrderUpdateRequest', responseSchemas: { '200': 'Order', '202': 'CommandStatusInProgress' } },
+  updateDocument: { requestSchema: 'DocumentUpdateRequest', responseSchemas: { '200': 'Document', '202': 'CommandStatusInProgress' } },
+  transitionOrder: { requestSchema: 'OrderCommandRequest', responseSchemas: { '200': 'Order', '202': 'CommandStatusInProgress' } },
+  releaseInventoryReservation: { requestSchema: 'InventoryCommandRequestTyped', responseSchemas: { '200': 'InventoryOperation', '202': 'CommandStatusInProgress' } },
+  attachPaymentProof: { requestSchema: 'PaymentCommandRequest', responseSchemas: { '200': 'Payment', '202': 'CommandStatusInProgress' } },
+  submitPaymentReview: { requestSchema: 'PaymentCommandRequest', responseSchemas: { '200': 'Payment', '202': 'CommandStatusInProgress' } },
+  reviewPayment: { requestSchema: 'PaymentCommandRequest', responseSchemas: { '200': 'Payment', '202': 'CommandStatusInProgress' } },
+  reversePayment: { requestSchema: 'PaymentCommandRequest', responseSchemas: { '200': 'Payment', '202': 'CommandStatusInProgress' } },
+  completeUpload: { requestSchema: 'FileCommandRequest', responseSchemas: { '200': 'File', '202': 'CommandStatusInProgress' } },
+  createDocument: { requestSchema: 'DocumentCreateRequest', responseSchemas: { '201': 'Document', '202': 'CommandStatusInProgress' }, requiredResponseHeaders: { '201': ['Location'], '202': ['Retry-After', 'Cache-Control', 'Content-Location'] } },
+};
+
 export const EXPECTED_OPERATION_MANIFEST =   [
     {
       "operationId": "getCsrfToken",
@@ -779,12 +835,64 @@ export function assertOperationManifest(document: AnyRecord): void {
         if ((safety.idempotency === 'required' || safety.ifMatch === 'required') && responses?.['428'] === undefined) throw new Error(`${operationId} must declare 428.`);
         if (safety.idempotency !== 'required' && safety.ifMatch !== 'required' && responses?.['428'] !== undefined) throw new Error(`${operationId} must not declare unreachable 428.`);
       }
+      const shape = EXPECTED_CONTRACT_SHAPES[operationId];
+      if (shape !== undefined) assertContractShape(operationId, operation, parameters, document, shape);
+      assertFrozenResponseHeaders(operationId, operation, document);
     }
   }
   const expected = [...EXPECTED_OPERATION_MANIFEST].sort(compare);
   const observed = actual.sort(compare);
   if (JSON.stringify(observed) !== JSON.stringify(expected)) {
     throw new Error(`OpenAPI operation/safety manifest mismatch. Expected ${expected.length}, observed ${observed.length}.\\nExpected: ${JSON.stringify(expected)}\\nObserved: ${JSON.stringify(observed)}`);
+  }
+}
+
+function assertFrozenResponseHeaders(operationId: string, operation: AnyRecord, document: AnyRecord): void {
+  const responses = isRecord(operation.responses) ? operation.responses : {};
+  for (const [status, expected] of Object.entries(expectedRequiredResponseHeaders(operationId, responses))) {
+    const response = resolveComponent(responses[status], document, 'responses');
+    const actual = isRecord(response?.headers) ? Object.entries(response.headers).filter(([, header]) => isRecord(header) && header['x-required'] === true).map(([name]) => name) : [];
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${operationId} required response header mismatch: expected ${JSON.stringify(expected)}, observed ${JSON.stringify(actual)}.`);
+  }
+}
+
+function expectedRequiredResponseHeaders(operationId: string, responses: AnyRecord): Readonly<Record<string, readonly string[]>> {
+  const expected: Record<string, readonly string[]> = {};
+  if (responses['200'] !== undefined && ['getCsrfToken', 'getCurrentSession', 'getCommandStatus'].includes(operationId)) expected['200'] = ['Cache-Control'];
+  if (responses['201'] !== undefined) expected['201'] = operationId === 'createSession' ? ['Cache-Control'] : ['Location'];
+  if (responses['202'] !== undefined) expected['202'] = ['Retry-After', 'Cache-Control', 'Content-Location'];
+  return expected;
+}
+
+function assertContractShape(operationId: string, operation: AnyRecord, parameters: Array<{ name: string; in: string; required?: boolean }>, document: AnyRecord, expected: ExpectedContractShape): void {
+  if (expected.queryParams !== undefined) {
+    const actual = parameters.filter((parameter) => parameter.in === 'query').map((parameter) => parameter.name).sort();
+    if (JSON.stringify(actual) !== JSON.stringify([...expected.queryParams].sort())) throw new Error(`${operationId} query contract mismatch: expected ${JSON.stringify(expected.queryParams)}, observed ${JSON.stringify(actual)}.`);
+  }
+  if (expected.requestSchema !== undefined) {
+    const requestBody = resolveComponent(operation.requestBody, document, 'requestBodies');
+    const content = isRecord(requestBody?.content) ? requestBody.content['application/json'] : undefined;
+    const schema = isRecord(content) && isRecord(content.schema) ? schemaComponentName(content.schema) : undefined;
+    if (schema !== expected.requestSchema) throw new Error(`${operationId} request schema mismatch: expected ${expected.requestSchema}, observed ${String(schema)}.`);
+  }
+  if (expected.responseSchemas !== undefined) {
+    const responses = isRecord(operation.responses) ? operation.responses : {};
+    const actual = Object.fromEntries(Object.entries(responses).filter(([status]) => /^2\d\d$/.test(status)).map(([status, value]) => {
+      const response = resolveComponent(value, document, 'responses');
+      const content = isRecord(response?.content) ? response.content['application/json'] ?? response.content['application/problem+json'] : undefined;
+      const schema = isRecord(content) && isRecord(content.schema) ? schemaComponentName(content.schema) : null;
+      return [status, schema];
+    }));
+    if (JSON.stringify(actual) !== JSON.stringify(expected.responseSchemas)) throw new Error(`${operationId} response schema mismatch: expected ${JSON.stringify(expected.responseSchemas)}, observed ${JSON.stringify(actual)}.`);
+  }
+  if (expected.requiredResponseHeaders !== undefined) {
+    const responses = isRecord(operation.responses) ? operation.responses : {};
+    const actual = Object.fromEntries(Object.entries(responses).filter(([status]) => expected.requiredResponseHeaders?.[status] !== undefined).map(([status, value]) => {
+      const response = resolveComponent(value, document, 'responses');
+      const headers = isRecord(response?.headers) ? Object.entries(response.headers).filter(([, header]) => isRecord(header) && header['x-required'] === true).map(([name]) => name) : [];
+      return [status, headers];
+    }));
+    if (JSON.stringify(actual) !== JSON.stringify(expected.requiredResponseHeaders)) throw new Error(`${operationId} required response header mismatch: expected ${JSON.stringify(expected.requiredResponseHeaders)}, observed ${JSON.stringify(actual)}.`);
   }
 }
 
@@ -811,6 +919,22 @@ function resolveParameters(operation: AnyRecord, document: AnyRecord): Array<{ n
     if (!isRecord(resolved)) throw new Error(`Unknown parameter ${String(ref)}.`);
     return { name: requireString(resolved.name, 'parameter name'), in: requireString(resolved.in, 'parameter location'), required: resolved.required === true };
   });
+}
+
+function resolveComponent(value: unknown, document: AnyRecord, component: string): AnyRecord | undefined {
+  if (!isRecord(value)) return undefined;
+  const ref = value['$ref'];
+  if (typeof ref !== 'string') return value;
+  const name = ref.split('/').at(-1);
+  const components = isRecord(document.components) && isRecord(document.components[component]) ? document.components[component] : {};
+  const resolved = name === undefined ? undefined : components[name];
+  return isRecord(resolved) ? resolved : undefined;
+}
+
+function schemaComponentName(value: AnyRecord): string | undefined {
+  const ref = value['$ref'];
+  const prefix = '#/components/schemas/';
+  return typeof ref === 'string' && ref.startsWith(prefix) ? ref.slice(prefix.length) : undefined;
 }
 
 function requireString(value: unknown, label: string): string {

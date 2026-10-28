@@ -188,9 +188,19 @@ function compareComposition(previous: RecordValue, next: RecordValue, path: stri
     if (!Array.isArray(previous[key])) continue;
     if (!Array.isArray(next[key])) throw new Error(`Breaking change at ${path}: ${key} was removed.`);
     for (const previousOption of previous[key]) {
-      if (!next[key].some((candidate) => JSON.stringify(candidate) === JSON.stringify(previousOption))) throw new Error(`Breaking change at ${path}: a ${key} option was removed.`);
+      if (!next[key].some((candidate) => schemaContainsOption(candidate, previousOption))) throw new Error(`Breaking change at ${path}: a ${key} option was removed.`);
     }
   }
+}
+
+function schemaContainsOption(candidate: unknown, previousOption: unknown): boolean {
+  if (JSON.stringify(candidate) === JSON.stringify(previousOption)) return true;
+  if (!isRecord(candidate)) return false;
+  for (const key of ['oneOf', 'anyOf'] as const) {
+    const options = candidate[key];
+    if (Array.isArray(options) && options.some((option) => schemaContainsOption(option, previousOption))) return true;
+  }
+  return false;
 }
 
 function compareSecurity(previous: unknown, next: unknown, path: string): void {

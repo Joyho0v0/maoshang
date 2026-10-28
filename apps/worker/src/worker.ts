@@ -2,12 +2,13 @@ export interface OutboxEvent {
   id: string;
   topic: string;
   payload: Record<string, unknown>;
+  claimToken?: Buffer;
 }
 
 export interface OutboxSource {
   claimBatch(limit: number): Promise<OutboxEvent[]>;
-  markPublished(id: string): Promise<void>;
-  markFailed?(id: string, error: unknown): Promise<void>;
+  markPublished(id: string, claimToken?: Buffer): Promise<void>;
+  markFailed?(id: string, error: unknown, claimToken?: Buffer): Promise<void>;
 }
 
 export interface EventPublisher {
@@ -22,9 +23,9 @@ export class OutboxWorker {
     for (const event of events) {
       try {
         await this.publisher.publish(event);
-        await this.source.markPublished(event.id);
+        await this.source.markPublished(event.id, event.claimToken);
       } catch (error) {
-        await this.source.markFailed?.(event.id, error);
+        await this.source.markFailed?.(event.id, error, event.claimToken);
         throw error;
       }
     }

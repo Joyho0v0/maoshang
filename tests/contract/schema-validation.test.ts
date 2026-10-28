@@ -29,6 +29,7 @@ describe('contract response schemas', () => {
       resource: null,
       resultHref: null,
       problem: null,
+      attemptCount: 1,
     })).toBe(true);
 
     expect(validate({

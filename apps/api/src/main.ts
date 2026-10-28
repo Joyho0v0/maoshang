@@ -15,11 +15,11 @@ import { ContractResponseValidationInterceptor } from './common/http/contract-re
 
 export async function createApp(options: { config?: RuntimeConfig; env?: Record<string, string | undefined> } = {}): Promise<NestFastifyApplication> {
   const config = options.config ?? loadRuntimeConfig(options.env);
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule.register(config), new FastifyAdapter({ logger: false }));
   const contractDocument = parse(await readFile(join(process.cwd(), 'packages/contracts/openapi/openapi.yaml'), 'utf8')) as Record<string, unknown>;
+  const contractValidator = createContractValidator(contractDocument);
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule.register(config, contractValidator), new FastifyAdapter({ logger: false }));
   await app.register(cookie as unknown as Parameters<typeof app.register>[0]);
   app.setGlobalPrefix('api/v1');
-  const contractValidator = createContractValidator(contractDocument);
   app.useGlobalFilters(new ProblemExceptionFilter(contractValidator));
   app.useGlobalGuards(app.get(RequestSafetyGuard));
   app.useGlobalInterceptors(new ContractResponseValidationInterceptor(contractValidator));

@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { Pool } from 'pg';
 import type { OutboxEvent, OutboxSource } from './worker.js';
 
@@ -8,24 +9,27 @@ export class PostgresOutboxSource implements OutboxSource {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      const claimToken = randomBytes(32);
       const result = await client.query<{ id: string; topic: string; payload: Record<string, unknown> }>(
         `WITH candidates AS (
            SELECT id
            FROM integration.outbox_event
-           WHERE status IN ('PENDING', 'FAILED') AND available_at <= now()
+           WHERE available_at <= now()
+             AND (status IN ('PENDING', 'FAILED') OR (status = 'CLAIMED' AND (claim_expires_at <= now() OR claimed_at <= now() - interval '30 seconds')))
            ORDER BY available_at, id
            FOR UPDATE SKIP LOCKED
            LIMIT $1
          )
          UPDATE integration.outbox_event AS event
-         SET status = 'CLAIMED', claimed_at = now(), attempts = event.attempts + 1
+         SET status = 'CLAIMED', claimed_at = now(), claim_owner_token = $2,
+             claim_expires_at = now() + interval '30 seconds', attempts = event.attempts + 1
          FROM candidates
          WHERE event.id = candidates.id
          RETURNING event.id, event.event_type AS topic, event.payload`,
-        [limit],
+        [limit, claimToken],
       );
       await client.query('COMMIT');
-      return result.rows;
+      return result.rows.map((row) => ({ ...row, claimToken }));
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -34,15 +38,19 @@ export class PostgresOutboxSource implements OutboxSource {
     }
   }
 
-  async markPublished(id: string): Promise<void> {
-    await this.pool.query("UPDATE integration.outbox_event SET status = 'PUBLISHED', published_at = now() WHERE id = $1 AND status = 'CLAIMED'", [id]);
+  async markPublished(id: string, claimToken?: Buffer): Promise<void> {
+    if (claimToken === undefined) throw new Error('Outbox claim token is required.');
+    const result = await this.pool.query("UPDATE integration.outbox_event SET status = 'PUBLISHED', published_at = now(), claim_expires_at = NULL, claim_owner_token = NULL WHERE id = $1 AND status = 'CLAIMED' AND claim_owner_token = $2", [id, claimToken]);
+    if (result.rowCount !== 1) throw new Error('Outbox acknowledgement lost ownership.');
   }
 
-  async markFailed(id: string, error: unknown): Promise<void> {
+  async markFailed(id: string, error: unknown, claimToken?: Buffer): Promise<void> {
+    if (claimToken === undefined) throw new Error('Outbox claim token is required.');
     const code = error instanceof Error ? error.name : 'PUBLISH_FAILED';
-    await this.pool.query(
-      "UPDATE integration.outbox_event SET status = CASE WHEN attempts >= 5 THEN 'FAILED' ELSE 'PENDING' END, available_at = now() + interval '5 seconds', last_error_code = $2 WHERE id = $1 AND status = 'CLAIMED'",
-      [id, code],
+    const result = await this.pool.query(
+      "UPDATE integration.outbox_event SET status = CASE WHEN attempts >= 5 THEN 'FAILED' ELSE 'PENDING' END, available_at = now() + interval '5 seconds', last_error_code = $2, claim_expires_at = NULL, claim_owner_token = NULL WHERE id = $1 AND status = 'CLAIMED' AND claim_owner_token = $3",
+      [id, code, claimToken],
     );
+    if (result.rowCount !== 1) throw new Error('Outbox failure update lost ownership.');
   }
 }

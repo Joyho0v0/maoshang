@@ -58,13 +58,18 @@ CREATE TABLE IF NOT EXISTS integration.outbox_event (
   status text NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'CLAIMED', 'PUBLISHED', 'FAILED')),
   available_at timestamptz NOT NULL DEFAULT now(),
   claimed_at timestamptz,
+  claim_owner_token bytea CHECK (claim_owner_token IS NULL OR octet_length(claim_owner_token) >= 16),
+  claim_expires_at timestamptz,
   published_at timestamptz,
   attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
   last_error_code text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE integration.outbox_event ADD COLUMN IF NOT EXISTS claim_owner_token bytea CHECK (claim_owner_token IS NULL OR octet_length(claim_owner_token) >= 16);
+ALTER TABLE integration.outbox_event ADD COLUMN IF NOT EXISTS claim_expires_at timestamptz;
 CREATE INDEX IF NOT EXISTS outbox_organization_idx ON integration.outbox_event (organization_id, id);
 CREATE INDEX IF NOT EXISTS outbox_status_idx ON integration.outbox_event (status, available_at, id);
+CREATE INDEX IF NOT EXISTS outbox_claim_expiry_idx ON integration.outbox_event (claim_expires_at, id) WHERE status = 'CLAIMED';
 
 CREATE TABLE IF NOT EXISTS audit.event (
   id uuid PRIMARY KEY,

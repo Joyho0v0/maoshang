@@ -62,4 +62,24 @@ describe('Fastify API entry point', () => {
       await app.close();
     }
   });
+
+  it('rejects an invalid session DTO after CSRF and before the controller', async () => {
+    const app = await createApp({ config: { nodeEnv: 'test', databaseUrl: 'postgres://localhost/test', sessionSecret: 's'.repeat(32) } });
+    await app.init();
+    try {
+      const csrfResponse = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: '/api/v1/auth/csrf' });
+      const csrfToken = csrfResponse.json().csrfToken as string;
+      const cookie = csrfResponse.headers['set-cookie'];
+      const response = await app.getHttpAdapter().getInstance().inject({
+        method: 'POST',
+        url: '/api/v1/auth/sessions',
+        headers: { 'x-csrf-token': csrfToken, cookie: Array.isArray(cookie) ? cookie[0] : cookie },
+        payload: { provider: 'NOT_ALLOWED', unexpected: true },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ code: 'VALIDATION_FAILED', status: 400 });
+    } finally {
+      await app.close();
+    }
+  });
 });

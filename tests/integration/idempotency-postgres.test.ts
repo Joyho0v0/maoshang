@@ -35,8 +35,10 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
 
     const owner = claims[0];
     if (owner === undefined) throw new Error('Expected a claim.');
+    const ownerToken = owner.ownerToken;
+    if (ownerToken === undefined) throw new Error('Expected the first contender to own the claim.');
     const result: CommandResult<{ id: string }> = { status: 201, body: { id: randomUUID() }, resultHref: '/api/v1/customers/1' };
-    await repository.withTransaction((client) => repository.complete(client, owner.commandId, owner.ownerToken, result));
+    await repository.withTransaction((client) => repository.complete(client, owner.commandId, ownerToken, result));
 
     await expect(repository.withTransaction((client) => repository.claim(client, { ...input, requestHash: 'request-b' }))).rejects.toBeInstanceOf(IdempotencyConflictError);
     await expect(repository.execute(input, async () => ({ status: 500, body: {} }))).resolves.toMatchObject({ status: 201, resultHref: '/api/v1/customers/1' });
@@ -49,6 +51,18 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
     const contenders = await Promise.all([1, 2].map(() => repository.withTransaction((client) => repository.claim(client, input))));
     expect(new Set(contenders.map((claim) => claim.commandId)).size).toBe(1);
     expect(Math.max(...contenders.map((claim) => claim.attemptCount))).toBe(2);
+  });
+
+  it('does not let an unexpired observer execute the owner callback', async () => {
+    const input: PostgresIdempotencyInput = { actorId, organizationId, operationId: 'createCustomerObserver', idempotencyKey: 'observer-key', requestHash: 'request-a' };
+    const owner = await repository.withTransaction((client) => repository.claim(client, input));
+    let executions = 0;
+    const observer = await repository.execute(input, async () => {
+      executions += 1;
+      return { status: 201, body: { id: randomUUID() } };
+    });
+    expect(executions).toBe(0);
+    expect(observer).toMatchObject({ commandId: owner.commandId, state: 'IN_PROGRESS' });
   });
 
   it('rolls back business side effects on transient failure before releasing the lease', async () => {

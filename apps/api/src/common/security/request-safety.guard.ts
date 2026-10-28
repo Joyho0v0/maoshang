@@ -3,19 +3,27 @@ import type { FastifyRequest } from 'fastify';
 import { canonicalRequestHash } from './canonical-request.js';
 import { RequestSafetyPipeline } from './request-safety-pipeline.js';
 import { CsrfService } from '../../modules/auth/csrf/csrf.service.js';
-import { InMemoryIdempotencyStore } from '../../modules/integration/idempotency/in-memory-idempotency-store.js';
+import { IDEMPOTENCY_REPOSITORY, IdempotencyConflictError, type PostgresClaim, type PostgresIdempotencyRepository } from '../../modules/integration/idempotency/postgres-idempotency-repository.js';
 import { EXPECTED_OPERATION_MANIFEST } from '../../../../../packages/contracts/openapi/contract-manifest.js';
 import { buildProblem, normalizeRequestId, ProblemError } from '../http/problem.js';
+import { operations, type OperationId } from '../../../../../packages/contracts/openapi/generated-client.js';
+import type { ContractValidator } from '../../../../../packages/contracts/openapi/runtime-validator.js';
+import { validateOperationRequest, type ClientCallInput } from '../../../../../packages/contracts/openapi/client.js';
 
 interface PrincipalRequest extends FastifyRequest {
   user?: { id: string; organizationId: string };
+  idempotencyClaim?: PostgresClaim;
 }
 
 @Injectable()
 export class RequestSafetyGuard implements CanActivate {
-  constructor(@Inject(CsrfService) private readonly csrf: CsrfService, @Inject(InMemoryIdempotencyStore) private readonly idempotency: InMemoryIdempotencyStore) {}
+  constructor(
+    @Inject(CsrfService) private readonly csrf: CsrfService,
+    @Inject(IDEMPOTENCY_REPOSITORY) private readonly idempotency: PostgresIdempotencyRepository,
+    @Inject('CONTRACT_VALIDATOR') private readonly validator: ContractValidator,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<PrincipalRequest>();
     const method = request.method.toUpperCase();
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return true;
@@ -35,16 +43,29 @@ export class RequestSafetyGuard implements CanActivate {
     const csrfToken = headerString(request.headers['x-csrf-token']);
     const requestBody = request.body ?? null;
 
+    const operationContract = operations[operationId as OperationId];
+    if (operationContract === undefined) {
+      throw new ProblemError(buildProblem({ status: 500, code: 'INTERNAL_ERROR', title: 'Unsafe route is absent from generated contract metadata.', requestId: normalizeRequestId(request.headers['x-request-id']), retryable: false }));
+    }
     const pipeline = new RequestSafetyPipeline({
-      claim: (key, safetyRequest) => {
-        if (principal === undefined) return;
-        this.idempotency.claim({
-          actorId: principal.id,
-          organizationId: principal.organizationId,
-          operationId: safetyRequest.operationId,
-          idempotencyKey: key,
-          requestHash: canonicalRequestHash({ method, path, body: requestBody, ...(ifMatch === undefined ? {} : { ifMatch }) }),
-        });
+      validateStructure: () => {
+        try {
+          validateOperationRequest(operationContract, {
+            pathParams: asStringRecord(request.params),
+            query: asQueryRecord(request.query),
+            headers: asStringRecord(request.headers),
+            body: requestBody,
+          } satisfies ClientCallInput, this.validator);
+        } catch (error) {
+          throw new ProblemError(buildProblem({
+            status: 400,
+            code: 'VALIDATION_FAILED',
+            title: 'Validation failed',
+            requestId: normalizeRequestId(request.headers['x-request-id']),
+            retryable: false,
+            violations: [{ field: 'request', code: 'INVALID', message: error instanceof Error ? error.message : 'Request validation failed.' }],
+          }));
+        }
       },
     });
     pipeline.validate({
@@ -60,10 +81,41 @@ export class RequestSafetyGuard implements CanActivate {
       requiresIdempotencyKey: operation.idempotency,
       body: requestBody,
     });
+    if (principal !== undefined && operation.idempotency) {
+      try {
+        request.idempotencyClaim = await this.idempotency.withTransaction((client) => this.idempotency.claim(client, {
+          actorId: principal.id,
+          organizationId: principal.organizationId,
+          operationId: operationId,
+          idempotencyKey: idempotencyKey as string,
+          requestHash: canonicalRequestHash({ method, path, body: requestBody, ...(ifMatch === undefined ? {} : { ifMatch }) }),
+        }));
+      } catch (error) {
+        if (!(error instanceof IdempotencyConflictError)) throw error;
+        throw new ProblemError(buildProblem({
+          status: 409,
+          code: 'IDEMPOTENCY_KEY_REUSED',
+          title: 'Idempotency key was reused with a different request.',
+          requestId: normalizeRequestId(request.headers['x-request-id']),
+          retryable: false,
+          meta: { operationId, commandStatusHref: '/api/v1/commands/status' },
+        }));
+      }
+    }
     return true;
   }
 }
 
 function headerString(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function asStringRecord(value: unknown): Record<string, string> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, headerString(typeof item === 'string' || Array.isArray(item) ? item : undefined) ?? ''])) as Record<string, string>;
+}
+
+function asQueryRecord(value: unknown): Record<string, string | number | boolean | undefined> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, Array.isArray(item) ? item[0] : item])) as Record<string, string | number | boolean | undefined>;
 }

@@ -5,6 +5,7 @@ type Schema = Record<string, unknown>;
 
 export interface ContractValidator {
   validate(schemaName: string, value: unknown): boolean;
+  validateSchema(schema: Schema, value: unknown): boolean;
   errors: ErrorObject[] | null | undefined;
 }
 
@@ -21,10 +22,21 @@ export function createContractValidator(document: Record<string, unknown>): Cont
     if (isRecord(schema)) ajv.addSchema(schema, `#/components/schemas/${name}`);
   }
 
+  const validators = new Map<string, ((value: unknown) => boolean) & { errors?: ErrorObject[] | null }>();
   let errors: ErrorObject[] | null | undefined;
   return {
     validate(schemaName: string, value: unknown): boolean {
-      const validate = ajv.compile({ $ref: `#/components/schemas/${schemaName}` });
+      let validate = validators.get(schemaName);
+      if (validate === undefined) {
+        validate = ajv.compile({ $ref: `#/components/schemas/${schemaName}` });
+        validators.set(schemaName, validate);
+      }
+      const valid = validate(value);
+      errors = validate.errors;
+      return valid;
+    },
+    validateSchema(schema: Schema, value: unknown): boolean {
+      const validate = ajv.compile(schema);
       const valid = validate(value);
       errors = validate.errors;
       return valid;

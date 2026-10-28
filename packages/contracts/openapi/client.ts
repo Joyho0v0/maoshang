@@ -1,8 +1,28 @@
 import type { ContractValidator } from './runtime-validator.js';
 
+export type ContractSchema = string | Readonly<Record<string, unknown>>;
+
+export interface OperationParameterContract {
+  readonly required: boolean;
+  readonly schema?: ContractSchema;
+  readonly type?: string;
+}
+
+export interface OperationResponseContract {
+  readonly schema?: string;
+  readonly contentType?: string;
+  readonly headers: readonly string[];
+  readonly requiredHeaders: readonly string[];
+}
+
 export interface GeneratedOperation {
   readonly method: string;
   readonly path: string;
+  readonly pathParams: Readonly<Record<string, OperationParameterContract>>;
+  readonly queryParams: Readonly<Record<string, OperationParameterContract>>;
+  readonly headers: Readonly<Record<string, OperationParameterContract>>;
+  readonly requestSchema?: string;
+  readonly responses: Readonly<Record<string, OperationResponseContract>>;
 }
 
 export interface ClientCallInput {
@@ -10,7 +30,6 @@ export interface ClientCallInput {
   query?: Record<string, string | number | boolean | undefined>;
   headers?: Record<string, string>;
   body?: unknown;
-  responseSchema?: string;
 }
 
 export interface ContractApiClientOptions {
@@ -35,7 +54,10 @@ export class ContractApiClient {
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
-  async execute<TResponse>(operation: GeneratedOperation, input: ClientCallInput = {}): Promise<TResponse> {
+  protected async execute<TResponse>(operation: GeneratedOperation, input: ClientCallInput = {}): Promise<TResponse> {
+    const validator = this.options.validator;
+    if (validator === undefined) throw new Error('A contract validator is required for generated API calls.');
+    validateOperationRequest(operation, input, validator);
     const path = expandPath(operation.path, input.pathParams);
     const absoluteBase = /^https?:\/\//i.test(this.baseUrl);
     const url = absoluteBase ? new URL(`${this.baseUrl}${path}`) : new URL(`${this.baseUrl}${path}`, 'http://contract-client.invalid');
@@ -55,14 +77,70 @@ export class ContractApiClient {
     const text = await response.text();
     const payload: unknown = text.length === 0 ? undefined : JSON.parse(text) as unknown;
     if (!response.ok) {
-      if (this.options.validator !== undefined && !this.options.validator.validate('Problem', payload)) throw new Error('Invalid Problem response.');
+      const responseContract = operation.responses[String(response.status)];
+      const schema = responseContract?.schema ?? 'Problem';
+      if (!validator.validate(schema, payload)) throw new Error(`Invalid ${schema} response.`);
       throw new ApiProblemError(response.status, payload);
     }
-    if (input.responseSchema !== undefined && this.options.validator !== undefined && !this.options.validator.validate(input.responseSchema, payload)) {
-      throw new Error(`Invalid ${input.responseSchema} response.`);
+    const responseContract = operation.responses[String(response.status)];
+    if (responseContract === undefined) throw new Error(`Unexpected HTTP ${response.status} response.`);
+    if (responseContract.contentType !== undefined) {
+      const contentType = response.headers.get('content-type')?.split(';', 1)[0]?.trim();
+      if (contentType !== responseContract.contentType) throw new Error(`Unexpected response content type: ${contentType ?? 'missing'}.`);
     }
+    for (const header of responseContract.requiredHeaders) {
+      if (!response.headers.has(header)) throw new Error(`Missing required response header: ${header}`);
+    }
+    if (responseContract.schema !== undefined && !validator.validate(responseContract.schema, payload)) throw new Error(`Invalid ${responseContract.schema} response.`);
     return payload as TResponse;
   }
+}
+
+export function validateOperationRequest(operation: GeneratedOperation, input: ClientCallInput, validator: ContractValidator): void {
+  const pathParams = input.pathParams ?? {};
+  for (const name of Object.keys(operation.pathParams)) {
+    const value = pathParams[name];
+    if (value === undefined) throw new Error(`Missing path parameter: ${name}`);
+    const schema = operation.pathParams[name]?.schema;
+    if (schema !== undefined && !validateSchema(schema, value, validator)) throw new Error(`Invalid path parameter: ${name}`);
+  }
+  for (const name of Object.keys(pathParams)) {
+    if (!(name in operation.pathParams)) throw new Error(`Unknown path parameter: ${name}`);
+  }
+
+  const query = input.query ?? {};
+  for (const name of Object.keys(operation.queryParams)) {
+    const parameter = operation.queryParams[name];
+    const value = query[name];
+    if (parameter?.required && value === undefined) throw new Error(`Missing query parameter: ${name}`);
+    if (value !== undefined && parameter?.schema !== undefined && !validateSchema(parameter.schema, value, validator)) throw new Error(`Invalid query parameter: ${name}`);
+  }
+  for (const name of Object.keys(query)) {
+    if (!(name in operation.queryParams)) throw new Error(`Unknown query parameter: ${name}`);
+  }
+
+  const headers = input.headers ?? {};
+  for (const [name, parameter] of Object.entries(operation.headers)) {
+    const value = findHeader(headers, name);
+    if (parameter.required && value === undefined) throw new Error(`Missing required header: ${name}`);
+    if (value !== undefined && parameter.schema !== undefined && !validateSchema(parameter.schema, value, validator)) throw new Error(`Invalid header: ${name}`);
+  }
+
+  if (operation.requestSchema !== undefined) {
+    if (input.body === undefined || !validator.validate(operation.requestSchema, input.body)) throw new Error(`Invalid ${operation.requestSchema} request body.`);
+  } else if (input.body !== undefined) {
+    throw new Error(`Operation ${operation.path} does not accept a request body.`);
+  }
+}
+
+function validateSchema(schema: ContractSchema, value: unknown, validator: ContractValidator): boolean {
+  return typeof schema === 'string' ? validator.validate(schema, value) : validator.validateSchema(schema, value);
+}
+
+function findHeader(headers: Record<string, string>, name: string): string | undefined {
+  const expected = name.toLowerCase();
+  const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === expected);
+  return entry?.[1];
 }
 
 function expandPath(path: string, values: Record<string, string> | undefined): string {

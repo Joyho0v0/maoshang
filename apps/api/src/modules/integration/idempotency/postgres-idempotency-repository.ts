@@ -8,6 +8,8 @@ import {
 } from './in-memory-idempotency-store.js';
 import { buildProblem, type ProblemDocument } from '../../../common/http/problem.js';
 
+export { IdempotencyConflictError } from './in-memory-idempotency-store.js';
+
 export const IDEMPOTENCY_CLAIM_SQL = `
 INSERT INTO integration.idempotency_record
   (id, organization_id, actor_user_id, operation_id, key_hash, request_hash,
@@ -59,8 +61,11 @@ export interface PostgresIdempotencyInput {
   requestHash: string;
 }
 export interface PostgresClaim extends CommandStatus {
-  ownerToken: Buffer;
+  ownerToken?: Buffer;
+  claimRole: 'OWNER' | 'OBSERVER' | 'TERMINAL';
 }
+
+export const IDEMPOTENCY_REPOSITORY = 'IDEMPOTENCY_REPOSITORY';
 
 interface StoredIdempotencyRow extends QueryResultRow {
   id: string;
@@ -108,24 +113,24 @@ export class PostgresIdempotencyRepository {
       if (row.state === 'IN_PROGRESS' && row.lease_expires_at <= new Date()) {
         const ownerToken = randomBytes(32);
         const takeover = await client.query<StoredIdempotencyRow>(IDEMPOTENCY_TAKEOVER_SQL, [row.id, ownerToken]);
-        if (takeover.rows[0] === undefined) return { ...toStatus(row), ownerToken: row.owner_token };
+        if (takeover.rows[0] === undefined) return { ...toStatus(row), claimRole: 'OBSERVER' as const };
         const refreshed = await this.readById(client, row.id);
-        return { ...toStatus(refreshed), ownerToken };
+        return { ...toStatus(refreshed), ownerToken, claimRole: 'OWNER' as const };
       }
-      return { ...toStatus(row), ownerToken: row.owner_token };
+      return { ...toStatus(row), claimRole: row.state === 'IN_PROGRESS' ? 'OBSERVER' as const : 'TERMINAL' as const };
     }
 
     const ownerToken = randomBytes(32);
     const inserted = await client.query<StoredIdempotencyRow>(IDEMPOTENCY_CLAIM_SQL, [randomUUID(), input.organizationId, input.actorId, input.operationId, keyHash, requestHash, ownerToken]);
     if (inserted.rows[0] !== undefined) {
       const row = await this.readById(client, inserted.rows[0].id);
-      return { ...toStatus(row), ownerToken };
+      return { ...toStatus(row), ownerToken, claimRole: 'OWNER' as const };
     }
     const raced = await client.query<StoredIdempotencyRow>(IDEMPOTENCY_READ_SQL, [input.organizationId, input.actorId, input.operationId, keyHash]);
     const row = raced.rows[0];
     if (row === undefined) throw new Error('Idempotency claim lost its concurrent row.');
     if (!row.request_hash.equals(requestHash)) throw new IdempotencyConflictError();
-    return { ...toStatus(row), ownerToken: row.owner_token };
+    return { ...toStatus(row), claimRole: row.state === 'IN_PROGRESS' ? 'OBSERVER' as const : 'TERMINAL' as const };
   }
 
   async complete(client: PoolClient, commandId: string, ownerToken: Buffer, result: CommandResult<unknown>): Promise<void> {
@@ -147,15 +152,17 @@ export class PostgresIdempotencyRepository {
       const claim = await this.claim(client, input);
       if (claim.state === 'SUCCEEDED') return { kind: 'result' as const, value: { status: claim.httpStatus ?? 200, body: claim.resource as T, ...(claim.resultHref === null ? {} : { resultHref: claim.resultHref }) } };
       if (claim.state === 'FAILED') return { kind: 'failure' as const, error: new CommandFailureError(claim.problem ?? storedFailure()) };
-      if (claim.state !== 'IN_PROGRESS') return { kind: 'terminal' as const, value: claim };
+      if (claim.claimRole !== 'OWNER') return { kind: 'terminal' as const, value: claim };
       await client.query('SAVEPOINT idempotency_command');
       try {
         const result = await work(client, claim);
         await client.query('RELEASE SAVEPOINT idempotency_command');
+        if (claim.ownerToken === undefined) throw new Error('Idempotency owner token is missing.');
         await this.complete(client, claim.commandId, claim.ownerToken, result);
         return { kind: 'result' as const, value: result };
       } catch (error) {
         await client.query('ROLLBACK TO SAVEPOINT idempotency_command');
+        if (claim.ownerToken === undefined) throw new Error('Idempotency owner token is missing.');
         if (error instanceof CommandFailureError) {
           await this.fail(client, claim.commandId, claim.ownerToken, error.problem);
           return { kind: 'failure' as const, error };
@@ -170,6 +177,11 @@ export class PostgresIdempotencyRepository {
 
   async statusByKey(client: PoolClient, input: Omit<PostgresIdempotencyInput, 'requestHash'>): Promise<CommandStatus | undefined> {
     const row = await client.query<StoredIdempotencyRow>(IDEMPOTENCY_READ_SQL, [input.organizationId, input.actorId, input.operationId, hashBuffer(input.idempotencyKey)]);
+    return row.rows[0] === undefined ? undefined : toStatus(row.rows[0]);
+  }
+
+  async statusById(client: PoolClient, commandId: string): Promise<CommandStatus | undefined> {
+    const row = await client.query<StoredIdempotencyRow>('SELECT id, operation_id, key_hash, request_hash, state, owner_token, lease_expires_at, attempt_count, started_at, completed_at, expires_at, http_status, response_body, problem_body, resource_href FROM integration.idempotency_record WHERE id = $1', [commandId]);
     return row.rows[0] === undefined ? undefined : toStatus(row.rows[0]);
   }
 
