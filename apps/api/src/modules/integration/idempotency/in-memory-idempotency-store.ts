@@ -15,6 +15,7 @@ export interface CommandResult<T = unknown> {
   body: T;
   resultHref?: string;
   resource?: ResourceReference;
+  replayed?: boolean;
 }
 
 export interface ResourceReference {
@@ -22,6 +23,13 @@ export interface ResourceReference {
   id: string;
   version?: number;
   href: string;
+}
+
+export function requireResourceReference(result: CommandResult<unknown>): ResourceReference | undefined {
+  if (result.status < 200 || result.status >= 300) return result.resource;
+  const resource = result.resource;
+  if (resource === undefined || !isResourceReference(resource)) throw new Error('Successful idempotency result requires a valid ResourceReference.');
+  return resource;
 }
 
 type RecordState = 'IN_PROGRESS' | 'SUCCEEDED' | 'FAILED';
@@ -91,7 +99,7 @@ export class InMemoryIdempotencyStore {
     const existing = this.records.get(key);
     if (existing !== undefined) {
       this.assertHash(existing, command.requestHash);
-      if (existing.state === 'SUCCEEDED' && existing.result !== undefined) return existing.result as CommandResult<T>;
+      if (existing.state === 'SUCCEEDED' && existing.result !== undefined) return { ...existing.result, replayed: true } as CommandResult<T>;
       if (existing.state === 'FAILED') throw new CommandFailureError(existing.problem ?? this.internalFailure());
       if (existing.promise !== undefined) return existing.promise as Promise<CommandResult<T>>;
       if (existing.leaseExpiresAt > Date.now()) throw new Error('Idempotency command is already in progress without an observable owner.');
@@ -102,6 +110,10 @@ export class InMemoryIdempotencyStore {
 
     const record = this.records.get(key) as CommandRecord;
     const promise = command.run().then((result) => {
+      if (result.status === 202 && isInProgressCommandStatus(result.body)) {
+        record.promise = undefined;
+        return result;
+      }
       this.complete(record.commandId, result);
       return result;
     }).catch((error: unknown) => {
@@ -134,6 +146,7 @@ export class InMemoryIdempotencyStore {
 
   complete(commandId: string, result: CommandResult<unknown>): CommandStatus {
     const record = this.requireRecord(commandId);
+    const resourceReference = requireResourceReference(result);
     if (record.state !== 'IN_PROGRESS') return this.toStatus(record);
     record.state = 'SUCCEEDED';
     record.result = result;
@@ -141,7 +154,7 @@ export class InMemoryIdempotencyStore {
     record.httpStatus = result.status;
     record.resource = result.body;
     record.resultHref = result.resultHref ?? extractHref(result.body);
-    record.resourceReference = result.resource ?? null;
+    record.resourceReference = resourceReference ?? null;
     record.promise = undefined;
     return this.toStatus(record);
   }
@@ -274,3 +287,36 @@ function hash(value: string): string {
 function extractHref(value: unknown): string | null {
   return typeof value === 'object' && value !== null && 'href' in value && typeof value.href === 'string' ? value.href : null;
 }
+
+function isResourceReference(value: unknown): value is ResourceReference {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.type === 'string' && candidate.type.length > 0
+    && RESOURCE_TYPES.has(candidate.type)
+    && typeof candidate.id === 'string' && UUID_PATTERN.test(candidate.id)
+    && typeof candidate.href === 'string' && HREF_PATTERN.test(candidate.href)
+    && (candidate.version === undefined || (typeof candidate.version === 'number' && Number.isInteger(candidate.version) && candidate.version >= 1));
+}
+
+function isInProgressCommandStatus(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    && (value as Record<string, unknown>).state === 'IN_PROGRESS'
+    && typeof (value as Record<string, unknown>).commandId === 'string';
+}
+
+const RESOURCE_TYPES = new Set([
+  'USER',
+  'ORGANIZATION',
+  'CUSTOMER',
+  'PRODUCT',
+  'SKU',
+  'ORDER',
+  'PAYMENT',
+  'FILE',
+  'DOCUMENT',
+  'TASK',
+  'INVENTORY_OPERATION',
+  'INVENTORY_RESERVATION',
+]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const HREF_PATTERN = /^\/api\/v1\/.+/;

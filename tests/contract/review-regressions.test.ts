@@ -115,6 +115,7 @@ describe('third-review contract regressions', () => {
     const base = { commandId: requestId, operationId: 'createCustomer', startedAt: '2026-10-28T05:00:00Z', expiresAt: '2026-10-29T05:00:00Z', attemptCount: 1 };
     expect(validator.validate('CommandStatus', { ...base, state: 'SUCCEEDED', completedAt: '2026-10-28T05:01:00Z', retryAfterMs: 0, httpStatus: 201, resource: { type: 'CUSTOMER', id: resourceId, href: `/api/v1/customers/${resourceId}` }, resultHref: null, problem: null, unexpected: true })).toBe(false);
     expect(validator.validate('CommandStatus', { ...base, state: 'FAILED', completedAt: '2026-10-28T05:01:00Z', retryAfterMs: 0, httpStatus: 409, resource: { type: 'CUSTOMER', id: resourceId, href: `/api/v1/customers/${resourceId}` }, resultHref: null, problem: null })).toBe(false);
+    expect(validator.validate('CommandStatus', { ...base, state: 'FAILED', completedAt: '2026-10-28T05:01:00Z', retryAfterMs: 0, httpStatus: 409, resource: null, resultHref: `/api/v1/customers/${resourceId}`, problem: { type: 'urn:autoflow:problem:business-rule-violation', title: 'Conflict', status: 409, code: 'BUSINESS_RULE_VIOLATION', requestId, retryable: false } })).toBe(false);
   });
 
   it('rejects cross-domain create payloads and requires domain response fields', async () => {

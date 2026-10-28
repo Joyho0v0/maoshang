@@ -68,4 +68,41 @@ describe('PostgreSQL foundation migration', () => {
       await pool.end();
     }
   });
+
+  it.skipIf(process.env.DATABASE_URL === undefined)('enforces the outbox claimed lease invariant in PostgreSQL', async () => {
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+    const client = await pool.connect();
+    const up = await readFile(new URL('../../packages/database/migrations/001_foundation.sql', import.meta.url), 'utf8');
+    const down = await readFile(new URL('../../packages/database/migrations/001_foundation.down.sql', import.meta.url), 'utf8');
+    const organizationId = '00000000-0000-4000-8000-000000000031';
+    try {
+      await client.query('BEGIN');
+      await client.query(up);
+      await client.query('INSERT INTO core.organization (id, name) VALUES ($1, $2)', [organizationId, 'Outbox Check Test Org']);
+
+      await client.query('SAVEPOINT missing_claim_fields');
+      await expect(client.query(
+        "INSERT INTO integration.outbox_event (id, organization_id, aggregate_type, aggregate_id, event_type, payload, status) VALUES ('00000000-0000-4000-8000-000000000032', $1, 'Customer', '00000000-0000-4000-8000-000000000033', 'CustomerCreated', '{}'::jsonb, 'CLAIMED')",
+        [organizationId],
+      )).rejects.toThrow();
+      await client.query('ROLLBACK TO SAVEPOINT missing_claim_fields');
+
+      await client.query('SAVEPOINT non_claimed_lease_fields');
+      await expect(client.query(
+        "INSERT INTO integration.outbox_event (id, organization_id, aggregate_type, aggregate_id, event_type, payload, claimed_at) VALUES ('00000000-0000-4000-8000-000000000034', $1, 'Customer', '00000000-0000-4000-8000-000000000035', 'CustomerCreated', '{}'::jsonb, now())",
+        [organizationId],
+      )).rejects.toThrow();
+      await client.query('ROLLBACK TO SAVEPOINT non_claimed_lease_fields');
+
+      await expect(client.query(
+        "INSERT INTO integration.outbox_event (id, organization_id, aggregate_type, aggregate_id, event_type, payload, status, claimed_at, claim_owner_token, claim_expires_at) VALUES ('00000000-0000-4000-8000-000000000036', $1, 'Customer', '00000000-0000-4000-8000-000000000037', 'CustomerCreated', '{}'::jsonb, 'CLAIMED', now(), repeat('c', 16)::bytea, now() + interval '30 seconds')",
+        [organizationId],
+      )).resolves.toMatchObject({ rowCount: 1 });
+      await client.query(down);
+      await client.query('ROLLBACK');
+    } finally {
+      client.release();
+      await pool.end();
+    }
+  });
 });

@@ -4,8 +4,9 @@ import { catchError, firstValueFrom, from, map, throwError, type Observable } fr
 import { canonicalRequestHash } from './canonical-request.js';
 import { EXPECTED_OPERATION_MANIFEST } from '../../../../../packages/contracts/openapi/contract-manifest.js';
 import { operations, type OperationId } from '../../../../../packages/contracts/openapi/generated-client.js';
-import { CommandFailureError, IdempotencyConflictError, type CommandResult, type CommandStatus } from '../../modules/integration/idempotency/in-memory-idempotency-store.js';
+import { CommandFailureError, IdempotencyConflictError, type CommandResult, type CommandStatus, type ResourceReference } from '../../modules/integration/idempotency/in-memory-idempotency-store.js';
 import type { PostgresIdempotencyInput, PostgresIdempotencyRepository } from '../../modules/integration/idempotency/postgres-idempotency-repository.js';
+import type { GeneratedOperation } from '../../../../../packages/contracts/openapi/client.js';
 import { buildProblem, normalizeRequestId, ProblemError } from '../http/problem.js';
 
 interface PrincipalRequest extends FastifyRequest {
@@ -41,9 +42,11 @@ export class IdempotencyExecutionInterceptor implements NestInterceptor {
     return from(this.repository.execute(input, async () => {
       const body = await firstValueFrom(next.handle());
       const contentLocation = headerString(response.getHeader('content-location'));
+      const resource = resourceReferenceForResponse(match.operation, request, response, body, response.statusCode ?? 200);
       const result: CommandResult<unknown> = {
         status: response.statusCode ?? 200,
         body,
+        ...(resource === undefined ? {} : { resource }),
         ...(contentLocation === undefined ? {} : { resultHref: contentLocation }),
       };
       return result;
@@ -55,6 +58,7 @@ export class IdempotencyExecutionInterceptor implements NestInterceptor {
         response.header('retry-after', String(Math.max(1, Math.ceil(outcome.retryAfterMs / 1000))));
         return outcome;
       }
+      if (outcome.replayed === true) response.header('idempotent-replay', 'true');
       response.statusCode = outcome.status;
       return outcome.body;
     }), catchError((error: unknown) => {
@@ -87,6 +91,42 @@ function isCommandStatus(value: CommandResult<unknown> | CommandStatus): value i
   return typeof value === 'object' && value !== null && 'state' in value && 'commandId' in value;
 }
 
+function resourceReferenceForResponse(operation: GeneratedOperation, request: PrincipalRequest, response: FastifyReply, body: unknown, status: number): ResourceReference | undefined {
+  const schema = operation.responses[String(status)]?.schema;
+  const type = resourceTypeForSchema(schema);
+  const id = isRecord(body) && typeof body.id === 'string' ? body.id : undefined;
+  const href = headerString(response.getHeader('location'))
+    ?? headerString(response.getHeader('content-location'))
+    ?? (isRecord(body) && typeof body.href === 'string' ? body.href : undefined)
+    ?? resourceHrefFromRequest(request);
+  if (type === undefined || id === undefined || href === undefined || !href.startsWith('/api/v1/')) return undefined;
+  const version = isRecord(body) && typeof body.version === 'number' ? body.version : undefined;
+  return { type, id, href, ...(version === undefined ? {} : { version }) };
+}
+
+function resourceTypeForSchema(schema: string | undefined): string | undefined {
+  const types: Readonly<Record<string, string>> = {
+    User: 'USER',
+    Customer: 'CUSTOMER',
+    Product: 'PRODUCT',
+    Sku: 'SKU',
+    Order: 'ORDER',
+    Payment: 'PAYMENT',
+    File: 'FILE',
+    Document: 'DOCUMENT',
+    Task: 'TASK',
+    InventoryOperation: 'INVENTORY_OPERATION',
+    InventoryReservation: 'INVENTORY_RESERVATION',
+  };
+  return schema === undefined ? undefined : types[schema];
+}
+
+function resourceHrefFromRequest(request: PrincipalRequest): string | undefined {
+  const path = request.url.split('?')[0] ?? request.url;
+  const resourcePath = path.replace(/\/(?:submit-approval|approve|reject|reassign|transition|release|reverse|attach-proof|submit-review|review|complete-upload|create-version|submit|finalize|issue|void|complete)\/?$/, '');
+  return resourcePath.startsWith('/api/v1/') ? resourcePath : undefined;
+}
+
 function headerString(value: string | string[] | number | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : typeof value === 'number' ? String(value) : value;
 }
@@ -94,4 +134,8 @@ function headerString(value: string | string[] | number | undefined): string | u
 function asCanonicalQuery(value: unknown): Record<string, string | string[] | undefined> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, Array.isArray(item) ? item.map(String) : typeof item === 'string' ? item : item === undefined ? undefined : String(item)]));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

@@ -6,6 +6,7 @@ import {
   type CommandResult,
   type CommandStatus,
   type ResourceReference,
+  requireResourceReference,
 } from './in-memory-idempotency-store.js';
 import { buildProblem, type ProblemDocument } from '../../../common/http/problem.js';
 
@@ -138,7 +139,7 @@ export class PostgresIdempotencyRepository {
   }
 
   async complete(client: PoolClient, commandId: string, ownerToken: Buffer, result: CommandResult<unknown>): Promise<void> {
-    const resource = result.resource;
+    const resource = requireResourceReference(result);
     const updated = await client.query(IDEMPOTENCY_COMPLETE_SQL, [commandId, ownerToken, result.status, JSON.stringify(result.body), resource?.type ?? null, resource?.id ?? null, resource?.version ?? null, result.resultHref ?? resource?.href ?? extractHref(result.body)]);
     if (updated.rowCount !== 1) throw new Error('Idempotency completion lost ownership.');
   }
@@ -158,7 +159,7 @@ export class PostgresIdempotencyRepository {
       if (claim.state === 'SUCCEEDED') {
         const stored = await this.readById(client, claim.commandId);
         const resource = toResourceReference(stored);
-        return { kind: 'result' as const, value: { status: claim.httpStatus ?? 200, body: stored.response_body as T, ...(claim.resultHref === null ? {} : { resultHref: claim.resultHref }), ...(resource === null ? {} : { resource }) } };
+        return { kind: 'result' as const, value: { status: claim.httpStatus ?? 200, body: stored.response_body as T, ...(claim.resultHref === null ? {} : { resultHref: claim.resultHref }), ...(resource === null ? {} : { resource }), replayed: true } };
       }
       if (claim.state === 'FAILED') return { kind: 'failure' as const, error: new CommandFailureError(claim.problem ?? storedFailure()) };
       if (claim.claimRole !== 'OWNER') return { kind: 'terminal' as const, value: claim };
@@ -166,6 +167,7 @@ export class PostgresIdempotencyRepository {
       try {
         const result = await work(client, claim);
         await client.query('RELEASE SAVEPOINT idempotency_command');
+        if (result.status === 202 && isInProgressCommandStatus(result.body, claim.commandId)) return { kind: 'result' as const, value: result };
         if (claim.ownerToken === undefined) throw new Error('Idempotency owner token is missing.');
         await this.complete(client, claim.commandId, claim.ownerToken, result);
         return { kind: 'result' as const, value: result };
@@ -235,4 +237,10 @@ function hashBuffer(value: string): Buffer {
 
 function extractHref(value: unknown): string | null {
   return typeof value === 'object' && value !== null && 'href' in value && typeof value.href === 'string' ? value.href : null;
+}
+
+function isInProgressCommandStatus(value: unknown, commandId: string): boolean {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    && (value as Record<string, unknown>).state === 'IN_PROGRESS'
+    && (value as Record<string, unknown>).commandId === commandId;
 }

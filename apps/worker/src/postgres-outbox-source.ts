@@ -40,7 +40,7 @@ export class PostgresOutboxSource implements OutboxSource {
 
   async markPublished(id: string, claimToken?: Buffer): Promise<void> {
     if (claimToken === undefined) throw new Error('Outbox claim token is required.');
-    const result = await this.pool.query("UPDATE integration.outbox_event SET status = 'PUBLISHED', published_at = now(), claim_expires_at = NULL, claim_owner_token = NULL WHERE id = $1 AND status = 'CLAIMED' AND claim_owner_token = $2", [id, claimToken]);
+    const result = await this.pool.query("UPDATE integration.outbox_event SET status = 'PUBLISHED', published_at = now(), claimed_at = NULL, claim_expires_at = NULL, claim_owner_token = NULL WHERE id = $1 AND status = 'CLAIMED' AND claim_owner_token = $2", [id, claimToken]);
     if (result.rowCount !== 1) throw new Error('Outbox acknowledgement lost ownership.');
   }
 
@@ -48,7 +48,7 @@ export class PostgresOutboxSource implements OutboxSource {
     if (claimToken === undefined) throw new Error('Outbox claim token is required.');
     const code = error instanceof Error ? error.name : 'PUBLISH_FAILED';
     const result = await this.pool.query(
-      "UPDATE integration.outbox_event SET status = CASE WHEN attempts >= 5 THEN 'FAILED' ELSE 'PENDING' END, available_at = now() + interval '5 seconds', last_error_code = $2, claim_expires_at = NULL, claim_owner_token = NULL WHERE id = $1 AND status = 'CLAIMED' AND claim_owner_token = $3",
+      "UPDATE integration.outbox_event SET status = CASE WHEN attempts >= 5 THEN 'FAILED' ELSE 'PENDING' END, available_at = now() + interval '5 seconds', last_error_code = $2, claimed_at = NULL, claim_expires_at = NULL, claim_owner_token = NULL WHERE id = $1 AND status = 'CLAIMED' AND claim_owner_token = $3",
       [id, code, claimToken],
     );
     if (result.rowCount !== 1) throw new Error('Outbox failure update lost ownership.');
