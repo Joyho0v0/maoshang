@@ -149,6 +149,64 @@ describe('OpenAPI compatibility gate', () => {
     )).toThrow(/unevaluatedProperties|removed|composition/);
   });
 
+  it('fails closed for unsupported 2020-12 narrowing keywords', () => {
+    const candidates: Array<[Record<string, unknown>, Record<string, unknown>]> = [
+      [
+        { oneOf: [{ type: 'string' }] },
+        { oneOf: [{ oneOf: [{ type: 'string' }], not: { const: 'A' } }] },
+      ],
+      [
+        { oneOf: [{ type: 'array' }] },
+        { oneOf: [{ oneOf: [{ type: 'array' }], minContains: 1, contains: { const: 'A' } }] },
+      ],
+      [
+        { oneOf: [{ type: 'object' }] },
+        { oneOf: [{ oneOf: [{ type: 'object' }], minProperties: 1 }] },
+      ],
+    ];
+
+    for (const [previous, candidate] of candidates) {
+      expect(() => assertNoBreakingChanges(previous, candidate)).toThrow();
+      expect(collectBreakingChanges(previous, candidate).length).toBeGreaterThan(0);
+    }
+
+    expect(() => assertNoBreakingChanges(
+      { type: 'string' },
+      { type: 'string', not: { const: 'A' } },
+    )).toThrow(/not/);
+  });
+
+  it('treats direct allOf merge and split as equivalent in both directions', () => {
+    const merged = {
+      type: 'object',
+      properties: { id: { type: 'string', minLength: 5 } },
+    };
+    const split = {
+      allOf: [
+        { type: 'object', properties: { id: { type: 'string' } } },
+        { type: 'object', properties: { id: { minLength: 5 } } },
+      ],
+    };
+
+    expect(() => assertNoBreakingChanges(merged, split)).not.toThrow();
+    expect(() => assertNoBreakingChanges(split, merged)).not.toThrow();
+    expect(collectBreakingChanges(merged, split)).toEqual([]);
+    expect(collectBreakingChanges(split, merged)).toEqual([]);
+  });
+
+  it('does not collapse repeated composition occurrences of one dereferenced object', () => {
+    const shared = { const: 'A' };
+    const changes = collectBreakingChanges(
+      { oneOf: [shared, shared] },
+      { oneOf: [] },
+    ).filter((change) => change.reason.includes('option was removed'));
+
+    expect(changes).toHaveLength(2);
+    expect(new Set(changes.map((change) => change.stableIdentity)).size).toBe(2);
+    expect(new Set(changes.map((change) => change.sourceIdentity)).size).toBe(2);
+    expect(changes.map((change) => change.sourceIdentity).some((identity) => identity.includes('~1'))).toBe(true);
+  });
+
   it('treats equivalent allOf property splits as compatible and added constraints as narrowing', () => {
     const oldSchema = {
       oneOf: [{ type: 'object', properties: { id: { type: 'string' } } }],

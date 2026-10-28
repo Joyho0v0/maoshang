@@ -21,6 +21,13 @@ export interface BreakingChange {
 const collectionLimits = new WeakMap<BreakingChange[], number>();
 interface CollectionContext {
   readonly sourceIds: WeakMap<object, string>;
+  readonly occurrenceSources: WeakMap<object, SourceOccurrence[]>;
+}
+
+interface SourceOccurrence {
+  readonly arrayPath: string;
+  readonly index: number;
+  readonly sourceIdentity: string;
 }
 
 const collectionContexts = new WeakMap<BreakingChange[], CollectionContext>();
@@ -109,6 +116,7 @@ function mergePropertySchemas(previous: unknown, next: unknown): unknown {
 
 function allOfFlattenedInto(previous: RecordValue, next: RecordValue): boolean {
   if (!Array.isArray(previous.allOf)) return false;
+  if (equivalentAfterAllOfFlattening(previous, next)) return true;
   const nextRequired = new Set(effectiveRequired(next));
   const nextProperties = effectiveProperties(next);
   for (const branch of previous.allOf) {
@@ -140,6 +148,8 @@ function allOfFlattenedInto(previous: RecordValue, next: RecordValue): boolean {
 
 function schemaContainsCompatibleOption(candidate: unknown, previousOption: unknown, inheritedRequired = new Set<string>()): boolean {
   if (!isRecord(candidate) || !isRecord(previousOption)) return false;
+
+  if (equivalentAfterAllOfFlattening(candidate, previousOption)) return true;
 
   if (schemaContainsOption(candidate, previousOption)) {
     // An allOf wrapper containing the old option can still add a mandatory
@@ -206,7 +216,8 @@ const containmentConstraintKeys = [
   'type', 'format', 'pattern', 'const', 'enum', 'minLength', 'maxLength',
   'minimum', 'maximum', 'minItems', 'maxItems', 'minProperties', 'maxProperties',
   'exclusiveMinimum', 'exclusiveMaximum', 'uniqueItems', 'multipleOf', 'contains',
-  'propertyNames', 'dependentRequired', 'unevaluatedProperties',
+  'propertyNames', 'dependentRequired', 'unevaluatedProperties', 'not',
+  'minContains', 'maxContains',
 ] as const;
 
 function candidateAddsNarrowingRootConstraint(candidate: RecordValue, previousOption: RecordValue): boolean {
@@ -226,11 +237,11 @@ function candidateAddsNarrowingRootConstraint(candidate: RecordValue, previousOp
       if (stableSerialize(previousValue) !== stableSerialize(candidateValue)) return true;
       continue;
     }
-    if (key === 'maxLength' || key === 'maximum' || key === 'maxItems' || key === 'maxProperties' || key === 'exclusiveMaximum') {
+    if (key === 'maxLength' || key === 'maximum' || key === 'maxItems' || key === 'maxProperties' || key === 'maxContains' || key === 'exclusiveMaximum') {
       if (typeof previousValue === 'number' && typeof candidateValue === 'number' && candidateValue < previousValue) return true;
       continue;
     }
-    if (key === 'minLength' || key === 'minimum' || key === 'minItems' || key === 'minProperties' || key === 'exclusiveMinimum') {
+    if (key === 'minLength' || key === 'minimum' || key === 'minItems' || key === 'minProperties' || key === 'minContains' || key === 'exclusiveMinimum') {
       if (typeof previousValue === 'number' && typeof candidateValue === 'number' && candidateValue > previousValue) return true;
       continue;
     }
@@ -276,6 +287,58 @@ function flattenAllOfForContainment(schema: RecordValue): RecordValue {
   return flattened;
 }
 
+function equivalentAfterAllOfFlattening(left: RecordValue, right: RecordValue): boolean {
+  const leftHasAllOf = Array.isArray(left.allOf);
+  const rightHasAllOf = Array.isArray(right.allOf);
+  if (!leftHasAllOf && !rightHasAllOf) return false;
+  return stableSerialize(canonicalAllOfSchema(left)) === stableSerialize(canonicalAllOfSchema(right));
+}
+
+function canonicalAllOfSchema(schema: RecordValue): RecordValue {
+  const result: RecordValue = {};
+  const allOfBranches = Array.isArray(schema.allOf) ? schema.allOf.filter(isRecord) : [];
+  const hasConflictingAllOfConstraint = allOfBranches.some((branch, index) => containmentConstraintKeys.some((key) => {
+    const value = inheritedConstraint(branch, key);
+    if (value === undefined) return false;
+    return allOfBranches.slice(index + 1).some((other) => {
+      const otherValue = inheritedConstraint(other, key);
+      return otherValue !== undefined && stableSerialize(value) !== stableSerialize(otherValue);
+    });
+  }));
+  for (const key of containmentConstraintKeys) {
+    const value = inheritedConstraint(schema, key);
+    if (value !== undefined) result[key] = value;
+  }
+  if (schema.additionalProperties !== undefined) result.additionalProperties = schema.additionalProperties;
+  if (Array.isArray(schema.allOf) && schema.allOf.some((branch) => isRecord(branch) && branch.additionalProperties === false)) {
+    result.additionalProperties = false;
+  }
+  const required = effectiveRequired(schema);
+  if (required.length > 0) result.required = [...new Set(required)].sort();
+  const properties = effectiveProperties(schema);
+  if (Object.keys(properties).length > 0) {
+    result.properties = Object.fromEntries(Object.entries(properties)
+      .map(([property, value]): [string, unknown] => [property, isRecord(value) ? canonicalAllOfSchema(value) : value])
+      .sort(([left], [right]) => left.localeCompare(right)));
+  }
+  if (schema.items !== undefined) result.items = isRecord(schema.items) ? canonicalAllOfSchema(schema.items) : schema.items;
+  for (const key of ['oneOf', 'anyOf'] as const) {
+    const direct = Array.isArray(schema[key]) ? schema[key] : undefined;
+    const inherited = direct ?? (Array.isArray(schema.allOf)
+      ? schema.allOf.filter(isRecord).flatMap((branch) => Array.isArray(branch[key]) ? [branch[key]] : [])
+      : []);
+    if (inherited.length === 0) continue;
+    const options = inherited.length === 1 && Array.isArray(inherited[0]) ? inherited[0] : inherited;
+    result[key] = options.map((option) => isRecord(option) ? canonicalAllOfSchema(option) : option)
+      .sort((left, right) => stableSerialize(left).localeCompare(stableSerialize(right)));
+  }
+  if (hasConflictingAllOfConstraint) {
+    result.allOf = allOfBranches.map((branch) => canonicalAllOfSchema(branch))
+      .sort((left, right) => stableSerialize(left).localeCompare(stableSerialize(right)));
+  }
+  return result;
+}
+
 /**
  * Collect every compatibility failure in a normalized artifact.
  *
@@ -286,10 +349,13 @@ function flattenAllOfForContainment(schema: RecordValue): RecordValue {
  */
 export function collectBreakingChanges(previous: unknown, next: unknown, path = 'root'): BreakingChange[] {
   const changes: BreakingChange[] = [];
-  const context: CollectionContext = { sourceIds: new WeakMap<object, string>() };
+  const context: CollectionContext = {
+    sourceIds: new WeakMap<object, string>(),
+    occurrenceSources: new WeakMap<object, SourceOccurrence[]>(),
+  };
   collectionContexts.set(changes, context);
-  indexSourceObjects(previous, 'previous', context.sourceIds);
-  indexSourceObjects(next, 'next', context.sourceIds);
+  indexSourceObjects(previous, 'previous', context);
+  indexSourceObjects(next, 'next', context);
   collectValue(previous, next, path, changes);
   const unique = new Map<string, BreakingChange>();
   for (const change of changes) {
@@ -508,7 +574,9 @@ function collectCommonSchemaConstraints(previous: RecordValue, next: RecordValue
   if (shouldStop(changes)) return;
   for (const key of [
     'type', 'format', 'pattern', 'const', 'minLength', 'maxLength', 'minimum', 'maximum',
-    'exclusiveMinimum', 'exclusiveMaximum', 'minItems', 'maxItems', 'unevaluatedProperties',
+    'exclusiveMinimum', 'exclusiveMaximum', 'minItems', 'maxItems', 'minProperties', 'maxProperties',
+    'minContains', 'maxContains', 'contains', 'propertyNames', 'dependentRequired',
+    'unevaluatedProperties', 'not',
   ] as const) {
     const previousValue = inheritedConstraint(previous, key);
     const nextValue = inheritedConstraint(next, key);
@@ -520,9 +588,9 @@ function collectCommonSchemaConstraints(previous: RecordValue, next: RecordValue
       addChange(changes, `${path}.${key}`, `constraint ${key} was removed.`, previousValue, undefined, key, previous);
       continue;
     }
-    const narrowed = key === 'maxLength' || key === 'maximum' || key === 'exclusiveMaximum' || key === 'maxItems'
+    const narrowed = key === 'maxLength' || key === 'maximum' || key === 'exclusiveMaximum' || key === 'maxItems' || key === 'maxProperties' || key === 'maxContains'
       ? typeof previousValue === 'number' && typeof nextValue === 'number' && nextValue < previousValue
-      : key === 'minLength' || key === 'minimum' || key === 'exclusiveMinimum' || key === 'minItems'
+      : key === 'minLength' || key === 'minimum' || key === 'exclusiveMinimum' || key === 'minItems' || key === 'minProperties' || key === 'minContains'
         ? typeof previousValue === 'number' && typeof nextValue === 'number' && nextValue > previousValue
         : JSON.stringify(previousValue) !== JSON.stringify(nextValue);
     if (narrowed) addChange(changes, `${path}.${key}`, `constraint ${key} was narrowed.`, previousValue, nextValue, key, previous);
@@ -551,6 +619,7 @@ function collectComposition(previous: RecordValue, next: RecordValue, path: stri
     const previousOptions = previous[key];
     const nextOptions = next[key];
     if (!Array.isArray(previousOptions)) {
+      if (key === 'allOf' && Array.isArray(nextOptions) && equivalentAfterAllOfFlattening(previous, next)) continue;
       if (Array.isArray(nextOptions)) addChange(changes, `${path}.${key}`, `${key} was added as a candidate-only composition.`, undefined, nextOptions, key);
       continue;
     }
@@ -559,6 +628,7 @@ function collectComposition(previous: RecordValue, next: RecordValue, path: stri
       addChange(changes, `${path}.${key}`, `${key} was removed.`, previousOptions, undefined, key);
       continue;
     }
+    if (key === 'allOf' && equivalentAfterAllOfFlattening(previous, next)) continue;
     if (key === 'oneOf' && nextOptions.length > previousOptions.length) {
       addChange(changes, `${path}.${key}`, 'oneOf option was added without a disjointness proof.', previousOptions, nextOptions, key);
     }
@@ -648,7 +718,7 @@ function addChange(
 ): void {
   if (shouldStop(changes)) return;
   const kind = stableIdentity ?? 'value';
-  const sourceIdentity = getSourceIdentity(changes, source ?? objectValue(oldValue) ?? objectValue(newValue));
+  const sourceIdentity = getSourceIdentity(changes, source ?? objectValue(oldValue) ?? objectValue(newValue), jsonPath);
   const logicalIdentity = `${sourceIdentity}#${kind}#${fingerprint(reason)}#${identityFingerprint(oldValue, kind)}->${identityFingerprint(newValue, kind)}`;
   changes.push({
     jsonPath,
@@ -662,13 +732,34 @@ function addChange(
   });
 }
 
-function getSourceIdentity(changes: BreakingChange[], source: unknown): string {
+function getSourceIdentity(changes: BreakingChange[], source: unknown, jsonPath: string): string {
   if (typeof source !== 'object' || source === null) return 'value';
   const context = collectionContexts.get(changes);
   if (context === undefined) return 'value';
   const object = source as object;
+  const occurrences = context.occurrenceSources.get(object);
+  if (occurrences !== undefined) {
+    for (const candidate of compositionPathCandidates(jsonPath).reverse()) {
+      const matching = occurrences.find((occurrence) => occurrence.arrayPath === candidate.arrayPath && occurrence.index === candidate.index);
+      if (matching !== undefined) return matching.sourceIdentity;
+    }
+  }
   const existing = context.sourceIds.get(object);
   return existing ?? `unindexed-${fingerprint(source)}`;
+}
+
+function compositionPathCandidates(path: string): Array<{ arrayPath: string; index: number }> {
+  const candidates: Array<{ arrayPath: string; index: number }> = [];
+  const pattern = /(?:^|\.)(oneOf|anyOf|allOf)\[(\d+)\]/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(path)) !== null) {
+    const prefix = path.slice(0, match.index);
+    candidates.push({
+      arrayPath: `${prefix}.${match[1]}`.replace(/^(root|previous|next)\./, ''),
+      index: Number(match[2]),
+    });
+  }
+  return candidates;
 }
 
 function objectValue(value: unknown): object | undefined {
@@ -709,33 +800,60 @@ function stableSerialize(value: unknown, seen = new WeakSet<object>(), canonical
   return serialized;
 }
 
-function indexSourceObjects(value: unknown, rootPath: string, sourceIds: WeakMap<object, string>): void {
-  const visit = (current: unknown, path: string): void => {
+function indexSourceObjects(value: unknown, rootPath: string, context: CollectionContext): void {
+  const occurrenceVisited = new WeakMap<object, Set<string>>();
+  const visit = (current: unknown, path: string, inheritedOccurrences: readonly SourceOccurrence[] = []): void => {
     if (isRecord(current)) {
-      if (sourceIds.has(current)) return;
-      sourceIds.set(current, path);
+      for (const occurrence of inheritedOccurrences) {
+        const seen = occurrenceVisited.get(current) ?? new Set<string>();
+        if (seen.has(occurrence.sourceIdentity)) continue;
+        seen.add(occurrence.sourceIdentity);
+        occurrenceVisited.set(current, seen);
+        const sources = context.occurrenceSources.get(current) ?? [];
+        if (!sources.some((candidate) => candidate.sourceIdentity === occurrence.sourceIdentity)) sources.push(occurrence);
+        context.occurrenceSources.set(current, sources);
+      }
+      if (inheritedOccurrences.length === 0) {
+        if (context.sourceIds.has(current)) return;
+        context.sourceIds.set(current, path);
+      }
       const keys = Object.keys(current).sort((left, right) => {
         if (path === rootPath && left === 'components') return -1;
         if (path === rootPath && right === 'components') return 1;
         return left.localeCompare(right);
       });
-      for (const key of keys) visit(current[key], `${path}.${key}`);
+      for (const key of keys) visit(current[key], `${path}.${key}`, inheritedOccurrences);
       return;
     }
     if (!Array.isArray(current)) return;
-    if (sourceIds.has(current)) return;
-    sourceIds.set(current, path);
+    if (inheritedOccurrences.length === 0) {
+      if (context.sourceIds.has(current)) return;
+      context.sourceIds.set(current, path);
+    }
     const occurrences = new Map<string, number>();
     current
-      .map((item) => ({ item, identity: fingerprint(item) }))
+      .map((item, index) => ({ item, index, identity: fingerprint(item) }))
       .sort((left, right) => left.identity.localeCompare(right.identity))
-      .forEach(({ item, identity }) => {
+      .forEach(({ item, index, identity }) => {
         const occurrence = occurrences.get(identity) ?? 0;
         occurrences.set(identity, occurrence + 1);
-        visit(item, `${path}[${identity}${occurrence === 0 ? '' : `~${occurrence}`}]`);
+        const arrayPath = normalizeSourcePath(path);
+        const sourceIdentity = `${arrayPath}[${identity}${occurrence === 0 ? '' : `~${occurrence}`}]`;
+        const ownOccurrence: SourceOccurrence = { arrayPath, index, sourceIdentity };
+        const nextOccurrences = [...inheritedOccurrences, ownOccurrence];
+        if (typeof item === 'object' && item !== null) {
+          const sources = context.occurrenceSources.get(item) ?? [];
+          if (!sources.some((candidate) => candidate.sourceIdentity === sourceIdentity)) sources.push(ownOccurrence);
+          context.occurrenceSources.set(item, sources);
+        }
+        visit(item, `${path}[${identity}${occurrence === 0 ? '' : `~${occurrence}`}]`, nextOccurrences);
       });
   };
   visit(value, rootPath);
+}
+
+function normalizeSourcePath(path: string): string {
+  return path.replace(/^(previous|next|root)\.?/, '');
 }
 
 function arrayOfStrings(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []; }

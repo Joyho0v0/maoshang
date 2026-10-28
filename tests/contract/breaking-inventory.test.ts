@@ -25,6 +25,22 @@ it('keeps the complete breaking inventory auditable and synchronized with both a
     generatedClientSha256: 'c32e0e08f80a96ca893882d70ad13fd3a96c134fa97bef8a6346e383f0b527ab',
     path: 'packages/contracts/openapi/openapi.yaml',
   });
+  expect((inventory as { comparator: { revision: string; sourceSha256: string; command: string } }).comparator).toEqual({
+    revision: 'cfa432c48f0461d0c4b44019076324aaf33b13f4',
+    sourceSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+    command: 'npm run contract:breaking -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml',
+  });
+  expect((inventory as { generator: { revision: string; sourceSha256: string; command: string } }).generator).toEqual({
+    revision: 'cfa432c48f0461d0c4b44019076324aaf33b13f4',
+    sourceSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+    command: 'npm run contract:breaking:inventory -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml',
+  });
+  expect((inventory as { comparator: { sourceSha256: string } }).comparator.sourceSha256).toBe(
+    createHash('sha256').update(await readFile(new URL('../../packages/contracts/openapi/breaking-gate.ts', import.meta.url))).digest('hex'),
+  );
+  expect((inventory as { generator: { sourceSha256: string } }).generator.sourceSha256).toBe(
+    createHash('sha256').update(await readFile(new URL('../../packages/contracts/openapi/breaking-inventory.ts', import.meta.url))).digest('hex'),
+  );
   expect(new Set(persisted.entries.map((entry) => entry.jsonPath)).size).toBe(persisted.count);
   for (const pathPrefix of [
     'root.paths./auth/sessions.post.responses.403',

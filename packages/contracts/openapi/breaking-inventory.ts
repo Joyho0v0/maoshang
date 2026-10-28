@@ -54,11 +54,22 @@ export interface BreakingInventory {
   readonly valueStore: Readonly<Record<string, unknown>>;
 }
 
+export interface AuditProvenance {
+  readonly comparatorRevision: string;
+  readonly generatorRevision: string;
+  readonly comparatorSourceSha256: string;
+  readonly generatorSourceSha256: string;
+  readonly comparatorCommand: string;
+  readonly generatorCommand: string;
+}
+
 const APPROVERS = ['高级 Web 后端架构师', '高级 Web 前端架构师', '全栈交付 Leader'] as const;
 const FRONTEND_PROBLEM_DECISION = '高级 Web 前端架构师 comment 01a18255-64b3-76bf-8908-62ebcfe9eb72';
 const BASELINE_REVISION = '9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25';
 const CANDIDATE_REVISION = '9138ea8f5cf130c3664367e39cafc18812edaa55';
 const BREAKING_COMMAND = 'npm run contract:breaking (approved baseline remains unchanged)';
+const COMPARATOR_COMMAND = 'npm run contract:breaking -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml';
+const GENERATOR_COMMAND = 'npm run contract:breaking:inventory -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml';
 
 export async function collectBreakingInventory(previousDocument: RecordValue, nextDocument: RecordValue): Promise<BreakingInventory> {
   const previous = await normalizeDocument(previousDocument);
@@ -79,7 +90,7 @@ export function buildAuditDocument(inventory: BreakingInventory, digests: {
   readonly candidate: string;
   readonly generated: string;
   readonly generatedClient: string;
-}): RecordValue {
+}, provenance: AuditProvenance): RecordValue {
   return {
     formatVersion: 2,
     purpose: 'Complete structured audit inventory for the candidate against the approved OpenAPI baseline.',
@@ -90,6 +101,16 @@ export function buildAuditDocument(inventory: BreakingInventory, digests: {
       generatedSha256: digests.generated,
       generatedClientSha256: digests.generatedClient,
       path: 'packages/contracts/openapi/openapi.yaml',
+    },
+    comparator: {
+      revision: provenance.comparatorRevision,
+      sourceSha256: provenance.comparatorSourceSha256,
+      command: provenance.comparatorCommand,
+    },
+    generator: {
+      revision: provenance.generatorRevision,
+      sourceSha256: provenance.generatorSourceSha256,
+      command: provenance.generatorCommand,
     },
     count: inventory.count,
     inventoryMethod: 'All structured BreakingChange records from the same normalized comparator used by the fail-fast gate; entries retain exact paths and stable identities, raw old/new values via the content-addressed valueStore, and complete affected-path groups after template expansion and Swagger dereference.',
@@ -233,11 +254,20 @@ async function main(): Promise<void> {
   const current = parse(await readFile(currentPath, 'utf8')) as RecordValue;
   const inventory = await collectBreakingInventory(previous, current);
   const digest = async (path: string) => createHash('sha256').update(await readFile(path)).digest('hex');
+  const comparatorSourceSha256 = await digest(fileURLToPath(new URL('./breaking-gate.ts', import.meta.url)));
+  const generatorSourceSha256 = await digest(fileURLToPath(new URL('./breaking-inventory.ts', import.meta.url)));
   process.stdout.write(`${JSON.stringify(buildAuditDocument(inventory, {
     baseline: await digest(previousPath),
     candidate: await digest(currentPath),
     generated: 'b0be58f74d9118664e24d7df68c547235abdb3348fbbf894c6f4d7962c7a0831',
     generatedClient: 'c32e0e08f80a96ca893882d70ad13fd3a96c134fa97bef8a6346e383f0b527ab',
+  }, {
+    comparatorRevision: 'cfa432c48f0461d0c4b44019076324aaf33b13f4',
+    generatorRevision: 'cfa432c48f0461d0c4b44019076324aaf33b13f4',
+    comparatorSourceSha256,
+    generatorSourceSha256,
+    comparatorCommand: COMPARATOR_COMMAND,
+    generatorCommand: GENERATOR_COMMAND,
   }))}\n`);
 }
 
