@@ -48,4 +48,18 @@ describe('OpenAPI compatibility gate', () => {
       { type: 'object', additionalProperties: false, properties: { id: { type: 'string' } } },
     )).toThrow(/additional properties/);
   });
+
+  it('treats an equivalent allOf required constraint and flattened schema as compatible', () => {
+    expect(() => assertNoBreakingChanges(
+      { allOf: [{ type: 'object', required: ['id'], properties: { id: { type: 'string' } } }] },
+      { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+    )).not.toThrow();
+  });
+
+  it('rejects a required field added while flattening an allOf schema', () => {
+    expect(() => assertNoBreakingChanges(
+      { allOf: [{ type: 'object', required: ['id'], properties: { id: { type: 'string' } } }] },
+      { type: 'object', required: ['id', 'name'], properties: { id: { type: 'string' }, name: { type: 'string' } } },
+    )).toThrow(/became required/);
+  });
 });

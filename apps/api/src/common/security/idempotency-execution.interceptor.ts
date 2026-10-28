@@ -76,9 +76,9 @@ export class IdempotencyExecutionInterceptor implements NestInterceptor {
       }
     })).pipe(map((outcome) => {
       const commandStatus = isCommandStatus(outcome)
-        ? publicCommandStatus(outcome)
+        ? publicCommandStatus(outcome, match.operation)
         : isCommandResult(outcome) && outcome.status === 202 && isCommandStatus(outcome.body)
-          ? publicCommandStatus(outcome.body)
+          ? publicCommandStatus(outcome.body, match.operation)
           : undefined;
       if (commandStatus !== undefined) {
         response.statusCode = 202;
@@ -136,8 +136,19 @@ function isCommandResult(value: CommandResult<unknown> | CommandStatus): value i
   return typeof value === 'object' && value !== null && 'status' in value && 'body' in value;
 }
 
-function publicCommandStatus(value: CommandStatus): CommandStatus {
-  return Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'claimRole' && key !== 'ownerToken')) as CommandStatus;
+function publicCommandStatus(value: CommandStatus, operation: GeneratedOperation): CommandStatus {
+  const publicValue = Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'claimRole' && key !== 'ownerToken')) as CommandStatus;
+  if (publicValue.state !== 'RECOVERY_REQUIRED' || operation.responses['202']?.schema !== 'CommandStatusInProgress') return publicValue;
+  return {
+    ...publicValue,
+    state: 'IN_PROGRESS',
+    completedAt: null,
+    retryAfterMs: Math.max(1, publicValue.retryAfterMs),
+    httpStatus: null,
+    resource: null,
+    resultHref: null,
+    problem: null,
+  };
 }
 
 export function resourceReferenceForResponse(operationId: string, operation: GeneratedOperation, request: PrincipalRequest, response: FastifyReply, body: unknown, status: number): ResourceReference | undefined {

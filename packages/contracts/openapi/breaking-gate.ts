@@ -19,8 +19,8 @@ export function assertNoBreakingChanges(previous: unknown, next: unknown, path =
     return;
   }
 
-  const previousRequired = arrayOfStrings(previous.required);
-  const nextRequired = new Set(arrayOfStrings(next.required));
+  const previousRequired = effectiveRequired(previous);
+  const nextRequired = new Set(effectiveRequired(next));
   for (const field of previousRequired) {
     if (!nextRequired.has(field)) throw new Error(`Breaking change at ${path}: required field ${field} was removed.`);
   }
@@ -29,8 +29,8 @@ export function assertNoBreakingChanges(previous: unknown, next: unknown, path =
     if (!previousRequiredSet.has(field)) throw new Error(`Breaking change at ${path}: field ${field} became required.`);
   }
 
-  const previousProperties = isRecord(previous.properties) ? previous.properties : {};
-  const nextProperties = isRecord(next.properties) ? next.properties : {};
+  const previousProperties = effectiveProperties(previous);
+  const nextProperties = effectiveProperties(next);
   for (const [property, previousSchema] of Object.entries(previousProperties)) {
     const nextSchema = nextProperties[property];
     if (nextSchema === undefined) throw new Error(`Breaking change at ${path}: property ${property} was removed.`);
@@ -186,11 +186,80 @@ function compareCommonSchemaConstraints(previous: RecordValue, next: RecordValue
 function compareComposition(previous: RecordValue, next: RecordValue, path: string): void {
   for (const key of ['oneOf', 'anyOf', 'allOf'] as const) {
     if (!Array.isArray(previous[key])) continue;
-    if (!Array.isArray(next[key])) throw new Error(`Breaking change at ${path}: ${key} was removed.`);
+    if (!Array.isArray(next[key])) {
+      if (key === 'allOf' && allOfFlattenedInto(previous, next)) continue;
+      throw new Error(`Breaking change at ${path}: ${key} was removed.`);
+    }
     for (const previousOption of previous[key]) {
       if (!next[key].some((candidate) => schemaContainsOption(candidate, previousOption))) throw new Error(`Breaking change at ${path}: a ${key} option was removed.`);
     }
   }
+}
+
+function effectiveRequired(schema: RecordValue): string[] {
+  const required = new Set(arrayOfStrings(schema.required));
+  const allOf = schema.allOf;
+  if (Array.isArray(allOf)) {
+    for (const branch of allOf) {
+      if (isRecord(branch)) {
+        for (const field of effectiveRequired(branch)) required.add(field);
+      }
+    }
+  }
+  for (const key of ['oneOf', 'anyOf'] as const) {
+    const branches = schema[key];
+    if (!Array.isArray(branches) || branches.length === 0 || !branches.every(isRecord)) continue;
+    const first = branches[0];
+    if (!isRecord(first)) continue;
+    const common = new Set(effectiveRequired(first));
+    for (const branch of branches.slice(1)) {
+      if (!isRecord(branch)) continue;
+      const branchRequired = new Set(effectiveRequired(branch));
+      for (const field of common) {
+        if (!branchRequired.has(field)) common.delete(field);
+      }
+    }
+    for (const field of common) required.add(field);
+  }
+  return [...required];
+}
+
+function effectiveProperties(schema: RecordValue): RecordValue {
+  const properties: RecordValue = {};
+  const allOf = schema.allOf;
+  if (Array.isArray(allOf)) {
+    for (const branch of allOf) {
+      if (isRecord(branch)) Object.assign(properties, effectiveProperties(branch));
+    }
+  }
+  if (isRecord(schema.properties)) Object.assign(properties, schema.properties);
+  return properties;
+}
+
+function allOfFlattenedInto(previous: RecordValue, next: RecordValue): boolean {
+  if (!Array.isArray(previous.allOf)) return false;
+  const nextRequired = new Set(effectiveRequired(next));
+  const nextProperties = effectiveProperties(next);
+  for (const branch of previous.allOf) {
+    if (!isRecord(branch)) return false;
+    for (const field of effectiveRequired(branch)) {
+      if (!nextRequired.has(field)) return false;
+    }
+    compareCommonSchemaConstraints(branch, next, 'allOf');
+    for (const [property, previousSchema] of Object.entries(effectiveProperties(branch))) {
+      const nextSchema = nextProperties[property];
+      if (nextSchema === undefined) return false;
+      assertNoBreakingChanges(previousSchema, nextSchema, `allOf.${property}`);
+    }
+    for (const key of ['oneOf', 'anyOf'] as const) {
+      const options = branch[key];
+      if (!Array.isArray(options)) continue;
+      for (const option of options) {
+        if (!schemaContainsOption(next, option)) return false;
+      }
+    }
+  }
+  return true;
 }
 
 function schemaContainsOption(candidate: unknown, previousOption: unknown): boolean {

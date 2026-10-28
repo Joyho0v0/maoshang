@@ -148,6 +148,62 @@ describe('idempotency execution interceptor', () => {
     expect(resourceReferenceForResponse('releaseInventoryReservation', operations.releaseInventoryReservation, request as never, response as never, { id: operationId }, 200)).toBeUndefined();
   });
 
+  it('locks secondary resource identity channels for representative projector policies', () => {
+    const resourceId = '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019';
+    const otherId = 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2';
+    const canonicalHref = `/api/v1/customers/${resourceId}`;
+    const responseWithHeaders = (headers: Record<string, string>) => ({
+      getHeader: (name: string) => headers[name.toLowerCase()],
+    });
+    const createRequest = { params: {} };
+
+    expect(resourceReferenceForResponse(
+      'createCustomer',
+      operations.createCustomer,
+      createRequest as never,
+      responseWithHeaders({ location: canonicalHref, 'content-location': canonicalHref }) as never,
+      { id: resourceId, href: canonicalHref },
+      201,
+    )).toEqual({ type: 'CUSTOMER', id: resourceId, href: canonicalHref });
+
+    expect(resourceReferenceForResponse(
+      'createCustomer',
+      operations.createCustomer,
+      createRequest as never,
+      responseWithHeaders({ location: canonicalHref, 'content-location': `/api/v1/customers/${otherId}` }) as never,
+      { id: resourceId, href: canonicalHref },
+      201,
+    )).toBeUndefined();
+
+    expect(resourceReferenceForResponse(
+      'createCustomer',
+      operations.createCustomer,
+      createRequest as never,
+      responseWithHeaders({ location: canonicalHref }) as never,
+      { id: resourceId, href: `/api/v1/customers/${otherId}` },
+      201,
+    )).toBeUndefined();
+
+    expect(resourceReferenceForResponse(
+      'createCustomer',
+      operations.createCustomer,
+      createRequest as never,
+      responseWithHeaders({ location: canonicalHref }) as never,
+      { href: canonicalHref },
+      201,
+    )).toBeUndefined();
+
+    const existingId = 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2';
+    expect(resourceReferenceForResponse(
+      'updateCustomer',
+      operations.updateCustomer,
+      { params: { id: existingId } } as never,
+      responseWithHeaders({ location: `/api/v1/customers/${existingId}` }) as never,
+      { id: resourceId },
+      200,
+    )).toBeUndefined();
+  });
+
   it('executes the controller only through the repository transaction boundary', async () => {
     let controllerExecutions = 0;
     let persistedResult: unknown;

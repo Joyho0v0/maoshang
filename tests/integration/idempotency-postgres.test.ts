@@ -421,6 +421,82 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
     })).resolves.toMatchObject({ status: 201, replayed: true });
   });
 
+  it('returns a contract-valid IN_PROGRESS response for a bounded HTTP recovery wait', async () => {
+    PostgresCustomerController.executions = 0;
+    let startOwner!: () => void;
+    const ownerStarted = new Promise<void>((resolve) => { startOwner = resolve; });
+    let releaseOwner!: () => void;
+    const ownerRelease = new Promise<void>((resolve) => { releaseOwner = resolve; });
+    PostgresCustomerController.ownerBarrier = { started: startOwner, released: ownerRelease };
+    const shortLeaseRepository = new PostgresIdempotencyRepository(pool, { leaseDurationMs: 50, lockTimeoutMs: 100, statementTimeoutMs: 1_000 });
+    const contract = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const validator = createContractValidator(contract);
+    const app = await NestFactory.create<NestFastifyApplication>(PostgresCustomerModule, new FastifyAdapter({ logger: false }));
+    app.setGlobalPrefix('api/v1');
+    app.useGlobalGuards(new PostgresPrincipalGuard(actorId, organizationId));
+    app.useGlobalFilters(new ProblemExceptionFilter(validator));
+    app.useGlobalInterceptors(new ContractResponseValidationInterceptor(validator), new IdempotencyExecutionInterceptor(shortLeaseRepository, validator));
+    await app.init();
+    const request = {
+      method: 'POST' as const,
+      url: '/api/v1/customers',
+      headers: { 'idempotency-key': `http-postgres-recovery-${randomUUID()}`, 'x-csrf-token': 'csrf-token-value' },
+      payload: { name: 'Bounded recovery customer' },
+    };
+    const owner = app.getHttpAdapter().getInstance().inject(request);
+    try {
+      await ownerStarted;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const contenderStartedAt = Date.now();
+      const contender = await app.getHttpAdapter().getInstance().inject(request);
+      expect(Date.now() - contenderStartedAt).toBeLessThan(750);
+      expect(contender.statusCode).toBe(202);
+      expect(contender.json()).toMatchObject({ state: 'IN_PROGRESS', operationId: 'createCustomer', retryAfterMs: expect.any(Number) });
+      expect(PostgresCustomerController.executions).toBe(1);
+      releaseOwner();
+      await expect(owner).resolves.toMatchObject({ statusCode: 201 });
+    } finally {
+      releaseOwner();
+      await owner;
+      PostgresCustomerController.ownerBarrier = undefined;
+      await app.close();
+    }
+  });
+
+  it('allows the next owner to take over after a bounded owner rollback', async () => {
+    const shortLeaseRepository = new PostgresIdempotencyRepository(pool, { leaseDurationMs: 50, lockTimeoutMs: 100, statementTimeoutMs: 1_000 });
+    const input: PostgresIdempotencyInput = { actorId, organizationId, operationId: 'createCustomerRecoveryRollback', idempotencyKey: `recovery-rollback-${randomUUID()}`, requestHash: 'request-a' };
+    let ownerStarted!: () => void;
+    const ownerStartedPromise = new Promise<void>((resolve) => { ownerStarted = resolve; });
+    let releaseOwner!: () => void;
+    const ownerRelease = new Promise<void>((resolve) => { releaseOwner = resolve; });
+    let executions = 0;
+    const owner = shortLeaseRepository.execute(input, async () => {
+      executions += 1;
+      ownerStarted();
+      await ownerRelease;
+      throw new Error('owner transient failure');
+    });
+
+    await ownerStartedPromise;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const bounded = await shortLeaseRepository.execute(input, async () => {
+      executions += 1;
+      throw new Error('bounded contender must not execute before owner rollback');
+    });
+    expect(bounded).toMatchObject({ state: 'RECOVERY_REQUIRED' });
+    expect(executions).toBe(1);
+
+    releaseOwner();
+    await expect(owner).rejects.toThrow('owner transient failure');
+    await expect(shortLeaseRepository.execute(input, async () => {
+      executions += 1;
+      const id = randomUUID();
+      return { status: 201, body: { id }, resource: { type: 'CUSTOMER', id, href: `/api/v1/customers/${id}` } };
+    })).resolves.toMatchObject({ status: 201 });
+    expect(executions).toBe(2);
+  });
+
   it('fails closed when a persisted terminal resource reference is corrupted', async () => {
     const input: PostgresIdempotencyInput = { actorId, organizationId, operationId: 'createCustomerCorruptResource', idempotencyKey: 'corrupt-resource-key', requestHash: 'request-a' };
     const owner = await repository.withTransaction((client) => repository.claim(client, input));
