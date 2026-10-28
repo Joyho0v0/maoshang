@@ -208,6 +208,81 @@ it('aggregates shared component paths but keeps equal inline schemas separate', 
   expect(inlineB?.affectedPaths).toEqual(['root.paths./inline-b.get.responses.200.content.application/json.schema.id.required']);
 });
 
+it('preserves provenance through derived allOf property merges and isolates equal inline origins', async () => {
+  const makeSchema = (idConst: string) => ({
+    allOf: [
+      { type: 'object', properties: { id: { type: 'string' } } },
+      { type: 'object', properties: { id: { const: idConst } } },
+    ],
+  });
+  const baseline = {
+    openapi: '3.1.0',
+    info: { title: 'Derived provenance test', version: '1.0.0' },
+    paths: {
+      '/inline-a': { get: { operationId: 'getInlineA', responses: { '200': { content: { 'application/json': { schema: makeSchema('A') } } } } } },
+      '/inline-b': { get: { operationId: 'getInlineB', responses: { '200': { content: { 'application/json': { schema: makeSchema('A') } } } } } },
+    },
+  };
+  const candidate = structuredClone(baseline);
+  candidate.paths['/inline-a']!.get.responses['200'].content['application/json'].schema.allOf[1]!.properties.id.const = 'B';
+  candidate.paths['/inline-b']!.get.responses['200'].content['application/json'].schema.allOf[1]!.properties.id.const = 'B';
+
+  const [normalizedBaseline, normalizedCandidate] = await Promise.all([
+    normalizeDocument(baseline),
+    normalizeDocument(candidate),
+  ]);
+  const changes = collectBreakingChanges(normalizedBaseline, normalizedCandidate)
+    .filter((change) => change.reason.includes('const'));
+
+  expect(changes).toHaveLength(2);
+  expect(changes.every((change) => !change.sourceIdentity.startsWith('unindexed-'))).toBe(true);
+  expect(changes[0]?.sourceIdentity).not.toBe(changes[1]?.sourceIdentity);
+  expect(changes.find((change) => change.jsonPath.includes('/inline-a'))?.affectedPaths).toEqual([
+    'root.paths./inline-a.get.responses.200.content.application/json.schema.id.const',
+  ]);
+  expect(changes.find((change) => change.jsonPath.includes('/inline-b'))?.affectedPaths).toEqual([
+    'root.paths./inline-b.get.responses.200.content.application/json.schema.id.const',
+  ]);
+});
+
+it('aggregates shared component derived properties across all consumers', async () => {
+  const baseline = {
+    openapi: '3.1.0',
+    info: { title: 'Shared derived provenance test', version: '1.0.0' },
+    components: {
+      schemas: {
+        Shared: {
+          allOf: [
+            { type: 'object', properties: { id: { type: 'string' } } },
+            { type: 'object', properties: { id: { const: 'A' } } },
+          ],
+        },
+      },
+    },
+    paths: {
+      '/shared-a': { get: { operationId: 'getSharedA', responses: { '200': { content: { 'application/json': { schema: { $ref: '#/components/schemas/Shared' } } } } } } },
+      '/shared-b': { get: { operationId: 'getSharedB', responses: { '200': { content: { 'application/json': { schema: { $ref: '#/components/schemas/Shared' } } } } } } },
+    },
+  };
+  const candidate = structuredClone(baseline);
+  candidate.components.schemas.Shared.allOf[1]!.properties.id.const = 'B';
+
+  const [normalizedBaseline, normalizedCandidate] = await Promise.all([
+    normalizeDocument(baseline),
+    normalizeDocument(candidate),
+  ]);
+  const changes = collectBreakingChanges(normalizedBaseline, normalizedCandidate)
+    .filter((change) => change.reason.includes('const'));
+  expect(changes.length).toBeGreaterThan(0);
+  expect(changes.every((change) => !change.sourceIdentity.startsWith('unindexed-'))).toBe(true);
+  const paths = changes.flatMap((change) => change.affectedPaths);
+  expect(paths).toEqual(expect.arrayContaining([
+    'root.components.schemas.Shared.id.const',
+    'root.paths./shared-a.get.responses.200.content.application/json.schema.id.const',
+    'root.paths./shared-b.get.responses.200.content.application/json.schema.id.const',
+  ]));
+});
+
 function digest(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }

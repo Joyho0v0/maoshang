@@ -7,6 +7,9 @@ import { parse } from 'yaml';
 
 type RecordValue = Record<string, unknown>;
 
+const DERIVED_PROVENANCE = Symbol('derived-schema-provenance');
+type DerivedSchema = object & { readonly [DERIVED_PROVENANCE]?: readonly object[] };
+
 export interface BreakingChange {
   readonly jsonPath: string;
   readonly reason: string;
@@ -101,7 +104,10 @@ function effectiveProperties(schema: RecordValue): RecordValue {
 }
 
 function mergePropertySchemas(previous: unknown, next: unknown): unknown {
-  if (stableSerialize(previous) === stableSerialize(next)) return previous;
+  const provenance = [...provenanceSources(previous), ...provenanceSources(next)];
+  if (stableSerialize(previous) === stableSerialize(next)) {
+    return provenance.length > 1 ? withProvenance(previous, provenance) : previous;
+  }
   const branches: unknown[] = [];
   const append = (value: unknown): void => {
     if (isRecord(value) && Object.keys(value).length === 1 && Array.isArray(value.allOf)) {
@@ -113,7 +119,31 @@ function mergePropertySchemas(previous: unknown, next: unknown): unknown {
   append(previous);
   append(next);
   branches.sort((left, right) => stableSerialize(left).localeCompare(stableSerialize(right)));
-  return { allOf: branches };
+  return withProvenance({ allOf: branches }, provenance);
+}
+
+function provenanceSources(value: unknown): object[] {
+  if (typeof value !== 'object' || value === null) return [];
+  const derived = (value as DerivedSchema)[DERIVED_PROVENANCE];
+  if (derived !== undefined) return [...derived];
+  return [value];
+}
+
+function withProvenance(value: unknown, sources: readonly object[]): unknown {
+  if (typeof value !== 'object' || value === null) return value;
+  const unique: object[] = [];
+  for (const source of sources) {
+    if (!unique.includes(source)) unique.push(source);
+  }
+  if (unique.length === 0) return value;
+  const clone = Array.isArray(value) ? [...value] : { ...(value as RecordValue) };
+  Object.defineProperty(clone, DERIVED_PROVENANCE, {
+    configurable: false,
+    enumerable: false,
+    value: unique,
+    writable: false,
+  });
+  return clone;
 }
 
 function allOfFlattenedInto(previous: RecordValue, next: RecordValue): boolean {
@@ -953,15 +983,25 @@ function getSourceIdentity(changes: BreakingChange[], source: unknown, jsonPath:
   const context = collectionContexts.get(changes);
   if (context === undefined) return 'value';
   const object = source as object;
+  const derived = (object as DerivedSchema)[DERIVED_PROVENANCE];
+  if (derived !== undefined) {
+    const identities = [...new Set(derived.flatMap((origin) => sourceIdentitiesForObject(context, origin, jsonPath)))].sort();
+    if (identities.length > 0) return `derived[${identities.join('|')}]`;
+  }
+  return sourceIdentitiesForObject(context, object, jsonPath)[0] ?? `unindexed-${fingerprint(source)}`;
+}
+
+function sourceIdentitiesForObject(context: CollectionContext, object: object, jsonPath: string): string[] {
   const occurrences = context.occurrenceSources.get(object);
-  if (occurrences !== undefined) {
+  if (occurrences !== undefined && occurrences.length > 0) {
     for (const candidate of compositionPathCandidates(jsonPath).reverse()) {
       const matching = occurrences.find((occurrence) => occurrence.arrayPath === candidate.arrayPath && occurrence.index === candidate.index);
-      if (matching !== undefined) return matching.sourceIdentity;
+      if (matching !== undefined) return [matching.sourceIdentity];
     }
+    return [...new Set(occurrences.map((occurrence) => occurrence.sourceIdentity))].sort();
   }
   const existing = context.sourceIds.get(object);
-  return existing ?? `unindexed-${fingerprint(source)}`;
+  return existing === undefined ? [] : [existing];
 }
 
 function compositionPathCandidates(path: string): Array<{ arrayPath: string; index: number }> {
