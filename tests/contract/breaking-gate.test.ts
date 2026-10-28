@@ -180,6 +180,7 @@ describe('OpenAPI compatibility gate', () => {
 
     expect(first).toBeDefined();
     expect(reordered).toBeDefined();
+    expect(first?.sourceIdentity).not.toMatch(/^unindexed-/);
     expect(reordered?.sourceIdentity).toBe(first?.sourceIdentity);
     expect(reordered?.logicalIdentity).toBe(first?.logicalIdentity);
     expect(reordered?.stableIdentity).toBe(first?.stableIdentity);
