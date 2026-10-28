@@ -13,6 +13,7 @@ export function assertNoBreakingChanges(previous: unknown, next: unknown, path =
   }
 
   compareCommonSchemaConstraints(previous, next, path);
+  compareComposition(previous, next, path);
 
   if (path === 'root' && (previous.openapi !== undefined || previous.paths !== undefined)) {
     compareOpenApiDocument(previous, next, path);
@@ -43,7 +44,6 @@ export function assertNoBreakingChanges(previous: unknown, next: unknown, path =
     assertNoBreakingChanges(previousItems, next.items, `${path}.items`);
   }
 
-  compareComposition(previous, next, path);
   if (previous.parameters !== undefined) compareNamedCollection(previous.parameters, next.parameters, ['name', 'in'], `${path}.parameters`);
   if (previous.requestBody !== undefined) compareRequestBody(previous.requestBody, next.requestBody, `${path}.requestBody`);
   if (previous.responses !== undefined) compareResponses(previous.responses, next.responses, `${path}.responses`);
@@ -157,9 +157,12 @@ function compareContent(previous: unknown, next: unknown, path: string): void {
 
 function compareCommonSchemaConstraints(previous: RecordValue, next: RecordValue, path: string): void {
   for (const key of ['type', 'format', 'pattern', 'const', 'minLength', 'maxLength', 'minimum', 'maximum', 'minItems', 'maxItems'] as const) {
-    const previousValue = previous[key];
+    const previousValue = inheritedConstraint(previous, key);
     const nextValue = next[key];
-    if (previousValue === undefined) continue;
+    if (previousValue === undefined) {
+      if (nextValue !== undefined) throw new Error(`Breaking change at ${path}: candidate-only constraint ${key} narrowed the value space.`);
+      continue;
+    }
     if (nextValue === undefined) throw new Error(`Breaking change at ${path}: constraint ${key} was removed.`);
     if (key === 'maxLength' || key === 'maximum' || key === 'maxItems') {
       if (typeof previousValue === 'number' && typeof nextValue === 'number' && nextValue < previousValue) throw new Error(`Breaking change at ${path}: constraint ${key} was narrowed.`);
@@ -174,13 +177,29 @@ function compareCommonSchemaConstraints(previous: RecordValue, next: RecordValue
     throw new Error(`Breaking change at ${path}: additional properties were disallowed.`);
   }
 
-  const previousEnum = arrayOfScalars(previous.enum);
+  const previousEnumValue = inheritedConstraint(previous, 'enum');
+  const previousEnum = arrayOfScalars(previousEnumValue);
+  if (previousEnumValue === undefined && next.enum !== undefined) {
+    throw new Error(`Breaking change at ${path}: candidate-only enum narrowed the value space.`);
+  }
   if (previousEnum.length > 0) {
     const nextEnum = new Set(arrayOfScalars(next.enum).map((value) => JSON.stringify(value)));
     for (const value of previousEnum) {
       if (!nextEnum.has(JSON.stringify(value))) throw new Error(`Breaking change at ${path}: enum value ${String(value)} was removed.`);
     }
   }
+}
+
+function inheritedConstraint(schema: RecordValue, key: string): unknown {
+  if (schema[key] !== undefined) return schema[key];
+  if (!Array.isArray(schema.allOf)) return undefined;
+  const values = schema.allOf
+    .filter(isRecord)
+    .map((branch) => inheritedConstraint(branch, key))
+    .filter((value) => value !== undefined);
+  if (values.length === 0) return undefined;
+  const first = JSON.stringify(values[0]);
+  return values.every((value) => JSON.stringify(value) === first) ? values[0] : undefined;
 }
 
 function compareComposition(previous: RecordValue, next: RecordValue, path: string): void {
@@ -192,6 +211,9 @@ function compareComposition(previous: RecordValue, next: RecordValue, path: stri
     if (!Array.isArray(next[key])) {
       if (key === 'allOf' && allOfFlattenedInto(previous, next)) continue;
       throw new Error(`Breaking change at ${path}: ${key} was removed.`);
+    }
+    if (key === 'oneOf' && next[key].length > previous[key].length) {
+      throw new Error(`Breaking change at ${path}: oneOf option was added without a disjointness proof.`);
     }
     for (const previousOption of previous[key]) {
       const inheritedRequired = new Set(effectiveRequired(previous));

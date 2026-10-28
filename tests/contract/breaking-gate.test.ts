@@ -88,4 +88,21 @@ describe('OpenAPI compatibility gate', () => {
       { oneOf: [{ type: 'object', required: ['id'], properties: { id: { type: 'string' }, label: { type: 'string' } } }] },
     )).not.toThrow();
   });
+
+  it('rejects candidate-only value constraints that narrow an unconstrained schema', () => {
+    expect(() => assertNoBreakingChanges({}, { const: 'A' })).toThrow(/constraint const/);
+    expect(() => assertNoBreakingChanges({}, { enum: ['A', 'B'] })).toThrow(/enum/);
+    expect(() => assertNoBreakingChanges({}, { pattern: '^A' })).toThrow(/constraint pattern/);
+    expect(() => assertNoBreakingChanges({}, { type: 'string' })).toThrow(/constraint type/);
+    expect(() => assertNoBreakingChanges({}, { format: 'uuid' })).toThrow(/constraint format/);
+    expect(() => assertNoBreakingChanges({}, { minLength: 1 })).toThrow(/constraint minLength/);
+    expect(() => assertNoBreakingChanges({}, { minimum: 1 })).toThrow(/constraint minimum/);
+  });
+
+  it('rejects a newly overlapping oneOf branch instead of treating it as additive', () => {
+    expect(() => assertNoBreakingChanges(
+      { oneOf: [{ type: 'string' }] },
+      { oneOf: [{ type: 'string' }, { const: 'A' }] },
+    )).toThrow(/oneOf|overlap|option/);
+  });
 });

@@ -95,6 +95,30 @@ describe('problem exception operation boundary', () => {
     expect(state.body).toMatchObject({ status: 403, code: 'CSRF_FAILED', meta: { refreshHref: '/api/v1/auth/csrf' } });
   });
 
+  it('preserves permission-denied problems for every representative authorization-capable mutation', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const filter = new ProblemExceptionFilter(createContractValidator(document));
+    const requestId = 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2';
+    const requests = [
+      { method: 'POST', url: '/api/v1/organizations/:id/users', routeOptions: { url: '/api/v1/organizations/:id/users' }, headers: {} },
+      { method: 'POST', url: '/api/v1/customers', routeOptions: { url: '/api/v1/customers' }, headers: {} },
+      { method: 'POST', url: '/api/v1/inventory/operations/:operationId/reverse', routeOptions: { url: '/api/v1/inventory/operations/:operationId/reverse' }, headers: {} },
+      { method: 'POST', url: '/api/v1/files/:id/download-intents', routeOptions: { url: '/api/v1/files/:id/download-intents' }, headers: {} },
+    ];
+    const problems = [
+      buildProblem({ status: 403, code: 'CSRF_FAILED', title: 'CSRF failed', requestId, retryable: true, meta: { refreshHref: '/api/v1/auth/csrf' } }),
+      buildProblem({ status: 403, code: 'PERMISSION_DENIED', title: 'Permission denied', requestId, retryable: false }),
+    ];
+    for (const request of requests) {
+      for (const problem of problems) {
+        const state: FilterState = { headers: {} };
+        filter.catch(new ProblemError(problem), hostFor(request, state));
+        expect(state.status).toBe(403);
+        expect(state.body).toMatchObject({ status: 403, code: problem.code });
+      }
+    }
+  });
+
   it('emits the required Retry-After value for a declared rate-limit response', async () => {
     const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
     const filter = new ProblemExceptionFilter(createContractValidator(document));

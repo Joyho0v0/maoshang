@@ -79,6 +79,63 @@ describe('generated contract client', () => {
     })).rejects.toBeInstanceOf(ApiProblemError);
   });
 
+  it('accepts typed permission and CSRF problems across representative permission-capable operations', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const requestId = 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2';
+    const csrfProblem = {
+      type: 'urn:autoflow:problem:csrf-failed',
+      title: 'CSRF failed',
+      status: 403,
+      code: 'CSRF_FAILED',
+      requestId,
+      retryable: true,
+      meta: { refreshHref: '/api/v1/auth/csrf' },
+    };
+    const permissionProblem = {
+      type: 'urn:autoflow:problem:permission-denied',
+      title: 'Permission denied',
+      status: 403,
+      code: 'PERMISSION_DENIED',
+      requestId,
+      retryable: false,
+      meta: null,
+    };
+    const cases = [
+      { operationId: 'createUser', input: { pathParams: { id: requestId }, headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': 'permission-user' }, body: { username: 'alice', role: 'USER' } } },
+      { operationId: 'createCustomer', input: { headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': 'permission-customer' }, body: { name: 'Acme', ownerUserId: requestId } } },
+      { operationId: 'reverseInventoryOperation', input: { pathParams: { operationId: requestId }, headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': 'permission-reverse', 'If-Match': '"v1"' }, body: { operationType: 'REVERSAL', lines: [{ skuId: requestId, quantity: '1' }] } } },
+      { operationId: 'createDownloadIntent', input: { pathParams: { id: requestId }, headers: { 'X-CSRF-Token': 'csrf-token-value' } } },
+    ] as const;
+
+    for (const testCase of cases) {
+      for (const problem of [csrfProblem, permissionProblem]) {
+        const client = new GeneratedApiClient({
+          fetch: async () => new Response(JSON.stringify(problem), { status: 403, headers: { 'content-type': 'application/problem+json', 'x-request-id': requestId } }),
+          validator: createContractValidator(document),
+        });
+        await expect(client.call(testCase.operationId, testCase.input as never)).rejects.toMatchObject({ name: 'ApiProblemError', status: 403, problem: { code: problem.code } });
+      }
+    }
+  });
+
+  it('rejects a permission problem whose status does not match the HTTP response on every representative operation', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const requestId = 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2';
+    const cases = [
+      { operationId: 'createUser', input: { pathParams: { id: requestId }, headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': 'mismatch-user' }, body: { username: 'alice', role: 'USER' } } },
+      { operationId: 'createCustomer', input: { headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': 'mismatch-customer' }, body: { name: 'Acme', ownerUserId: requestId } } },
+      { operationId: 'reverseInventoryOperation', input: { pathParams: { operationId: requestId }, headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': 'mismatch-reverse', 'If-Match': '"v1"' }, body: { operationType: 'REVERSAL', lines: [{ skuId: requestId, quantity: '1' }] } } },
+      { operationId: 'createDownloadIntent', input: { pathParams: { id: requestId }, headers: { 'X-CSRF-Token': 'csrf-token-value' } } },
+    ] as const;
+    for (const testCase of cases) {
+      const client = new GeneratedApiClient({
+        fetch: async () => new Response(JSON.stringify({ type: 'urn:autoflow:problem:permission-denied', title: 'Permission denied', status: 401, code: 'PERMISSION_DENIED', requestId, retryable: false, meta: null }), { status: 403, headers: { 'content-type': 'application/problem+json', 'x-request-id': requestId } }),
+        validator: createContractValidator(document),
+      });
+      await expect(client.call(testCase.operationId, testCase.input as never)).rejects.toThrow(/status does not match/);
+    }
+  });
+
   it('exposes a declared dependency failure as a typed Problem instead of an undeclared-status error', async () => {
     const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
     const client = new GeneratedApiClient({
