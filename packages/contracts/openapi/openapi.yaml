@@ -311,7 +311,7 @@ paths:
       operationId: createDownloadIntent
       x-safety: { csrf: required, idempotency: exempt, ifMatch: exempt }
       parameters: [{ $ref: '#/components/parameters/ResourceId' }, { $ref: '#/components/parameters/CsrfHeader' }]
-      responses: { '200': { $ref: '#/components/responses/DownloadIntent' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/Problem' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
+      responses: { '200': { $ref: '#/components/responses/DownloadIntent' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/Problem' }, '409': { $ref: '#/components/responses/DownloadFileNotReady' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
 
   /orders/{orderId}/documents:
     get: { $ref: '#/x-operationTemplates/listDocuments' }
@@ -441,10 +441,11 @@ components:
     CreatedInventoryObservation: { description: Newly created inventory observation., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location', x-required: true }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/InventoryObservation' } } } }
     CreatedPayment: { description: Newly created payment., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location', x-required: true }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Payment' } } } }
     CreatedFile: { description: Newly created file resource., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location', x-required: true }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/File' } } } }
-    CreatedUploadIntent: { description: Signed upload intent., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location', x-required: true }, Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/UploadIntent' } } } }
+    CreatedUploadIntent: { description: Signed upload intent., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location', x-required: true }, Content-Location: { $ref: '#/components/headers/ContentLocation' }, Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/UploadIntent' } } } }
     UploadFileTooLarge: { description: Upload declaration exceeds the file size policy., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemFileTooLarge' } } } }
     UploadUnsupportedMediaType: { description: Upload media type is not accepted., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemUnsupportedMediaType' } } } }
     DownloadIntent: { description: Signed download intent., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' } }, content: { application/json: { schema: { $ref: '#/components/schemas/DownloadIntent' } } } }
+    DownloadFileNotReady: { description: File is not yet available for download., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemFileNotReady' } } } }
     CreatedDocument: { description: Newly created document., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location', x-required: true }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Document' } } } }
     CreatedTask: { description: Newly created task., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location', x-required: true }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
     PageResource: { description: Cursor-paginated typed resources., headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { schema: { type: string } } }, content: { application/json: { schema: { $ref: '#/components/schemas/PageResource' } } } }
@@ -714,6 +715,17 @@ components:
       required: [id, organizationId, version, createdAt, updatedAt, fileName, contentType, sizeBytes, status]
       properties: { id: { $ref: '#/components/schemas/Uuid' }, organizationId: { $ref: '#/components/schemas/Uuid' }, version: { type: integer, minimum: 1 }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time }, fileName: { type: string, minLength: 1, maxLength: 256 }, contentType: { type: string, minLength: 1, maxLength: 256 }, sizeBytes: { type: integer, minimum: 1 }, checksum: { type: string }, status: { type: string, enum: [PENDING_UPLOAD, UPLOADED, SCANNING, AVAILABLE, REJECTED, QUARANTINED] }, metadata: { type: object, additionalProperties: true } }
       additionalProperties: true
+    UploadIntentFile:
+      allOf:
+        - $ref: '#/components/schemas/File'
+        - type: object
+          required: [href]
+          properties: { href: { $ref: '#/components/schemas/Href' } }
+    DownloadIntentFile:
+      allOf:
+        - $ref: '#/components/schemas/File'
+        - type: object
+          properties: { status: { const: AVAILABLE } }
     TransferHeaders:
       type: object
       additionalProperties: { type: string }
@@ -756,7 +768,7 @@ components:
       type: object
       required: [file, href, transfer]
       properties:
-        file: { $ref: '#/components/schemas/File' }
+        file: { $ref: '#/components/schemas/UploadIntentFile' }
         href: { $ref: '#/components/schemas/Href' }
         transfer: { $ref: '#/components/schemas/UploadTransfer' }
       additionalProperties: false
@@ -764,7 +776,7 @@ components:
       type: object
       required: [file, href, transfer]
       properties:
-        file: { $ref: '#/components/schemas/File' }
+        file: { $ref: '#/components/schemas/DownloadIntentFile' }
         href: { $ref: '#/components/schemas/Href' }
         transfer: { $ref: '#/components/schemas/DownloadTransfer' }
       additionalProperties: false

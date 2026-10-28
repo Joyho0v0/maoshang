@@ -10381,6 +10381,10 @@ export const operations = {
             "required": true,
             "schema": "Href"
           },
+          "Content-Location": {
+            "required": false,
+            "schema": "Href"
+          },
           "Cache-Control": {
             "required": true,
             "schema": {
@@ -10873,6 +10877,19 @@ export const operations = {
       },
       "404": {
         "schema": "Problem",
+        "contentType": "application/problem+json",
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
+      },
+      "409": {
+        "schema": "ProblemFileNotReady",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
@@ -14415,7 +14432,7 @@ export type OperationResponseMap = {
   "reviewPayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "reversePayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "getFile": ContractResponse<components["schemas"]["File"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200>;
-  "createUploadIntent": ContractResponse<components["schemas"]["UploadIntent"], { "X-Request-ID": string; "ETag": string; "Location": string; "Cache-Control": "no-store"; "Idempotent-Replay"?: "true" }, 201>;
+  "createUploadIntent": ContractResponse<components["schemas"]["UploadIntent"], { "X-Request-ID": string; "ETag": string; "Location": string; "Content-Location"?: string; "Cache-Control": "no-store"; "Idempotent-Replay"?: "true" }, 201>;
   "completeUpload": ContractResponse<components["schemas"]["File"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "createDownloadIntent": ContractResponse<components["schemas"]["DownloadIntent"], { "X-Request-ID": string; "Cache-Control": "no-store" }, 200>;
   "listDocuments": ContractResponse<components["schemas"]["DocumentPage"], { "X-Request-ID": string; "Cache-Control"?: string }, 200>;
@@ -14447,6 +14464,7 @@ export class GeneratedApiClient extends ContractApiClient {
       const data = response.data as { href?: unknown };
       const headers = response.headers as Record<string, string>;
       if (headers.Location !== data.href) throw new Error('Upload intent Location must equal body href.');
+      if (headers['Content-Location'] !== undefined && headers['Content-Location'] !== data.href) throw new Error('Upload intent Content-Location must equal body href.');
     }
     return response as OperationResponseMap[Id];
   }
@@ -14506,9 +14524,10 @@ export class TransferExecutor {
 }
 
 function assertTransferIntent(intent: UploadIntent | DownloadIntent, now: () => Date): void {
-  const transfer = intent.transfer as { expiresAt?: unknown; headers?: Record<string, string> };
+  const transfer = intent.transfer as { kind?: unknown; expiresAt?: unknown; headers?: Record<string, string> };
   if (typeof transfer.expiresAt !== 'string' || !Number.isFinite(Date.parse(transfer.expiresAt)) || Date.parse(transfer.expiresAt) <= now().getTime()) throw new Error('Transfer descriptor expired.');
   const forbidden = new Set(['cookie', 'authorization', 'x-csrf-token', 'idempotency-key', 'if-match']);
+  if (transfer.kind === 'HTTP_MULTIPART_POST') forbidden.add('content-type');
   if (transfer.headers !== undefined && Object.keys(transfer.headers).some((name) => forbidden.has(name.toLowerCase()))) throw new Error('Transfer descriptor contains a forbidden application header.');
   if (!validateIntentPayload(intent, now)) throw new Error('Invalid transfer intent descriptor.');
 }

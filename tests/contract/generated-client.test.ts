@@ -278,6 +278,32 @@ describe('generated contract client', () => {
         validator: createContractValidator(document),
       });
       await expect(client.call(operationId, input as never), `${testCase.code} ${status}`).rejects.toMatchObject({ name: 'ApiProblemError', status, problem: { code: testCase.code, status } });
+
+      const futureOptionalClient = new GeneratedApiClient({
+        fetch: async () => new Response(JSON.stringify(problemFixture(testCase, status, { futureOptional: { retained: true } })), { status, headers: responseHeaders }),
+        validator: createContractValidator(document),
+      });
+      await expect(futureOptionalClient.call(operationId, input as never), `${testCase.code} ${status} futureOptional`).rejects.toMatchObject({ name: 'ApiProblemError', status, problem: { code: testCase.code, status, futureOptional: { retained: true } } });
+    }
+  });
+
+  it('rejects an unknown code for every declared Problem transport row before ApiProblemError', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const transportCases = problemCases.flatMap((testCase) => testCase.statuses.filter((status) => status !== 422).map((status) => ({ testCase, status })));
+    expect(transportCases).toHaveLength(32);
+    for (const [index, { testCase, status }] of transportCases.entries()) {
+      const operationId = status === 404 ? 'getCustomer' : status === 413 || status === 415 ? 'createUploadIntent' : 'createCustomer';
+      const input = operationId === 'getCustomer'
+        ? { pathParams: { id: requestId } }
+        : operationId === 'createUploadIntent'
+          ? { headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': `unknown-${index}` }, body: { fileName: 'invoice.pdf', contentType: 'application/pdf', sizeBytes: 128 } }
+          : { headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': `unknown-${index}` }, body: { name: 'Acme', ownerUserId: requestId } };
+      const unknownCode = `UNKNOWN_${String(index).padStart(2, '0')}`;
+      const client = new GeneratedApiClient({
+        fetch: async () => new Response(JSON.stringify(problemFixture(testCase, status, { code: unknownCode })), { status, headers: { 'content-type': 'application/problem+json', 'x-request-id': requestId, ...(status === 429 ? { 'retry-after': '60' } : {}) } }),
+        validator: createContractValidator(document),
+      });
+      await expect(client.call(operationId, input as never), `${testCase.code} ${status}`).rejects.toSatisfy((error: unknown) => error instanceof Error && !(error instanceof ApiProblemError) && /Invalid .* response/.test(error.message));
     }
   });
 
@@ -311,6 +337,12 @@ describe('generated contract client', () => {
         validator: createContractValidator(document),
       });
       await expect(client.call(operationId, input as never), `${testCase.code} missing meta`).rejects.toThrow(/Invalid .* response/);
+
+      const malformed = new GeneratedApiClient({
+        fetch: async () => new Response(JSON.stringify(problemFixture(testCase, status, { meta: {} })), { status, headers: { 'content-type': 'application/problem+json', 'x-request-id': requestId } }),
+        validator: createContractValidator(document),
+      });
+      await expect(malformed.call(operationId, input as never), `${testCase.code} malformed meta`).rejects.toThrow(/Invalid .* response/);
     }
 
     const unknown = new GeneratedApiClient({

@@ -12,6 +12,7 @@ const future = '2099-10-28T05:00:00Z';
 
 const file = {
   id: fileId,
+  href: `/api/v1/files/${fileId}`,
   organizationId: requestId,
   version: 1,
   createdAt: '2026-10-28T05:00:00Z',
@@ -87,11 +88,15 @@ describe('file intent contract', () => {
       uploadIntent({ ...multipartTransfer, formFields: {} }),
       uploadIntent({ ...multipartTransfer, fileField: '' }),
       uploadIntent({ ...multipartTransfer, headers: { Cookie: 'session=leaked' } }),
+      uploadIntent({ ...multipartTransfer, headers: { 'cOnTeNt-TyPe': 'multipart/form-data' } }),
       uploadIntent(putTransfer, `/api/v1/files/${otherFileId}`),
+      { ...uploadIntent(putTransfer), file: { ...file, href: undefined } },
+      { ...uploadIntent(putTransfer), file: { ...file, href: `/api/v1/files/${otherFileId}` } },
     ];
     for (const candidate of invalidUploads) expect(validator.validate('UploadIntent', candidate)).toBe(false);
     expect(validator.validate('DownloadIntent', downloadIntent({ ...downloadTransfer, method: 'POST' }))).toBe(false);
     expect(validator.validate('DownloadIntent', downloadIntent({ ...downloadTransfer, formFields: { file: 'wrong-domain' } }))).toBe(false);
+    expect(validator.validate('DownloadIntent', { ...downloadIntent(downloadTransfer), file: { ...file, status: 'SCANNING' } })).toBe(false);
   });
 
   it('enforces upload 201 and download 200 success contracts including canonical Location', async () => {
@@ -114,6 +119,19 @@ describe('file intent contract', () => {
     await expect(client.call('createUploadIntent', uploadInput())).resolves.toMatchObject({ status: 201, data: { href: `/api/v1/files/${fileId}` }, headers: { Location: `/api/v1/files/${fileId}`, 'Cache-Control': 'no-store' } });
     await expect(client.call('createDownloadIntent', { pathParams: { id: fileId }, headers: { 'X-CSRF-Token': 'csrf-token-value' } })).resolves.toMatchObject({ status: 200, data: { href: `/api/v1/files/${fileId}` }, headers: { 'Cache-Control': 'no-store' } });
 
+    for (const body of [
+      { ...uploadIntent(putTransfer), file: { ...file, href: undefined } },
+      { ...uploadIntent(putTransfer), file: { ...file, href: `/api/v1/files/${otherFileId}` } },
+    ]) {
+      const invalidUploadClient = new GeneratedApiClient({
+        fetch: async () => new Response(JSON.stringify(body), { status: 201, headers: {
+          'content-type': 'application/json', 'x-request-id': requestId, etag: '"v1"', location: `/api/v1/files/${fileId}`, 'cache-control': 'no-store',
+        } }),
+        validator,
+      });
+      await expect(invalidUploadClient.call('createUploadIntent', uploadInput())).rejects.toThrow(/Invalid UploadIntent response/);
+    }
+
     const badLocationClient = new GeneratedApiClient({
       fetch: async () => new Response(JSON.stringify(uploadIntent(putTransfer)), { status: 201, headers: {
         'content-type': 'application/json', 'x-request-id': requestId, etag: '"v1"', location: `/api/v1/files/${otherFileId}`, 'cache-control': 'no-store',
@@ -121,6 +139,22 @@ describe('file intent contract', () => {
       validator,
     });
     await expect(badLocationClient.call('createUploadIntent', uploadInput())).rejects.toThrow(/Location.*href/i);
+
+    const badContentLocationClient = new GeneratedApiClient({
+      fetch: async () => new Response(JSON.stringify(uploadIntent(putTransfer)), { status: 201, headers: {
+        'content-type': 'application/json', 'x-request-id': requestId, etag: '"v1"', location: `/api/v1/files/${fileId}`, 'content-location': `/api/v1/files/${otherFileId}`, 'cache-control': 'no-store',
+      } }),
+      validator,
+    });
+    await expect(badContentLocationClient.call('createUploadIntent', uploadInput())).rejects.toThrow(/Content-Location.*href/i);
+
+    const unavailableDownloadClient = new GeneratedApiClient({
+      fetch: async () => new Response(JSON.stringify({ ...downloadIntent(downloadTransfer), file: { ...file, status: 'SCANNING' } }), { status: 200, headers: {
+        'content-type': 'application/json', 'x-request-id': requestId, 'cache-control': 'no-store',
+      } }),
+      validator,
+    });
+    await expect(unavailableDownloadClient.call('createDownloadIntent', { pathParams: { id: fileId }, headers: { 'X-CSRF-Token': 'csrf-token-value' } })).rejects.toThrow(/Invalid DownloadIntent response/);
   });
 
   it('maps upload-only 413/415 to typed Problems and keeps 422 undeclared', async () => {
@@ -137,6 +171,21 @@ describe('file intent contract', () => {
       validator,
     });
     await expect(undeclared.call('createUploadIntent', uploadInput())).rejects.toThrow(/Unexpected HTTP 422/);
+
+    const nonUpload413415 = [413, 415] as const;
+    for (const status of nonUpload413415) {
+      const client = new GeneratedApiClient({
+        fetch: async () => new Response(JSON.stringify({ type: 'urn:autoflow:problem:transport', title: 'Transport', status, code: status === 413 ? 'FILE_TOO_LARGE' : 'UNSUPPORTED_MEDIA_TYPE', requestId, retryable: false, meta: null }), { status, headers: { 'content-type': 'application/problem+json', 'x-request-id': requestId } }),
+        validator,
+      });
+      await expect(client.call('createCustomer', { headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': `undeclared-${status}` }, body: { name: 'Acme', ownerUserId: requestId } })).rejects.toThrow(new RegExp(`Unexpected HTTP ${status}`));
+    }
+
+    const notReady = new GeneratedApiClient({
+      fetch: async () => new Response(JSON.stringify({ type: 'urn:autoflow:problem:file-not-ready', title: 'File not ready', status: 409, code: 'FILE_NOT_READY', requestId, retryable: true, meta: { fileId, state: 'SCANNING', statusHref: `/api/v1/files/${fileId}` } }), { status: 409, headers: { 'content-type': 'application/problem+json', 'x-request-id': requestId } }),
+      validator,
+    });
+    await expect(notReady.call('createDownloadIntent', { pathParams: { id: fileId }, headers: { 'X-CSRF-Token': 'csrf-token-value' } })).rejects.toMatchObject({ name: 'ApiProblemError', status: 409, problem: { code: 'FILE_NOT_READY' } });
   });
 
   it('executes transfers in an isolated security context and never fetches invalid descriptors', async () => {
@@ -166,6 +215,7 @@ describe('file intent contract', () => {
     const beforeInvalid = calls.length;
     await expect(executor.download(downloadIntent({ ...downloadTransfer, expiresAt: '2020-10-28T05:00:00Z' }) as never)).rejects.toThrow(/expired/i);
     await expect(executor.download(downloadIntent({ ...downloadTransfer, headers: { 'X-CSRF-Token': 'leaked' } }) as never)).rejects.toThrow(/forbidden/i);
+    await expect(executor.upload(uploadIntent({ ...multipartTransfer, headers: { 'CONTENT-TYPE': 'multipart/form-data' } }) as never, new Blob(['bytes']))).rejects.toThrow(/forbidden|content-type/i);
     expect(calls).toHaveLength(beforeInvalid);
   });
 });

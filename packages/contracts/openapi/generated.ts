@@ -1263,6 +1263,13 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        UploadIntentFile: components["schemas"]["File"] & {
+            href: components["schemas"]["Href"];
+        };
+        DownloadIntentFile: components["schemas"]["File"] & {
+            /** @constant */
+            status?: "AVAILABLE";
+        };
         TransferHeaders: {
             [key: string]: string;
         };
@@ -1311,12 +1318,12 @@ export interface components {
             headers: components["schemas"]["TransferHeaders"];
         };
         UploadIntent: {
-            file: components["schemas"]["File"];
+            file: components["schemas"]["UploadIntentFile"];
             href: components["schemas"]["Href"];
             transfer: components["schemas"]["UploadTransfer"];
         };
         DownloadIntent: {
-            file: components["schemas"]["File"];
+            file: components["schemas"]["DownloadIntentFile"];
             href: components["schemas"]["Href"];
             transfer: components["schemas"]["DownloadTransfer"];
         };
@@ -2202,6 +2209,7 @@ export interface components {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 Location: components["headers"]["Location"];
+                "Content-Location": components["headers"]["ContentLocation"];
                 "Cache-Control": components["headers"]["CacheControlNoStore"];
                 "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
@@ -2239,6 +2247,16 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["DownloadIntent"];
+            };
+        };
+        /** @description File is not yet available for download. */
+        DownloadFileNotReady: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemFileNotReady"];
             };
         };
         /** @description Newly created document. */
@@ -4300,6 +4318,7 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["Problem"];
+            409: components["responses"]["DownloadFileNotReady"];
             429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
             502: components["responses"]["Problem"];

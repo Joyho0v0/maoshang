@@ -35,7 +35,7 @@ export function createContractValidator(document: Record<string, unknown>, optio
         validate = ajv.compile({ $ref: `#/components/schemas/${schemaName}` });
         validators.set(schemaName, validate);
       }
-      const valid = validate(value) && (schemaName === 'UploadIntent' || schemaName === 'DownloadIntent' ? validateIntentPayload(value, options.now) : true);
+      const valid = validate(value) && (schemaName === 'UploadIntent' || schemaName === 'DownloadIntent' ? validateIntentPayload(value, options.now, schemaName) : true);
       errors = validate.errors;
       return valid;
     },
@@ -51,11 +51,16 @@ export function createContractValidator(document: Record<string, unknown>, optio
   };
 }
 
-export function validateIntentPayload(value: unknown, now: () => Date = () => new Date()): boolean {
+export function validateIntentPayload(value: unknown, now: () => Date = () => new Date(), intentKind?: 'UploadIntent' | 'DownloadIntent'): boolean {
   if (!isRecord(value) || !isRecord(value.file) || typeof value.file.id !== 'string' || typeof value.href !== 'string' || value.href !== `/api/v1/files/${value.file.id}` || !isRecord(value.transfer)) return false;
   const transfer = value.transfer;
+  const expectedKind = intentKind ?? (transfer.kind === 'HTTP_GET' ? 'DownloadIntent' : 'UploadIntent');
+  const canonicalHref = `/api/v1/files/${value.file.id}`;
+  if (typeof value.file.href !== 'undefined' && value.file.href !== canonicalHref) return false;
+  if (expectedKind === 'UploadIntent' && value.file.href !== canonicalHref) return false;
+  if (expectedKind === 'DownloadIntent' && value.file.status !== 'AVAILABLE') return false;
   if (typeof transfer.locator !== 'string' || !isFutureDate(transfer.expiresAt, now) || !isHttpsLocator(transfer.locator) || !validTransferHeaders(transfer.headers)) return false;
-  const forbidden = forbiddenHeader(transfer.headers);
+  const forbidden = forbiddenHeader(transfer.headers, transfer.kind);
   if (forbidden !== undefined) return false;
   if (transfer.kind === 'HTTP_PUT' && transfer.method === 'PUT') {
     if (transfer.formFields !== undefined || transfer.fileField !== undefined) return false;
@@ -92,8 +97,9 @@ function validTransferHeaders(value: unknown): value is Record<string, unknown> 
   return isRecord(value) && Object.values(value).every((header) => typeof header === 'string');
 }
 
-function forbiddenHeader(headers: Record<string, unknown>): string | undefined {
+function forbiddenHeader(headers: Record<string, unknown>, transferKind?: unknown): string | undefined {
   const forbidden = new Set(['cookie', 'authorization', 'x-csrf-token', 'idempotency-key', 'if-match']);
+  if (transferKind === 'HTTP_MULTIPART_POST') forbidden.add('content-type');
   return Object.keys(headers).find((name) => forbidden.has(name.toLowerCase()));
 }
 

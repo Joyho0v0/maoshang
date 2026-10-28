@@ -54,6 +54,7 @@ export class GeneratedApiClient extends ContractApiClient {
       const data = response.data as { href?: unknown };
       const headers = response.headers as Record<string, string>;
       if (headers.Location !== data.href) throw new Error('Upload intent Location must equal body href.');
+      if (headers['Content-Location'] !== undefined && headers['Content-Location'] !== data.href) throw new Error('Upload intent Content-Location must equal body href.');
     }
     return response as OperationResponseMap[Id];
   }
@@ -113,9 +114,10 @@ export class TransferExecutor {
 }
 
 function assertTransferIntent(intent: UploadIntent | DownloadIntent, now: () => Date): void {
-  const transfer = intent.transfer as { expiresAt?: unknown; headers?: Record<string, string> };
+  const transfer = intent.transfer as { kind?: unknown; expiresAt?: unknown; headers?: Record<string, string> };
   if (typeof transfer.expiresAt !== 'string' || !Number.isFinite(Date.parse(transfer.expiresAt)) || Date.parse(transfer.expiresAt) <= now().getTime()) throw new Error('Transfer descriptor expired.');
   const forbidden = new Set(['cookie', 'authorization', 'x-csrf-token', 'idempotency-key', 'if-match']);
+  if (transfer.kind === 'HTTP_MULTIPART_POST') forbidden.add('content-type');
   if (transfer.headers !== undefined && Object.keys(transfer.headers).some((name) => forbidden.has(name.toLowerCase()))) throw new Error('Transfer descriptor contains a forbidden application header.');
   if (!validateIntentPayload(intent, now)) throw new Error('Invalid transfer intent descriptor.');
 }
