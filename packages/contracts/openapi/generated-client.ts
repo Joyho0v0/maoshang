@@ -1,5 +1,6 @@
 import { ContractApiClient, type ContractApiClientOptions, type ContractResponse, type GeneratedOperation } from './client.js';
 import type { components } from './generated.js';
+import { validateIntentPayload } from './runtime-validator.js';
 
 export const operations = {
   "getCsrfToken": {
@@ -10362,7 +10363,7 @@ export const operations = {
     "requestSchema": "FileCreateRequest",
     "responses": {
       "201": {
-        "schema": "File",
+        "schema": "UploadIntent",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
@@ -10380,6 +10381,13 @@ export const operations = {
             "required": true,
             "schema": "Href"
           },
+          "Cache-Control": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          },
           "Idempotent-Replay": {
             "required": false,
             "schema": {
@@ -10393,40 +10401,8 @@ export const operations = {
         "requiredHeaders": [
           "X-Request-ID",
           "ETag",
-          "Location"
-        ]
-      },
-      "202": {
-        "schema": "CommandStatusInProgress",
-        "contentType": "application/json",
-        "headers": {
-          "X-Request-ID": {
-            "required": true,
-            "schema": "Uuid"
-          },
-          "Retry-After": {
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          "Cache-Control": {
-            "required": true,
-            "schema": {
-              "type": "string",
-              "const": "no-store"
-            }
-          },
-          "Content-Location": {
-            "required": true,
-            "schema": "Href"
-          }
-        },
-        "requiredHeaders": [
-          "X-Request-ID",
-          "Retry-After",
-          "Cache-Control",
-          "Content-Location"
+          "Location",
+          "Cache-Control"
         ]
       },
       "400": {
@@ -10470,6 +10446,32 @@ export const operations = {
       },
       "409": {
         "schema": "Problem",
+        "contentType": "application/problem+json",
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
+      },
+      "413": {
+        "schema": "ProblemFileTooLarge",
+        "contentType": "application/problem+json",
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
+      },
+      "415": {
+        "schema": "ProblemUnsupportedMediaType",
         "contentType": "application/problem+json",
         "headers": {
           "X-Request-ID": {
@@ -10809,39 +10811,25 @@ export const operations = {
       }
     },
     "responses": {
-      "201": {
-        "schema": "File",
+      "200": {
+        "schema": "DownloadIntent",
         "contentType": "application/json",
         "headers": {
           "X-Request-ID": {
             "required": true,
             "schema": "Uuid"
           },
-          "ETag": {
+          "Cache-Control": {
             "required": true,
             "schema": {
               "type": "string",
-              "pattern": "^\"v[1-9][0-9]*\"$"
-            }
-          },
-          "Location": {
-            "required": true,
-            "schema": "Href"
-          },
-          "Idempotent-Replay": {
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true"
-              ]
+              "const": "no-store"
             }
           }
         },
         "requiredHeaders": [
           "X-Request-ID",
-          "ETag",
-          "Location"
+          "Cache-Control"
         ]
       },
       "400": {
@@ -14427,9 +14415,9 @@ export type OperationResponseMap = {
   "reviewPayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "reversePayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "getFile": ContractResponse<components["schemas"]["File"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200>;
-  "createUploadIntent": ContractResponse<components["schemas"]["File"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createUploadIntent": ContractResponse<components["schemas"]["UploadIntent"], { "X-Request-ID": string; "ETag": string; "Location": string; "Cache-Control": "no-store"; "Idempotent-Replay"?: "true" }, 201>;
   "completeUpload": ContractResponse<components["schemas"]["File"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "createDownloadIntent": ContractResponse<components["schemas"]["File"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201>;
+  "createDownloadIntent": ContractResponse<components["schemas"]["DownloadIntent"], { "X-Request-ID": string; "Cache-Control": "no-store" }, 200>;
   "listDocuments": ContractResponse<components["schemas"]["DocumentPage"], { "X-Request-ID": string; "Cache-Control"?: string }, 200>;
   "createDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID": string; "ETag": string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID": string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "getDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID": string; "ETag": string; "Idempotent-Replay"?: "true" }, 200>;
@@ -14453,7 +14441,74 @@ export class GeneratedApiClient extends ContractApiClient {
     super(options);
   }
 
-  call<Id extends OperationId>(operationId: Id, input: OperationInputMap[Id]): Promise<OperationResponseMap[Id]> {
-    return super.execute(operations[operationId], input);
+  async call<Id extends OperationId>(operationId: Id, input: OperationInputMap[Id]): Promise<OperationResponseMap[Id]> {
+    const response = await super.execute<OperationResponseMap[Id]>(operations[operationId], input);
+    if (operationId === 'createUploadIntent' && response.status === 201) {
+      const data = response.data as { href?: unknown };
+      const headers = response.headers as Record<string, string>;
+      if (headers.Location !== data.href) throw new Error('Upload intent Location must equal body href.');
+    }
+    return response as OperationResponseMap[Id];
   }
+}
+
+export interface TransferExecutorOptions {
+  readonly fetch?: typeof globalThis.fetch;
+  readonly now?: () => Date;
+}
+
+export type UploadIntent = components['schemas']['UploadIntent'];
+export type DownloadIntent = components['schemas']['DownloadIntent'];
+export type TransferPayload = Blob | Uint8Array | ArrayBuffer | string;
+
+export class TransferExecutor {
+  private readonly fetchImpl: typeof globalThis.fetch;
+  private readonly now: () => Date;
+
+  constructor(options: TransferExecutorOptions = {}) {
+    this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.now = options.now ?? (() => new Date());
+  }
+
+  async upload(intent: UploadIntent, payload: TransferPayload): Promise<Response> {
+    assertTransferIntent(intent, this.now);
+    const transfer = intent.transfer;
+    if (transfer.kind === 'HTTP_PUT') {
+      return await this.fetchImpl(transfer.locator, {
+        method: 'PUT',
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer',
+        headers: transfer.headers,
+        body: payload,
+      });
+    }
+    const form = new FormData();
+    for (const [name, value] of Object.entries(transfer.formFields)) form.append(name, value);
+    form.append(transfer.fileField, payload instanceof Blob ? payload : new Blob([payload as never]));
+    return await this.fetchImpl(transfer.locator, {
+      method: 'POST',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      headers: transfer.headers,
+      body: form,
+    });
+  }
+
+  async download(intent: DownloadIntent): Promise<Response> {
+    assertTransferIntent(intent, this.now);
+    return await this.fetchImpl(intent.transfer.locator, {
+      method: 'GET',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      headers: intent.transfer.headers,
+    });
+  }
+}
+
+function assertTransferIntent(intent: UploadIntent | DownloadIntent, now: () => Date): void {
+  const transfer = intent.transfer as { expiresAt?: unknown; headers?: Record<string, string> };
+  if (typeof transfer.expiresAt !== 'string' || !Number.isFinite(Date.parse(transfer.expiresAt)) || Date.parse(transfer.expiresAt) <= now().getTime()) throw new Error('Transfer descriptor expired.');
+  const forbidden = new Set(['cookie', 'authorization', 'x-csrf-token', 'idempotency-key', 'if-match']);
+  if (transfer.headers !== undefined && Object.keys(transfer.headers).some((name) => forbidden.has(name.toLowerCase()))) throw new Error('Transfer descriptor contains a forbidden application header.');
+  if (!validateIntentPayload(intent, now)) throw new Error('Invalid transfer intent descriptor.');
 }

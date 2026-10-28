@@ -9,7 +9,11 @@ export interface ContractValidator {
   errors: ErrorObject[] | null | undefined;
 }
 
-export function createContractValidator(document: Record<string, unknown>): ContractValidator {
+export interface ContractValidatorOptions {
+  readonly now?: () => Date;
+}
+
+export function createContractValidator(document: Record<string, unknown>, options: ContractValidatorOptions = {}): ContractValidator {
   const Ajv = AjvModule as unknown as new (options?: object) => {
     addSchema: (schema: Schema, key: string) => void;
     compile: (schema: Schema) => ((value: unknown) => boolean) & { errors?: ErrorObject[] | null };
@@ -31,7 +35,7 @@ export function createContractValidator(document: Record<string, unknown>): Cont
         validate = ajv.compile({ $ref: `#/components/schemas/${schemaName}` });
         validators.set(schemaName, validate);
       }
-      const valid = validate(value);
+      const valid = validate(value) && (schemaName === 'UploadIntent' || schemaName === 'DownloadIntent' ? validateIntentPayload(value, options.now) : true);
       errors = validate.errors;
       return valid;
     },
@@ -45,6 +49,58 @@ export function createContractValidator(document: Record<string, unknown>): Cont
       return errors;
     },
   };
+}
+
+export function validateIntentPayload(value: unknown, now: () => Date = () => new Date()): boolean {
+  if (!isRecord(value) || !isRecord(value.file) || typeof value.file.id !== 'string' || typeof value.href !== 'string' || value.href !== `/api/v1/files/${value.file.id}` || !isRecord(value.transfer)) return false;
+  const transfer = value.transfer;
+  if (typeof transfer.locator !== 'string' || !isFutureDate(transfer.expiresAt, now) || !isHttpsLocator(transfer.locator) || !validTransferHeaders(transfer.headers)) return false;
+  const forbidden = forbiddenHeader(transfer.headers);
+  if (forbidden !== undefined) return false;
+  if (transfer.kind === 'HTTP_PUT' && transfer.method === 'PUT') {
+    if (transfer.formFields !== undefined || transfer.fileField !== undefined) return false;
+    const contentType = headerValue(transfer.headers, 'content-type');
+    return contentType === value.file.contentType;
+  }
+  if (transfer.kind === 'HTTP_MULTIPART_POST' && transfer.method === 'POST') {
+    return isRecord(transfer.formFields) && Object.keys(transfer.formFields).length > 0 && typeof transfer.fileField === 'string' && transfer.fileField.length > 0;
+  }
+  if (transfer.kind === 'HTTP_GET' && transfer.method === 'GET') return transfer.formFields === undefined && transfer.fileField === undefined;
+  return false;
+}
+
+export function assertIntentPayload(value: unknown, now: () => Date = () => new Date()): asserts value is Record<string, unknown> {
+  if (!validateIntentPayload(value, now)) throw new Error('Invalid transfer intent descriptor.');
+}
+
+function isFutureDate(value: unknown, now: () => Date): boolean {
+  if (typeof value !== 'string') return false;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && parsed > now().getTime();
+}
+
+function isHttpsLocator(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.hostname.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function validTransferHeaders(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && Object.values(value).every((header) => typeof header === 'string');
+}
+
+function forbiddenHeader(headers: Record<string, unknown>): string | undefined {
+  const forbidden = new Set(['cookie', 'authorization', 'x-csrf-token', 'idempotency-key', 'if-match']);
+  return Object.keys(headers).find((name) => forbidden.has(name.toLowerCase()));
+}
+
+function headerValue(headers: Record<string, unknown>, expected: string): string | undefined {
+  const name = Object.keys(headers).find((candidate) => candidate.toLowerCase() === expected);
+  const value = name === undefined ? undefined : headers[name];
+  return typeof value === 'string' ? value : undefined;
 }
 
 function isRecord(value: unknown): value is Schema {

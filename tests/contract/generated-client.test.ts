@@ -3,6 +3,7 @@ import { parse } from 'yaml';
 import { ApiProblemError } from '../../packages/contracts/openapi/client.js';
 import { GeneratedApiClient } from '../../packages/contracts/openapi/generated-client.js';
 import { createContractValidator } from '../../packages/contracts/openapi/runtime-validator.js';
+import { problemCases, problemFixture, typedMetaCases, requestId } from './problem-fixtures.js';
 
 describe('generated contract client', () => {
   it('calls a named operation with session credentials and validates its generated response contract', async () => {
@@ -256,5 +257,72 @@ describe('generated contract client', () => {
 
     await expect(client.call('listProducts', { query: { 'page[size]': 101 } })).rejects.toThrow(/Invalid query parameter/);
     expect(fetchCalls).toBe(0);
+  });
+
+  it('transports every declared Problem v1 status/code combination through the generated client', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const transportCases = problemCases.flatMap((testCase) => testCase.statuses.filter((status) => status !== 422).map((status) => ({ testCase, status })));
+    expect(transportCases).toHaveLength(32);
+
+    for (const { testCase, status } of transportCases) {
+      const operationId = status === 404 ? 'getCustomer' : status === 413 || status === 415 ? 'createUploadIntent' : 'createCustomer';
+      const input = operationId === 'getCustomer'
+        ? { pathParams: { id: requestId } }
+        : operationId === 'createUploadIntent'
+          ? { headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': `transport-${testCase.code}` }, body: { fileName: 'invoice.pdf', contentType: 'application/pdf', sizeBytes: 128 } }
+          : { headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': `transport-${testCase.code}` }, body: { name: 'Acme', ownerUserId: requestId } };
+      const responseHeaders: Record<string, string> = { 'content-type': 'application/problem+json', 'x-request-id': requestId };
+      if (status === 429) responseHeaders['retry-after'] = '60';
+      const client = new GeneratedApiClient({
+        fetch: async () => new Response(JSON.stringify(problemFixture(testCase, status)), { status, headers: responseHeaders }),
+        validator: createContractValidator(document),
+      });
+      await expect(client.call(operationId, input as never), `${testCase.code} ${status}`).rejects.toMatchObject({ name: 'ApiProblemError', status, problem: { code: testCase.code, status } });
+    }
+  });
+
+  it('rejects declared Problem transport mismatches and malformed typed metadata before ApiProblemError', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const transportCases = problemCases.flatMap((testCase) => testCase.statuses.filter((status) => status !== 422).map((status) => ({ testCase, status })));
+    for (const { testCase, status } of transportCases) {
+      const operationId = status === 404 ? 'getCustomer' : status === 413 || status === 415 ? 'createUploadIntent' : 'createCustomer';
+      const input = operationId === 'getCustomer'
+        ? { pathParams: { id: requestId } }
+        : operationId === 'createUploadIntent'
+          ? { headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': `mismatch-${testCase.code}` }, body: { fileName: 'invoice.pdf', contentType: 'application/pdf', sizeBytes: 128 } }
+          : { headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': `mismatch-${testCase.code}` }, body: { name: 'Acme', ownerUserId: requestId } };
+      const wrongStatus = status === 400 ? 409 : 400;
+      const client = new GeneratedApiClient({
+        fetch: async () => new Response(JSON.stringify(problemFixture(testCase, wrongStatus)), { status, headers: { 'content-type': 'application/problem+json', 'x-request-id': requestId, ...(status === 429 ? { 'retry-after': '60' } : {}) } }),
+        validator: createContractValidator(document),
+      });
+      await expect(client.call(operationId, input as never), `${testCase.code} ${status}`).rejects.toThrow(/status does not match/);
+    }
+
+    for (const testCase of problemCases.filter((candidate) => typedMetaCases.has(candidate.code))) {
+      const status = testCase.statuses[0]!;
+      if (status === 422) continue;
+      const operationId = status === 413 || status === 415 ? 'createUploadIntent' : 'createCustomer';
+      const input = operationId === 'createUploadIntent'
+        ? { headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': `meta-${testCase.code}` }, body: { fileName: 'invoice.pdf', contentType: 'application/pdf', sizeBytes: 128 } }
+        : { headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': `meta-${testCase.code}` }, body: { name: 'Acme', ownerUserId: requestId } };
+      const client = new GeneratedApiClient({
+        fetch: async () => new Response(JSON.stringify(problemFixture(testCase, status, { meta: undefined })), { status, headers: { 'content-type': 'application/problem+json', 'x-request-id': requestId } }),
+        validator: createContractValidator(document),
+      });
+      await expect(client.call(operationId, input as never), `${testCase.code} missing meta`).rejects.toThrow(/Invalid .* response/);
+    }
+
+    const unknown = new GeneratedApiClient({
+      fetch: async () => new Response(JSON.stringify(problemFixture(problemCases[0]!, 400, { code: 'TOTALLY_UNKNOWN' })), { status: 400, headers: { 'content-type': 'application/problem+json', 'x-request-id': requestId } }),
+      validator: createContractValidator(document),
+    });
+    await expect(unknown.call('createCustomer', { headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': 'unknown-problem' }, body: { name: 'Acme', ownerUserId: requestId } })).rejects.toSatisfy((error: unknown) => error instanceof Error && !(error instanceof ApiProblemError) && /Invalid Problem response/.test(error.message));
+
+    const undeclared = new GeneratedApiClient({
+      fetch: async () => new Response(JSON.stringify(problemFixture(problemCases.find((candidate) => candidate.code === 'VALIDATION_FAILED')!, 422)), { status: 422, headers: { 'content-type': 'application/problem+json', 'x-request-id': requestId } }),
+      validator: createContractValidator(document),
+    });
+    await expect(undeclared.call('createUploadIntent', { headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': 'undeclared-problem' }, body: { fileName: 'invoice.pdf', contentType: 'application/pdf', sizeBytes: 128 } })).rejects.toThrow(/Unexpected HTTP 422/);
   });
 });

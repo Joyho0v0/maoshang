@@ -32,6 +32,7 @@ const inputTypes = operationDefinitions.map(({ operationId, operation }) => `  $
 const responseTypes = operationDefinitions.map(({ operationId, operation }) => `  ${JSON.stringify(operationId)}: ${operationResponseType(source as unknown as AnyRecord, operation)};`).join('\n');
 await writeFile(new URL('./generated-client.ts', import.meta.url), `import { ContractApiClient, type ContractApiClientOptions, type ContractResponse, type GeneratedOperation } from './client.js';
 import type { components } from './generated.js';
+import { validateIntentPayload } from './runtime-validator.js';
 
 export const operations = ${JSON.stringify(Object.fromEntries(operations.map(({ operationId, method, path, contract }) => [operationId, { method, path, ...contract }])), null, 2)} as const satisfies Record<string, GeneratedOperation>;
 export type OperationId = keyof typeof operations;
@@ -47,9 +48,76 @@ export class GeneratedApiClient extends ContractApiClient {
     super(options);
   }
 
-  call<Id extends OperationId>(operationId: Id, input: OperationInputMap[Id]): Promise<OperationResponseMap[Id]> {
-    return super.execute(operations[operationId], input);
+  async call<Id extends OperationId>(operationId: Id, input: OperationInputMap[Id]): Promise<OperationResponseMap[Id]> {
+    const response = await super.execute<OperationResponseMap[Id]>(operations[operationId], input);
+    if (operationId === 'createUploadIntent' && response.status === 201) {
+      const data = response.data as { href?: unknown };
+      const headers = response.headers as Record<string, string>;
+      if (headers.Location !== data.href) throw new Error('Upload intent Location must equal body href.');
+    }
+    return response as OperationResponseMap[Id];
   }
+}
+
+export interface TransferExecutorOptions {
+  readonly fetch?: typeof globalThis.fetch;
+  readonly now?: () => Date;
+}
+
+export type UploadIntent = components['schemas']['UploadIntent'];
+export type DownloadIntent = components['schemas']['DownloadIntent'];
+export type TransferPayload = Blob | Uint8Array | ArrayBuffer | string;
+
+export class TransferExecutor {
+  private readonly fetchImpl: typeof globalThis.fetch;
+  private readonly now: () => Date;
+
+  constructor(options: TransferExecutorOptions = {}) {
+    this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.now = options.now ?? (() => new Date());
+  }
+
+  async upload(intent: UploadIntent, payload: TransferPayload): Promise<Response> {
+    assertTransferIntent(intent, this.now);
+    const transfer = intent.transfer;
+    if (transfer.kind === 'HTTP_PUT') {
+      return await this.fetchImpl(transfer.locator, {
+        method: 'PUT',
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer',
+        headers: transfer.headers,
+        body: payload,
+      });
+    }
+    const form = new FormData();
+    for (const [name, value] of Object.entries(transfer.formFields)) form.append(name, value);
+    form.append(transfer.fileField, payload instanceof Blob ? payload : new Blob([payload as never]));
+    return await this.fetchImpl(transfer.locator, {
+      method: 'POST',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      headers: transfer.headers,
+      body: form,
+    });
+  }
+
+  async download(intent: DownloadIntent): Promise<Response> {
+    assertTransferIntent(intent, this.now);
+    return await this.fetchImpl(intent.transfer.locator, {
+      method: 'GET',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      headers: intent.transfer.headers,
+    });
+  }
+}
+
+function assertTransferIntent(intent: UploadIntent | DownloadIntent, now: () => Date): void {
+  const transfer = intent.transfer as { expiresAt?: unknown; headers?: Record<string, string> };
+  if (typeof transfer.expiresAt !== 'string' || !Number.isFinite(Date.parse(transfer.expiresAt)) || Date.parse(transfer.expiresAt) <= now().getTime()) throw new Error('Transfer descriptor expired.');
+  const forbidden = new Set(['cookie', 'authorization', 'x-csrf-token', 'idempotency-key', 'if-match']);
+  if (transfer.headers !== undefined && Object.keys(transfer.headers).some((name) => forbidden.has(name.toLowerCase()))) throw new Error('Transfer descriptor contains a forbidden application header.');
+  if (!validateIntentPayload(intent, now)) throw new Error('Invalid transfer intent descriptor.');
 }
 `, 'utf8');
 process.stdout.write('Generated client/types from expanded Joint Contract artifact.\n');

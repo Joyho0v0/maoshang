@@ -134,9 +134,9 @@ export const EXPECTED_CONTRACT_SHAPES: Readonly<Record<string, ExpectedContractS
   reviewPayment: commandShape('Payment', 'PaymentCommandRequest'),
   reversePayment: commandShape('Payment', 'PaymentCommandRequest'),
   getFile: getShape('File'),
-  createUploadIntent: createShape('File', 'FileCreateRequest'),
+  createUploadIntent: { requestSchema: 'FileCreateRequest', responseSchemas: { '201': 'UploadIntent', '403': 'Problem', '409': 'Problem', '413': 'ProblemFileTooLarge', '415': 'ProblemUnsupportedMediaType', '428': 'PreconditionRequiredProblem' }, responseHeaders: { '201': ['X-Request-ID', 'ETag', 'Location', 'Cache-Control', 'Idempotent-Replay'], '403': ['X-Request-ID'], '409': ['X-Request-ID'], '413': ['X-Request-ID'], '415': ['X-Request-ID'], '428': ['X-Request-ID'] }, headerSchemas: { '201': { 'X-Request-ID': REQUEST_ID, ETag: ETAG, Location: HREF, 'Cache-Control': NO_STORE, 'Idempotent-Replay': IDEMPOTENT_REPLAY }, '403': { 'X-Request-ID': REQUEST_ID }, '409': { 'X-Request-ID': REQUEST_ID }, '413': { 'X-Request-ID': REQUEST_ID }, '415': { 'X-Request-ID': REQUEST_ID }, '428': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '201': ['X-Request-ID', 'ETag', 'Location', 'Cache-Control'] } },
   completeUpload: commandShape('File', 'FileCommandRequest'),
-  createDownloadIntent: { responseSchemas: { '201': 'File', '403': 'Problem', '404': 'Problem' }, responseHeaders: { '201': ['X-Request-ID', 'ETag', 'Location', 'Idempotent-Replay'], '403': ['X-Request-ID'], '404': ['X-Request-ID'] }, headerSchemas: { '201': { 'X-Request-ID': REQUEST_ID, ETag: ETAG, Location: HREF, 'Idempotent-Replay': IDEMPOTENT_REPLAY }, '403': { 'X-Request-ID': REQUEST_ID }, '404': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '201': ['X-Request-ID', 'ETag', 'Location'] } },
+  createDownloadIntent: { responseSchemas: { '200': 'DownloadIntent', '403': 'Problem', '404': 'Problem' }, responseHeaders: { '200': ['X-Request-ID', 'Cache-Control'], '403': ['X-Request-ID'], '404': ['X-Request-ID'] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': NO_STORE }, '403': { 'X-Request-ID': REQUEST_ID }, '404': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '200': ['X-Request-ID', 'Cache-Control'] } },
   listDocuments: listShape('DocumentPage', ['filter[status]']),
   createDocument: createShape('Document', 'DocumentCreateRequest'),
   getDocument: getShape('Document'),
@@ -951,7 +951,8 @@ function expectedRequiredResponseHeaders(operationId: string, responses: AnyReco
   const expected: Record<string, readonly string[]> = {};
   if (responses['200'] !== undefined && ['getCsrfToken', 'getCurrentSession'].includes(operationId)) expected['200'] = ['X-Request-ID', 'Cache-Control'];
   if (responses['200'] !== undefined && operationId === 'getCommandStatus') expected['200'] = ['X-Request-ID', 'Cache-Control'];
-  if (responses['201'] !== undefined) expected['201'] = operationId === 'createSession' ? ['X-Request-ID', 'Cache-Control'] : ['X-Request-ID', 'ETag', 'Location'];
+  if (responses['201'] !== undefined) expected['201'] = operationId === 'createSession' ? ['X-Request-ID', 'Cache-Control'] : operationId === 'createUploadIntent' ? ['X-Request-ID', 'ETag', 'Location', 'Cache-Control'] : ['X-Request-ID', 'ETag', 'Location'];
+  if (responses['200'] !== undefined && operationId === 'createDownloadIntent') expected['200'] = ['X-Request-ID', 'Cache-Control'];
   if (responses['202'] !== undefined) expected['202'] = ['X-Request-ID', 'Retry-After', 'Cache-Control', 'Content-Location'];
   if (responses['204'] !== undefined) expected['204'] = ['X-Request-ID'];
   return expected;

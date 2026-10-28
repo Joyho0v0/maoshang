@@ -1263,6 +1263,63 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        TransferHeaders: {
+            [key: string]: string;
+        };
+        UploadTransferPut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "HTTP_PUT";
+            /** @constant */
+            method: "PUT";
+            /** Format: uri */
+            locator: string;
+            /** Format: date-time */
+            expiresAt: string;
+            headers: components["schemas"]["TransferHeaders"];
+        };
+        UploadTransferMultipartPost: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "HTTP_MULTIPART_POST";
+            /** @constant */
+            method: "POST";
+            /** Format: uri */
+            locator: string;
+            /** Format: date-time */
+            expiresAt: string;
+            headers: components["schemas"]["TransferHeaders"];
+            formFields: {
+                [key: string]: string;
+            };
+            fileField: string;
+        };
+        UploadTransfer: components["schemas"]["UploadTransferPut"] | components["schemas"]["UploadTransferMultipartPost"];
+        DownloadTransfer: {
+            /** @constant */
+            kind: "HTTP_GET";
+            /** @constant */
+            method: "GET";
+            /** Format: uri */
+            locator: string;
+            /** Format: date-time */
+            expiresAt: string;
+            headers: components["schemas"]["TransferHeaders"];
+        };
+        UploadIntent: {
+            file: components["schemas"]["File"];
+            href: components["schemas"]["Href"];
+            transfer: components["schemas"]["UploadTransfer"];
+        };
+        DownloadIntent: {
+            file: components["schemas"]["File"];
+            href: components["schemas"]["Href"];
+            transfer: components["schemas"]["DownloadTransfer"];
+        };
         Document: {
             id: components["schemas"]["Uuid"];
             organizationId: components["schemas"]["Uuid"];
@@ -2139,6 +2196,51 @@ export interface components {
                 "application/json": components["schemas"]["File"];
             };
         };
+        /** @description Signed upload intent. */
+        CreatedUploadIntent: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
+                ETag: components["headers"]["ETag"];
+                Location: components["headers"]["Location"];
+                "Cache-Control": components["headers"]["CacheControlNoStore"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["UploadIntent"];
+            };
+        };
+        /** @description Upload declaration exceeds the file size policy. */
+        UploadFileTooLarge: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemFileTooLarge"];
+            };
+        };
+        /** @description Upload media type is not accepted. */
+        UploadUnsupportedMediaType: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemUnsupportedMediaType"];
+            };
+        };
+        /** @description Signed download intent. */
+        DownloadIntent: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
+                "Cache-Control": components["headers"]["CacheControlNoStore"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["DownloadIntent"];
+            };
+        };
         /** @description Newly created document. */
         CreatedDocument: {
             headers: {
@@ -2805,6 +2907,8 @@ export interface components {
         ContentLocation: components["schemas"]["Href"];
         /** @description Indicates a terminal result replay. */
         IdempotentReplay: "true";
+        /** @description Intent responses must not be cached. */
+        CacheControlNoStore: "no-store";
     };
     pathItems: never;
 }
@@ -4136,12 +4240,13 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["FileCreateRequest"];
         responses: {
-            201: components["responses"]["CreatedFile"];
-            202: components["responses"]["CommandStatusInProgress"];
+            201: components["responses"]["CreatedUploadIntent"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
+            413: components["responses"]["UploadFileTooLarge"];
+            415: components["responses"]["UploadUnsupportedMediaType"];
             428: components["responses"]["PreconditionRequired"];
             429: components["responses"]["RateLimited"];
             500: components["responses"]["Problem"];
@@ -4190,7 +4295,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            201: components["responses"]["CreatedFile"];
+            200: components["responses"]["DownloadIntent"];
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Forbidden"];
