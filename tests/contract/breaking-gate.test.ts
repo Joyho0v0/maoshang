@@ -115,6 +115,16 @@ describe('OpenAPI compatibility gate', () => {
     )).toThrow(/oneOf|overlap|option/);
   });
 
+  it('indexes composition containers reached through an inherited occurrence', () => {
+    const changes = collectBreakingChanges(
+      { allOf: [{ type: 'object' }] },
+      { allOf: [{ type: 'object', oneOf: [{ type: 'string' }] }] },
+    );
+
+    expect(changes.length).toBeGreaterThan(0);
+    expect(changes.every((change) => !change.sourceIdentity.startsWith('unindexed-'))).toBe(true);
+  });
+
   it('uses the same compatible composition matching for the gate and inventory', () => {
     const previous = { oneOf: [{ const: 'A' }, { const: 'B' }] };
     const reordered = { oneOf: [{ const: 'B' }, { const: 'A' }] };

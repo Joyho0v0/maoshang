@@ -1094,10 +1094,11 @@ function indexSourceObjects(value: unknown, rootPath: string, context: Collectio
       return;
     }
     if (!Array.isArray(current)) return;
-    if (inheritedOccurrences.length === 0) {
-      if (context.sourceIds.has(current)) return;
-      context.sourceIds.set(current, path);
-    }
+    // A composition array can itself be reached through an inherited
+    // occurrence (for example a dereferenced schema branch). It still needs
+    // a direct source identity: only indexing root-level arrays leaves these
+    // valid Schema Object containers as unindexed fallback values.
+    if (!context.sourceIds.has(current)) context.sourceIds.set(current, normalizeSourcePath(path));
     const occurrences = new Map<string, number>();
     current
       .map((item, index) => ({ item, index, identity: fingerprint(item) }))
