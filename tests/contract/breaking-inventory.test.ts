@@ -21,10 +21,10 @@ it('keeps the complete breaking inventory auditable and synchronized with both a
   expect(persisted.entries).toHaveLength(persisted.count);
   expect((inventory as { baseline: { digest: string } }).baseline.digest).toBe('9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25');
   expect((inventory as { candidate: { revision: string; sha256: string; generatedSha256: string; generatedClientSha256: string } }).candidate).toEqual({
-    revision: 'd3753458288499e3adb2a9d211b9173f083abb7c',
-    sha256: 'b4fac2822bcc832c685e0ecb88e0d0dfe892b9ff4a43474fccaa6e1132466aa7',
-    generatedSha256: '68cb815b71aa121d22446a099885b4ab33e5e6fce88185bad2d10df797d5de13',
-    generatedClientSha256: 'a0279faeb08488204aef5375e6cff3c9c03c1b9682df2f920279961a2a6705e3',
+    revision: 'a8f0d37a615e2338de4774d8d13f7498b49aa9b8',
+    sha256: '149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984',
+    generatedSha256: 'ae349a7f9f81b712bc0ef276a12ff0127ca40db9e83878b64c47fab5e1b5dc16',
+    generatedClientSha256: 'ce3658102bad129ce633aa91695fae350f9612f77e16d318215dedb09ec7138d',
     path: 'packages/contracts/openapi/openapi.yaml',
   });
   const comparator = inventory as typeof inventory & { comparator: { revision: string; sourceSha256: string; command: string } };
