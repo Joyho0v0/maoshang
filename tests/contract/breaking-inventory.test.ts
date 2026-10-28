@@ -5,36 +5,57 @@ import { parse } from 'yaml';
 import { expect, it } from 'vitest';
 import inventory from '../../packages/contracts/openapi/breaking-inventory.json' with { type: 'json' };
 import decisionManifest from '../../packages/contracts/openapi/breaking-decisions.json' with { type: 'json' };
-import { collectBreakingInventory, createContentAddressedValueStore, normalizeDocument } from '../../packages/contracts/openapi/breaking-inventory.js';
+import { buildAuditDocument, collectBreakingInventory, createContentAddressedValueStore, normalizeDocument } from '../../packages/contracts/openapi/breaking-inventory.js';
 import { collectBreakingChanges } from '../../packages/contracts/openapi/breaking-gate.js';
 
 const baselinePath = new URL('../../packages/contracts/openapi/openapi.baseline.yaml', import.meta.url);
 const candidatePath = new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url);
+const generatedPath = new URL('../../packages/contracts/openapi/generated.ts', import.meta.url);
+const generatedClientPath = new URL('../../packages/contracts/openapi/generated-client.ts', import.meta.url);
 
 it('keeps the complete breaking inventory auditable and synchronized with both artifacts', async () => {
   const baseline = parse(await readFile(baselinePath, 'utf8')) as Record<string, unknown>;
   const candidate = parse(await readFile(candidatePath, 'utf8')) as Record<string, unknown>;
   const generated = await collectBreakingInventory(baseline, candidate);
   const persisted = inventory as typeof generated;
+  const persistedAudit = inventory as typeof inventory & {
+    candidate: { revision: string; sha256: string; generatedSha256: string; generatedClientSha256: string; path: string };
+    comparator: { revision: string; sourceSha256: string; command: string };
+    generator: { revision: string; sourceSha256: string; command: string };
+  };
 
   expect(persisted.count).toBeGreaterThan(84);
   expect(persisted.entries).toHaveLength(persisted.count);
   expect((inventory as { baseline: { digest: string } }).baseline.digest).toBe('9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25');
-  expect((inventory as { candidate: { revision: string; sha256: string; generatedSha256: string; generatedClientSha256: string } }).candidate).toEqual({
-    revision: 'a8f0d37a615e2338de4774d8d13f7498b49aa9b8',
-    sha256: '149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984',
-    generatedSha256: 'ae349a7f9f81b712bc0ef276a12ff0127ca40db9e83878b64c47fab5e1b5dc16',
-    generatedClientSha256: 'ce3658102bad129ce633aa91695fae350f9612f77e16d318215dedb09ec7138d',
-    path: 'packages/contracts/openapi/openapi.yaml',
-  });
-  const comparator = inventory as typeof inventory & { comparator: { revision: string; sourceSha256: string; command: string } };
-  const generator = inventory as typeof inventory & { generator: { revision: string; sourceSha256: string; command: string } };
-  expect(comparator.comparator.revision).toMatch(/^[0-9a-f]{40}$/);
-  expect(generator.generator.revision).toMatch(/^[0-9a-f]{40}$/);
-  expect(comparator.comparator.sourceSha256).toBe(gitSourceDigest(comparator.comparator.revision, 'packages/contracts/openapi/breaking-gate.ts'));
-  expect(generator.generator.sourceSha256).toBe(gitSourceDigest(generator.generator.revision, 'packages/contracts/openapi/breaking-inventory.ts'));
-  expect(comparator.comparator.command).toContain(`sourceRevision=${comparator.comparator.revision}`);
-  expect(generator.generator.command).toContain(`sourceRevision=${generator.generator.revision}`);
+  expect(persistedAudit.comparator.revision).toMatch(/^[0-9a-f]{40}$/);
+  expect(persistedAudit.generator.revision).toMatch(/^[0-9a-f]{40}$/);
+  expect(persistedAudit.comparator.sourceSha256).toBe(gitSourceDigest(persistedAudit.comparator.revision, 'packages/contracts/openapi/breaking-gate.ts'));
+  expect(persistedAudit.generator.sourceSha256).toBe(gitSourceDigest(persistedAudit.generator.revision, 'packages/contracts/openapi/breaking-inventory.ts'));
+  expect(persistedAudit.comparator.command).toContain(`sourceRevision=${persistedAudit.comparator.revision}`);
+  expect(persistedAudit.generator.command).toContain(`sourceRevision=${persistedAudit.generator.revision}`);
+  const comparatorRevision = latestRevision('packages/contracts/openapi/breaking-gate.ts');
+  const generatorRevision = latestRevision('packages/contracts/openapi/breaking-inventory.ts');
+
+  const freshAudit = buildAuditDocument(generated, {
+    baseline: await fileDigest(baselinePath),
+    candidate: await fileDigest(candidatePath),
+    generated: await fileDigest(generatedPath),
+    generatedClient: await fileDigest(generatedClientPath),
+  }, {
+    comparatorRevision,
+    generatorRevision,
+    comparatorSourceSha256: gitSourceDigest(comparatorRevision, 'packages/contracts/openapi/breaking-gate.ts'),
+    generatorSourceSha256: gitSourceDigest(generatorRevision, 'packages/contracts/openapi/breaking-inventory.ts'),
+    comparatorCommand: `npm run contract:breaking -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml [sourceRevision=${comparatorRevision}]`,
+    generatorCommand: `npm run contract:breaking:inventory -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml [sourceRevision=${generatorRevision}]`,
+  }, latestRevision('packages/contracts/openapi/openapi.yaml'));
+
+  expect(freshAudit).toEqual(inventory);
+  const freshCandidate = freshAudit.candidate as Record<string, string>;
+  expect(freshCandidate.path).toBe('packages/contracts/openapi/openapi.yaml');
+  expect(freshCandidate.sha256).toBe(await fileDigest(candidatePath));
+  expect(freshCandidate.generatedSha256).toBe(await fileDigest(generatedPath));
+  expect(freshCandidate.generatedClientSha256).toBe(await fileDigest(generatedClientPath));
   expect(new Set(persisted.entries.map((entry) => entry.jsonPath)).size).toBe(persisted.count);
   for (const pathPrefix of [
     'root.paths./auth/sessions.post.responses.403',
@@ -343,6 +364,14 @@ it('keeps the identity-keyed decision manifest in strict one-to-one lockstep', a
 
 function digest(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+async function fileDigest(path: URL): Promise<string> {
+  return createHash('sha256').update(await readFile(path)).digest('hex');
+}
+
+function latestRevision(path: string): string {
+  return execFileSync('git', ['log', '-1', '--format=%H', '--', path], { encoding: 'utf8' }).trim();
 }
 
 function gitSourceDigest(revision: string, path: string): string {
