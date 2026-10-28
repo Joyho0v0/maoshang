@@ -34,7 +34,7 @@ const HREF = 'Href';
 const RETRY_AFTER = { type: 'string' } as const;
 const NO_STORE = { type: 'string', const: 'no-store' } as const;
 const IDEMPOTENT_REPLAY = { type: 'string', enum: ['true'] } as const;
-const RESOURCE_HEADERS = ['X-Request-ID', 'ETag'] as const;
+const RESOURCE_HEADERS = ['X-Request-ID', 'ETag', 'Idempotent-Replay'] as const;
 const LIST_HEADERS = ['X-Request-ID', 'Cache-Control'] as const;
 const ASYNC_RESPONSE_HEADERS = ['X-Request-ID', 'Retry-After', 'Cache-Control', 'Content-Location'] as const;
 const COMMON_PROBLEM_STATUSES = ['400', '401', '429', '500', '502', '503'] as const;
@@ -48,14 +48,14 @@ function listHeaders(schema: string): ExpectedContractShape {
 function responseShapes(status: string, schema: string, includeAsync: boolean, includeCreated: boolean): Pick<ExpectedContractShape, 'responseSchemas' | 'responseHeaders' | 'headerSchemas' | 'requiredResponseHeaders'> {
   const responseSchemas: Record<string, string> = { [status]: schema, ...includeAsync ? { '202': 'CommandStatusInProgress' } : {}, ...PROBLEM_HEADERS };
   const responseHeaders: Record<string, readonly string[]> = {
-    [status]: includeCreated ? ['X-Request-ID', 'ETag', 'Location'] : RESOURCE_HEADERS,
+    [status]: includeCreated ? ['X-Request-ID', 'ETag', 'Location', 'Idempotent-Replay'] : RESOURCE_HEADERS,
     ...includeAsync ? { '202': ASYNC_RESPONSE_HEADERS } : {},
     '403': [],
     '409': ['X-Request-ID'],
     '428': [],
   };
   const headerSchemas: Record<string, Readonly<Record<string, string | Readonly<Record<string, unknown>>>> > = {
-    [status]: includeCreated ? { 'X-Request-ID': REQUEST_ID, ETag: ETAG, Location: HREF } : { 'X-Request-ID': REQUEST_ID, ETag: ETAG },
+    [status]: includeCreated ? { 'X-Request-ID': REQUEST_ID, ETag: ETAG, Location: HREF, 'Idempotent-Replay': IDEMPOTENT_REPLAY } : { 'X-Request-ID': REQUEST_ID, ETag: ETAG, 'Idempotent-Replay': IDEMPOTENT_REPLAY },
     ...includeAsync ? { '202': { 'X-Request-ID': REQUEST_ID, 'Retry-After': RETRY_AFTER, 'Cache-Control': NO_STORE, 'Content-Location': HREF } } : {},
     '403': {},
     '409': { 'X-Request-ID': REQUEST_ID },
@@ -68,7 +68,7 @@ function listShape(schema: string): ExpectedContractShape {
   return listHeaders(schema);
 }
 function getShape(schema: string): ExpectedContractShape {
-  return { responseSchemas: { '200': schema, '404': 'Problem' }, responseHeaders: { '200': RESOURCE_HEADERS, '404': ['X-Request-ID'] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, ETag: ETAG }, '404': { 'X-Request-ID': REQUEST_ID } } };
+  return { responseSchemas: { '200': schema, '404': 'Problem' }, responseHeaders: { '200': RESOURCE_HEADERS, '404': ['X-Request-ID'] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, ETag: ETAG, 'Idempotent-Replay': IDEMPOTENT_REPLAY }, '404': { 'X-Request-ID': REQUEST_ID } } };
 }
 function createShape(schema: string, requestSchema: string): ExpectedContractShape {
   return { requestSchema, ...responseShapes('201', schema, true, true) };
@@ -136,7 +136,7 @@ export const EXPECTED_CONTRACT_SHAPES: Readonly<Record<string, ExpectedContractS
   getFile: getShape('File'),
   createUploadIntent: createShape('File', 'FileCreateRequest'),
   completeUpload: commandShape('File', 'FileCommandRequest'),
-  createDownloadIntent: { responseSchemas: { '201': 'File', '403': 'CsrfFailedProblem', '404': 'Problem' }, responseHeaders: { '201': ['X-Request-ID', 'ETag', 'Location'], '403': [], '404': ['X-Request-ID'] }, headerSchemas: { '201': { 'X-Request-ID': REQUEST_ID, ETag: ETAG, Location: HREF }, '403': {}, '404': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '201': ['Location'] } },
+  createDownloadIntent: { responseSchemas: { '201': 'File', '403': 'CsrfFailedProblem', '404': 'Problem' }, responseHeaders: { '201': ['X-Request-ID', 'ETag', 'Location', 'Idempotent-Replay'], '403': [], '404': ['X-Request-ID'] }, headerSchemas: { '201': { 'X-Request-ID': REQUEST_ID, ETag: ETAG, Location: HREF, 'Idempotent-Replay': IDEMPOTENT_REPLAY }, '403': {}, '404': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '201': ['Location'] } },
   listDocuments: listShape('DocumentPage'),
   createDocument: createShape('Document', 'DocumentCreateRequest'),
   getDocument: getShape('Document'),

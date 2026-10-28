@@ -6,6 +6,7 @@ import {
   type CommandResult,
   type CommandStatus,
   type ResourceReference,
+  isResourceReference,
   requireResourceReference,
 } from './in-memory-idempotency-store.js';
 import { buildProblem, type ProblemDocument } from '../../../common/http/problem.js';
@@ -25,7 +26,7 @@ RETURNING id, state, attempt_count, lease_expires_at;
 export const IDEMPOTENCY_READ_SQL = `
 SELECT id, organization_id, actor_user_id, operation_id, key_hash, request_hash,
        state, owner_token, lease_expires_at, attempt_count, started_at,
-       completed_at, expires_at, http_status, response_body, resource_type, resource_id, resource_version, problem_body,
+       completed_at, expires_at, http_status, response_body, response_headers, resource_type, resource_id, resource_version, problem_body,
        resource_href
 FROM integration.idempotency_record
 WHERE organization_id = $1 AND actor_user_id = $2 AND operation_id = $3 AND key_hash = $4
@@ -42,7 +43,7 @@ RETURNING id, state, attempt_count, lease_expires_at;
 export const IDEMPOTENCY_COMPLETE_SQL = `
 UPDATE integration.idempotency_record
 SET state = 'SUCCEEDED', completed_at = now(), http_status = $3,
-    response_body = $4, resource_type = $5, resource_id = $6, resource_version = $7, resource_href = $8, lease_expires_at = now()
+    response_body = $4, response_headers = $5, resource_type = $6, resource_id = $7, resource_version = $8, resource_href = $9, lease_expires_at = now()
 WHERE id = $1 AND owner_token = $2 AND state = 'IN_PROGRESS'
 RETURNING id, state, attempt_count;
 `;
@@ -83,6 +84,7 @@ interface StoredIdempotencyRow extends QueryResultRow {
   expires_at: Date;
   http_status: number | null;
   response_body: unknown;
+  response_headers: Record<string, string> | null;
   resource_type: string | null;
   resource_id: string | null;
   resource_version: number | null;
@@ -140,7 +142,8 @@ export class PostgresIdempotencyRepository {
 
   async complete(client: PoolClient, commandId: string, ownerToken: Buffer, result: CommandResult<unknown>): Promise<void> {
     const resource = requireResourceReference(result);
-    const updated = await client.query(IDEMPOTENCY_COMPLETE_SQL, [commandId, ownerToken, result.status, JSON.stringify(result.body), resource?.type ?? null, resource?.id ?? null, resource?.version ?? null, result.resultHref ?? resource?.href ?? extractHref(result.body)]);
+    const responseHeaders = normalizeResponseHeaders(result.responseHeaders);
+    const updated = await client.query(IDEMPOTENCY_COMPLETE_SQL, [commandId, ownerToken, result.status, JSON.stringify(result.body), responseHeaders === undefined ? null : JSON.stringify(responseHeaders), resource?.type ?? null, resource?.id ?? null, resource?.version ?? null, result.resultHref ?? resource?.href ?? extractHref(result.body)]);
     if (updated.rowCount !== 1) throw new Error('Idempotency completion lost ownership.');
   }
 
@@ -161,7 +164,8 @@ export class PostgresIdempotencyRepository {
     if (claim.state === 'SUCCEEDED') {
       const stored = await this.withTransaction((client) => this.readById(client, claim.commandId));
       const resource = toResourceReference(stored);
-      return { status: claim.httpStatus ?? 200, body: stored.response_body as T, ...(claim.resultHref === null ? {} : { resultHref: claim.resultHref }), ...(resource === null ? {} : { resource }), replayed: true };
+      const responseHeaders = normalizeResponseHeaders(stored.response_headers);
+      return { status: claim.httpStatus ?? 200, body: stored.response_body as T, ...(claim.resultHref === null ? {} : { resultHref: claim.resultHref }), ...(resource === null ? {} : { resource }), ...(responseHeaders === undefined ? {} : { responseHeaders }), replayed: true };
     }
     if (claim.state === 'FAILED') throw new CommandFailureError(claim.problem ?? storedFailure());
     if (claim.claimRole !== 'OWNER') return claim;
@@ -171,8 +175,12 @@ export class PostgresIdempotencyRepository {
       await client.query('SAVEPOINT idempotency_command');
       try {
         const result = await work(client, claim);
+        if (result.status === 202) {
+          if (!isInProgressCommandStatus(result.body, claim)) throw new Error('CommandStatusInProgress result is invalid.');
+          await client.query('RELEASE SAVEPOINT idempotency_command');
+          return { kind: 'result' as const, value: result };
+        }
         await client.query('RELEASE SAVEPOINT idempotency_command');
-        if (result.status === 202 && isInProgressCommandStatus(result.body, claim.commandId)) return { kind: 'result' as const, value: result };
         await this.complete(client, claim.commandId, claim.ownerToken as Buffer, result);
         return { kind: 'result' as const, value: result };
       } catch (error) {
@@ -195,12 +203,12 @@ export class PostgresIdempotencyRepository {
   }
 
   async statusById(client: PoolClient, commandId: string): Promise<CommandStatus | undefined> {
-    const row = await client.query<StoredIdempotencyRow>('SELECT id, operation_id, key_hash, request_hash, state, owner_token, lease_expires_at, attempt_count, started_at, completed_at, expires_at, http_status, response_body, resource_type, resource_id, resource_version, problem_body, resource_href FROM integration.idempotency_record WHERE id = $1', [commandId]);
+    const row = await client.query<StoredIdempotencyRow>('SELECT id, operation_id, key_hash, request_hash, state, owner_token, lease_expires_at, attempt_count, started_at, completed_at, expires_at, http_status, response_body, response_headers, resource_type, resource_id, resource_version, problem_body, resource_href FROM integration.idempotency_record WHERE id = $1', [commandId]);
     return row.rows[0] === undefined ? undefined : toStatus(row.rows[0]);
   }
 
   private async readById(client: PoolClient, id: string): Promise<StoredIdempotencyRow> {
-    const result = await client.query<StoredIdempotencyRow>('SELECT id, operation_id, key_hash, request_hash, state, owner_token, lease_expires_at, attempt_count, started_at, completed_at, expires_at, http_status, response_body, resource_type, resource_id, resource_version, problem_body, resource_href FROM integration.idempotency_record WHERE id = $1 FOR UPDATE', [id]);
+    const result = await client.query<StoredIdempotencyRow>('SELECT id, operation_id, key_hash, request_hash, state, owner_token, lease_expires_at, attempt_count, started_at, completed_at, expires_at, http_status, response_body, response_headers, resource_type, resource_id, resource_version, problem_body, resource_href FROM integration.idempotency_record WHERE id = $1 FOR UPDATE', [id]);
     const row = result.rows[0];
     if (row === undefined) throw new Error('Idempotency row disappeared during takeover.');
     return row;
@@ -213,6 +221,10 @@ function storedFailure(): ProblemDocument {
 
 function toStatus(row: StoredIdempotencyRow): CommandStatus {
   const recovery = row.state === 'IN_PROGRESS' && row.lease_expires_at <= new Date();
+  const resource = toResourceReference(row);
+  if (row.state === 'SUCCEEDED' && (row.completed_at === null || row.http_status === null || row.http_status < 200 || row.http_status >= 300 || resource === null || row.problem_body !== null)) throw new Error('Persisted SUCCEEDED command has an invalid ResourceReference or terminal shape.');
+  if (row.state === 'FAILED' && (row.completed_at === null || row.http_status === null || row.http_status < 400 || row.problem_body === null || resource !== null || row.resource_href !== null)) throw new Error('Persisted FAILED command has an invalid terminal shape.');
+  if (row.state === 'IN_PROGRESS' && (row.completed_at !== null || row.http_status !== null || resource !== null || row.resource_href !== null || row.problem_body !== null)) throw new Error('Persisted IN_PROGRESS command has an invalid terminal shape.');
   return {
     commandId: row.id,
     operationId: row.operation_id,
@@ -222,7 +234,7 @@ function toStatus(row: StoredIdempotencyRow): CommandStatus {
     expiresAt: row.expires_at.toISOString(),
     retryAfterMs: recovery ? 0 : row.state === 'IN_PROGRESS' ? Math.max(1, row.lease_expires_at.getTime() - Date.now()) : 0,
     httpStatus: row.http_status,
-    resource: toResourceReference(row),
+    resource,
     resultHref: row.resource_href,
     problem: row.problem_body,
     attemptCount: row.attempt_count,
@@ -231,7 +243,9 @@ function toStatus(row: StoredIdempotencyRow): CommandStatus {
 
 function toResourceReference(row: Pick<StoredIdempotencyRow, 'resource_type' | 'resource_id' | 'resource_version' | 'resource_href'>): ResourceReference | null {
   if (row.resource_type === null || row.resource_id === null || row.resource_href === null) return null;
-  return { type: row.resource_type, id: row.resource_id, ...(row.resource_version === null ? {} : { version: row.resource_version }), href: row.resource_href };
+  const resource = { type: row.resource_type, id: row.resource_id, ...(row.resource_version === null ? {} : { version: row.resource_version }), href: row.resource_href };
+  if (!isResourceReference(resource)) throw new Error('Persisted ResourceReference is invalid.');
+  return resource;
 }
 
 function hashBuffer(value: string): Buffer {
@@ -242,8 +256,35 @@ function extractHref(value: unknown): string | null {
   return typeof value === 'object' && value !== null && 'href' in value && typeof value.href === 'string' ? value.href : null;
 }
 
-function isInProgressCommandStatus(value: unknown, commandId: string): boolean {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    && (value as Record<string, unknown>).state === 'IN_PROGRESS'
-    && (value as Record<string, unknown>).commandId === commandId;
+function isInProgressCommandStatus(value: unknown, claim: PostgresClaim): boolean {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  const required = ['commandId', 'operationId', 'state', 'startedAt', 'completedAt', 'expiresAt', 'retryAfterMs', 'httpStatus', 'resource', 'resultHref', 'problem', 'attemptCount'];
+  if (Object.keys(candidate).some((key) => !required.includes(key)) || required.some((key) => !(key in candidate))) return false;
+  return candidate.commandId === claim.commandId
+    && candidate.operationId === claim.operationId
+    && candidate.state === 'IN_PROGRESS'
+    && typeof candidate.startedAt === 'string' && !Number.isNaN(Date.parse(candidate.startedAt))
+    && candidate.completedAt === null
+    && typeof candidate.expiresAt === 'string' && !Number.isNaN(Date.parse(candidate.expiresAt))
+    && typeof candidate.retryAfterMs === 'number' && Number.isInteger(candidate.retryAfterMs) && candidate.retryAfterMs >= 1
+    && candidate.httpStatus === null && candidate.resource === null && candidate.resultHref === null && candidate.problem === null
+    && typeof candidate.attemptCount === 'number' && Number.isInteger(candidate.attemptCount) && candidate.attemptCount === claim.attemptCount;
+}
+
+function normalizeResponseHeaders(value: Record<string, string> | null | undefined): Record<string, string> | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'object' || Array.isArray(value)) throw new Error('Persisted response headers are invalid.');
+  const allowed = new Set(['location', 'content-location', 'etag', 'retry-after', 'cache-control']);
+  const normalized: Record<string, string> = {};
+  for (const [name, headerValue] of Object.entries(value)) {
+    const lowerName = name.toLowerCase();
+    if (!allowed.has(lowerName) || typeof headerValue !== 'string' || headerValue.length === 0) throw new Error('Persisted response headers are invalid.');
+    if ((lowerName === 'location' || lowerName === 'content-location') && !headerValue.startsWith('/api/v1/')) throw new Error('Persisted response headers are invalid.');
+    if (lowerName === 'etag' && !/^"v[1-9][0-9]*"$/.test(headerValue)) throw new Error('Persisted response headers are invalid.');
+    if (lowerName === 'retry-after' && !/^[0-9]+$/.test(headerValue)) throw new Error('Persisted response headers are invalid.');
+    if (lowerName === 'cache-control' && headerValue !== 'no-store') throw new Error('Persisted response headers are invalid.');
+    normalized[lowerName] = headerValue;
+  }
+  return normalized;
 }

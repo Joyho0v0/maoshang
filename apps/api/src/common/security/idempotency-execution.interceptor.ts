@@ -51,6 +51,7 @@ export class IdempotencyExecutionInterceptor implements NestInterceptor {
           body,
           ...(resource === undefined ? {} : { resource }),
           ...(contentLocation === undefined ? {} : { resultHref: contentLocation }),
+          responseHeaders: replayableResponseHeaders(response),
         };
         return result;
       } finally {
@@ -64,7 +65,10 @@ export class IdempotencyExecutionInterceptor implements NestInterceptor {
         response.header('retry-after', String(Math.max(1, Math.ceil(outcome.retryAfterMs / 1000))));
         return outcome;
       }
-      if (outcome.replayed === true) response.header('idempotent-replay', 'true');
+      if (outcome.replayed === true) {
+        for (const [name, value] of Object.entries(outcome.responseHeaders ?? {})) response.header(name, value);
+        response.header('idempotent-replay', 'true');
+      }
       response.statusCode = outcome.status;
       return outcome.body;
     }), catchError((error: unknown) => {
@@ -184,6 +188,15 @@ function resourceHrefFromRequest(operationId: string, request: PrincipalRequest,
 
 function headerString(value: string | string[] | number | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : typeof value === 'number' ? String(value) : value;
+}
+
+function replayableResponseHeaders(response: FastifyReply): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const name of ['location', 'content-location', 'etag', 'retry-after', 'cache-control']) {
+    const value = headerString(response.getHeader(name));
+    if (value !== undefined) headers[name] = value;
+  }
+  return headers;
 }
 
 function asCanonicalQuery(value: unknown): Record<string, string | string[] | undefined> {

@@ -561,6 +561,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -699,6 +708,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -883,6 +901,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -1064,6 +1091,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -1541,6 +1577,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -1696,6 +1741,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -1833,6 +1887,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -2016,6 +2079,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -2197,6 +2269,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -2380,6 +2461,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -2561,6 +2651,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -2871,6 +2970,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -3026,6 +3134,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -3163,6 +3280,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -3473,6 +3599,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -3628,6 +3763,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -3765,6 +3909,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -4075,6 +4228,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -4230,6 +4392,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -4367,6 +4538,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -4549,6 +4729,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -5131,6 +5320,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -5286,6 +5484,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -5423,6 +5630,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -5733,6 +5949,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -5888,6 +6113,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -6017,6 +6251,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -6192,6 +6435,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -6367,6 +6619,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -6542,6 +6803,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -6730,6 +7000,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -7041,6 +7320,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -7196,6 +7484,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -7333,6 +7630,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -7516,6 +7822,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -7697,6 +8012,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -7880,6 +8204,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -8033,6 +8366,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -8162,6 +8504,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -8346,6 +8697,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -8513,6 +8873,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -8804,6 +9173,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -8959,6 +9337,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -9096,6 +9483,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -9279,6 +9675,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -9460,6 +9865,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -9643,6 +10057,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -9824,6 +10247,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -10007,6 +10439,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -10189,6 +10630,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -10370,6 +10820,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -10680,6 +11139,15 @@ export const operations = {
           "Location": {
             "required": true,
             "schema": "Href"
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": [
@@ -10835,6 +11303,15 @@ export const operations = {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
             }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
           }
         },
         "requiredHeaders": []
@@ -10972,6 +11449,15 @@ export const operations = {
             "schema": {
               "type": "string",
               "pattern": "^\"v[1-9][0-9]*\"$"
+            }
+          },
+          "Idempotent-Replay": {
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
             }
           }
         },
@@ -11318,72 +11804,72 @@ export type OperationResponseMap = {
   "getCurrentSession": ContractResponse<components["schemas"]["Session"], { "X-Request-ID"?: string; "Cache-Control": "no-store" }, 200>;
   "deleteCurrentSession": ContractResponse<void, Record<never, never>, 204>;
   "getCommandStatus": ContractResponse<components["schemas"]["CommandStatus"], { "X-Request-ID"?: string; "Retry-After"?: string; "Cache-Control": "no-store"; "Idempotent-Replay"?: "true"; "Content-Location"?: string }, 200>;
-  "getUser": ContractResponse<components["schemas"]["User"], { "X-Request-ID"?: string; "ETag"?: string }, 200>;
-  "createUser": ContractResponse<components["schemas"]["User"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "updateUserRoleBindings": ContractResponse<components["schemas"]["User"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "updateUserDataScopeGrants": ContractResponse<components["schemas"]["User"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getUser": ContractResponse<components["schemas"]["User"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
+  "createUser": ContractResponse<components["schemas"]["User"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "updateUserRoleBindings": ContractResponse<components["schemas"]["User"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "updateUserDataScopeGrants": ContractResponse<components["schemas"]["User"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "disableUser": ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "listCustomers": ContractResponse<components["schemas"]["CustomerPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string }, 200>;
-  "updateCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "submitCustomerApproval": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "approveCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "rejectCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "reassignCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
+  "updateCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "submitCustomerApproval": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "approveCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "rejectCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "reassignCustomer": ContractResponse<components["schemas"]["Customer"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "listProducts": ContractResponse<components["schemas"]["ProductPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createProduct": ContractResponse<components["schemas"]["Product"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getProduct": ContractResponse<components["schemas"]["Product"], { "X-Request-ID"?: string; "ETag"?: string }, 200>;
-  "updateProduct": ContractResponse<components["schemas"]["Product"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createProduct": ContractResponse<components["schemas"]["Product"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getProduct": ContractResponse<components["schemas"]["Product"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
+  "updateProduct": ContractResponse<components["schemas"]["Product"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "listSkus": ContractResponse<components["schemas"]["SkuPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createSku": ContractResponse<components["schemas"]["Sku"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getSku": ContractResponse<components["schemas"]["Sku"], { "X-Request-ID"?: string; "ETag"?: string }, 200>;
-  "updateSku": ContractResponse<components["schemas"]["Sku"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createSku": ContractResponse<components["schemas"]["Sku"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getSku": ContractResponse<components["schemas"]["Sku"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
+  "updateSku": ContractResponse<components["schemas"]["Sku"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "listOrders": ContractResponse<components["schemas"]["OrderPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID"?: string; "ETag"?: string }, 200>;
-  "updateOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "transitionOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
+  "updateOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "transitionOrder": ContractResponse<components["schemas"]["Order"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "listInventoryBalances": ContractResponse<components["schemas"]["InventoryBalancePage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
   "listInventoryMovements": ContractResponse<components["schemas"]["InventoryMovementPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
   "listInventoryReservations": ContractResponse<components["schemas"]["InventoryReservationPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createInventoryReservation": ContractResponse<components["schemas"]["InventoryReservation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getInventory": ContractResponse<components["schemas"]["InventoryReservation"], { "X-Request-ID"?: string; "ETag"?: string }, 200>;
-  "releaseInventoryReservation": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createInventoryReservation": ContractResponse<components["schemas"]["InventoryReservation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getInventory": ContractResponse<components["schemas"]["InventoryReservation"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
+  "releaseInventoryReservation": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "listInventoryObservations": ContractResponse<components["schemas"]["InventoryObservationPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createInventoryObservation": ContractResponse<components["schemas"]["InventoryObservation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getInventoryOperation": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string }, 200>;
-  "createInitialReceipt": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "createInventoryReceipt": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "createInventoryAdjustment": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "issueInventory": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "reverseInventoryOperation": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createInventoryObservation": ContractResponse<components["schemas"]["InventoryObservation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getInventoryOperation": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
+  "createInitialReceipt": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createInventoryReceipt": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createInventoryAdjustment": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "issueInventory": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "reverseInventoryOperation": ContractResponse<components["schemas"]["InventoryOperation"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "listPayments": ContractResponse<components["schemas"]["PaymentPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createPayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getPayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string }, 200>;
-  "attachPaymentProof": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "submitPaymentReview": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "reviewPayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "reversePayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getFile": ContractResponse<components["schemas"]["File"], { "X-Request-ID"?: string; "ETag"?: string }, 200>;
-  "createUploadIntent": ContractResponse<components["schemas"]["File"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "completeUpload": ContractResponse<components["schemas"]["File"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "createDownloadIntent": ContractResponse<components["schemas"]["File"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201>;
+  "createPayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getPayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
+  "attachPaymentProof": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "submitPaymentReview": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "reviewPayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "reversePayment": ContractResponse<components["schemas"]["Payment"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getFile": ContractResponse<components["schemas"]["File"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
+  "createUploadIntent": ContractResponse<components["schemas"]["File"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "completeUpload": ContractResponse<components["schemas"]["File"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createDownloadIntent": ContractResponse<components["schemas"]["File"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201>;
   "listDocuments": ContractResponse<components["schemas"]["DocumentPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string }, 200>;
-  "updateDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "createDocumentVersion": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "submitDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "approveDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "rejectDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "finalizeDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "issueDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "voidDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
+  "updateDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createDocumentVersion": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "submitDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "approveDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "rejectDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "finalizeDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "issueDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "voidDocument": ContractResponse<components["schemas"]["Document"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "listTasks": ContractResponse<components["schemas"]["TaskPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
-  "createTask": ContractResponse<components["schemas"]["Task"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
-  "getTask": ContractResponse<components["schemas"]["Task"], { "X-Request-ID"?: string; "ETag"?: string }, 200>;
-  "completeTask": ContractResponse<components["schemas"]["Task"], { "X-Request-ID"?: string; "ETag"?: string }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "createTask": ContractResponse<components["schemas"]["Task"], { "X-Request-ID"?: string; "ETag"?: string; "Location": string; "Idempotent-Replay"?: "true" }, 201> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
+  "getTask": ContractResponse<components["schemas"]["Task"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200>;
+  "completeTask": ContractResponse<components["schemas"]["Task"], { "X-Request-ID"?: string; "ETag"?: string; "Idempotent-Replay"?: "true" }, 200> | ContractResponse<components["schemas"]["CommandStatusInProgress"], { "X-Request-ID"?: string; "Retry-After": string; "Cache-Control": "no-store"; "Content-Location": string }, 202>;
   "listAuditEvents": ContractResponse<components["schemas"]["AuditEventPage"], { "X-Request-ID"?: string; "Cache-Control"?: string }, 200>;
 };
 

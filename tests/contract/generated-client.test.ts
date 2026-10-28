@@ -54,6 +54,41 @@ describe('generated contract client', () => {
     await expect(client.call('createSession', { headers: { 'X-CSRF-Token': 'csrf-token-value' }, body: { provider: 'LOCAL_PASSWORD' } })).rejects.toBeInstanceOf(ApiProblemError);
   });
 
+  it('preserves a terminal replay marker and resource headers in the typed response envelope', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const client = new GeneratedApiClient({
+      fetch: async () => new Response(JSON.stringify({
+        id: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2',
+        organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019',
+        version: 1,
+        createdAt: '2026-10-28T05:00:00Z',
+        updatedAt: '2026-10-28T05:00:00Z',
+        name: 'Widget',
+        productCode: 'WIDGET-001',
+        unit: 'piece',
+        status: 'ACTIVE',
+      }), { status: 201, headers: {
+        'content-type': 'application/json',
+        etag: '"v1"',
+        location: '/api/v1/products/f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2',
+        'idempotent-replay': 'true',
+      } }),
+      validator: createContractValidator(document),
+    });
+
+    await expect(client.call('createProduct', {
+      headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': 'replay-key' },
+      body: { name: 'Widget', productCode: 'WIDGET-001', unit: 'piece' },
+    })).resolves.toMatchObject({
+      status: 201,
+      headers: {
+        ETag: '"v1"',
+        Location: '/api/v1/products/f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2',
+        'Idempotent-Replay': 'true',
+      },
+    });
+  });
+
   it('rejects an unexpected media type on a 204 response', async () => {
     const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
     const client = new GeneratedApiClient({

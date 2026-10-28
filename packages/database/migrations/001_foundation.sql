@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS integration.idempotency_record (
   attempt_count integer NOT NULL DEFAULT 1 CHECK (attempt_count > 0),
   http_status integer CHECK (http_status IS NULL OR (http_status BETWEEN 200 AND 599)),
   response_body jsonb,
+  response_headers jsonb,
   problem_body jsonb,
   resource_type text,
   resource_id uuid,
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS integration.idempotency_record (
   FOREIGN KEY (organization_id, actor_user_id) REFERENCES core.user_account (organization_id, id),
   CHECK (state = 'IN_PROGRESS' OR completed_at IS NOT NULL)
 );
+ALTER TABLE integration.idempotency_record ADD COLUMN IF NOT EXISTS response_headers jsonb;
 CREATE INDEX IF NOT EXISTS idempotency_organization_actor_idx ON integration.idempotency_record (organization_id, actor_user_id, id);
 CREATE INDEX IF NOT EXISTS idempotency_actor_idx ON integration.idempotency_record (actor_user_id, id);
 CREATE INDEX IF NOT EXISTS idempotency_lease_idx ON integration.idempotency_record (lease_expires_at, id) WHERE state = 'IN_PROGRESS';
@@ -71,6 +73,14 @@ CREATE TABLE IF NOT EXISTS integration.outbox_event (
 );
 ALTER TABLE integration.outbox_event ADD COLUMN IF NOT EXISTS claim_owner_token bytea CHECK (claim_owner_token IS NULL OR octet_length(claim_owner_token) >= 16);
 ALTER TABLE integration.outbox_event ADD COLUMN IF NOT EXISTS claim_expires_at timestamptz;
+UPDATE integration.outbox_event
+SET status = 'PENDING', claimed_at = NULL, claim_owner_token = NULL, claim_expires_at = NULL
+WHERE status = 'CLAIMED'
+  AND (claimed_at IS NULL OR claim_owner_token IS NULL OR claim_expires_at IS NULL);
+UPDATE integration.outbox_event
+SET claimed_at = NULL, claim_owner_token = NULL, claim_expires_at = NULL
+WHERE status <> 'CLAIMED'
+  AND (claimed_at IS NOT NULL OR claim_owner_token IS NOT NULL OR claim_expires_at IS NOT NULL);
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'outbox_claim_consistency' AND conrelid = 'integration.outbox_event'::regclass) THEN

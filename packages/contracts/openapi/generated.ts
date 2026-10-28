@@ -1887,6 +1887,7 @@ export interface components {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 Location: components["headers"]["Location"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -1899,6 +1900,7 @@ export interface components {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 Location: components["headers"]["Location"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -1911,6 +1913,7 @@ export interface components {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 Location: components["headers"]["Location"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -1923,6 +1926,7 @@ export interface components {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 Location: components["headers"]["Location"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -1935,6 +1939,7 @@ export interface components {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 Location: components["headers"]["Location"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -1947,6 +1952,7 @@ export interface components {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 Location: components["headers"]["Location"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -1959,6 +1965,7 @@ export interface components {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 Location: components["headers"]["Location"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -1971,6 +1978,7 @@ export interface components {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 Location: components["headers"]["Location"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -1983,6 +1991,7 @@ export interface components {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 Location: components["headers"]["Location"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -1995,6 +2004,7 @@ export interface components {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 Location: components["headers"]["Location"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -2007,6 +2017,7 @@ export interface components {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 Location: components["headers"]["Location"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -2172,6 +2183,7 @@ export interface components {
             headers: {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -2184,6 +2196,7 @@ export interface components {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 Location: components["headers"]["Location"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -2195,6 +2208,7 @@ export interface components {
             headers: {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -2206,6 +2220,7 @@ export interface components {
             headers: {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -2217,6 +2232,7 @@ export interface components {
             headers: {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -2228,6 +2244,7 @@ export interface components {
             headers: {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -2239,6 +2256,7 @@ export interface components {
             headers: {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -2250,6 +2268,7 @@ export interface components {
             headers: {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -2261,6 +2280,7 @@ export interface components {
             headers: {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -2272,6 +2292,7 @@ export interface components {
             headers: {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -2283,6 +2304,7 @@ export interface components {
             headers: {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -2295,6 +2317,7 @@ export interface components {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 Location: components["headers"]["Location"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -2354,6 +2377,7 @@ export interface components {
             headers: {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {
@@ -2366,6 +2390,7 @@ export interface components {
                 "X-Request-ID": components["headers"]["RequestId"];
                 ETag: components["headers"]["ETag"];
                 Location: components["headers"]["Location"];
+                "Idempotent-Replay": components["headers"]["IdempotentReplay"];
                 [name: string]: unknown;
             };
             content: {

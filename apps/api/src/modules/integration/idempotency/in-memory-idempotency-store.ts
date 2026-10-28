@@ -15,6 +15,7 @@ export interface CommandResult<T = unknown> {
   body: T;
   resultHref?: string;
   resource?: ResourceReference;
+  responseHeaders?: Record<string, string>;
   replayed?: boolean;
 }
 
@@ -288,7 +289,7 @@ function extractHref(value: unknown): string | null {
   return typeof value === 'object' && value !== null && 'href' in value && typeof value.href === 'string' ? value.href : null;
 }
 
-function isResourceReference(value: unknown): value is ResourceReference {
+export function isResourceReference(value: unknown): value is ResourceReference {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const candidate = value as Record<string, unknown>;
   return typeof candidate.type === 'string' && candidate.type.length > 0

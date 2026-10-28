@@ -153,11 +153,34 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
     const input: PostgresIdempotencyInput = { actorId, organizationId, operationId: 'disableUser', idempotencyKey: 'accepted-key', requestHash: 'request-a' };
     const accepted = await repository.execute(input, async (_client, claim) => ({
       status: 202,
-      body: { commandId: claim.commandId, state: 'IN_PROGRESS' },
+      body: {
+        commandId: claim.commandId,
+        operationId: claim.operationId,
+        state: 'IN_PROGRESS',
+        startedAt: claim.startedAt,
+        completedAt: null,
+        expiresAt: claim.expiresAt,
+        retryAfterMs: claim.retryAfterMs,
+        httpStatus: null,
+        resource: null,
+        resultHref: null,
+        problem: null,
+        attemptCount: claim.attemptCount,
+      },
     }));
 
     expect(accepted).toMatchObject({ status: 202, body: { state: 'IN_PROGRESS' } });
     await expect(repository.withTransaction((client) => repository.statusByKey(client, input))).resolves.toMatchObject({ state: 'IN_PROGRESS', resource: null });
+  });
+
+  it('rejects an incomplete 202 CommandStatus before persisting a terminal result', async () => {
+    const input: PostgresIdempotencyInput = { actorId, organizationId, operationId: 'disableUserMalformedAccepted', idempotencyKey: 'malformed-accepted-key', requestHash: 'request-a' };
+
+    await expect(repository.execute(input, async (_client, claim) => ({
+      status: 202,
+      body: { commandId: claim.commandId, state: 'IN_PROGRESS' },
+    }))).rejects.toThrow(/CommandStatusInProgress/);
+    await expect(repository.withTransaction((client) => repository.statusByKey(client, input))).resolves.toMatchObject({ state: 'RECOVERY_REQUIRED', resource: null });
   });
 
   it('rolls back business side effects on transient failure before releasing the lease', async () => {
@@ -198,6 +221,7 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
       expect(first.statusCode).toBe(201);
       expect(second.statusCode).toBe(201);
       expect(second.headers['idempotent-replay']).toBe('true');
+      expect(second.headers.location).toBe(first.headers.location);
       expect(PostgresCustomerController.executions).toBe(1);
       expect(new Set(PostgresCustomerController.backendPids)).toHaveLength(1);
 
@@ -214,5 +238,36 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
     } finally {
       await app.close();
     }
+  });
+
+  it('fails closed when a persisted terminal resource reference is corrupted', async () => {
+    const input: PostgresIdempotencyInput = { actorId, organizationId, operationId: 'createCustomerCorruptResource', idempotencyKey: 'corrupt-resource-key', requestHash: 'request-a' };
+    const owner = await repository.withTransaction((client) => repository.claim(client, input));
+    if (owner.ownerToken === undefined) throw new Error('Expected the first contender to own the claim.');
+    const customerId = randomUUID();
+    await repository.withTransaction((client) => repository.complete(client, owner.commandId, owner.ownerToken as Buffer, {
+      status: 201,
+      body: { id: customerId },
+      resource: { type: 'CUSTOMER', id: customerId, href: `/api/v1/customers/${customerId}` },
+    }));
+    await pool.query("UPDATE integration.idempotency_record SET resource_type = 'BOGUS' WHERE id = $1", [owner.commandId]);
+
+    await expect(repository.withTransaction((client) => repository.statusById(client, owner.commandId))).rejects.toThrow(/ResourceReference/);
+  });
+
+  it('fails closed when persisted replay headers contain an undeclared header', async () => {
+    const input: PostgresIdempotencyInput = { actorId, organizationId, operationId: 'createCustomerCorruptHeaders', idempotencyKey: 'corrupt-headers-key', requestHash: 'request-a' };
+    const owner = await repository.withTransaction((client) => repository.claim(client, input));
+    if (owner.ownerToken === undefined) throw new Error('Expected the first contender to own the claim.');
+    const customerId = randomUUID();
+    await repository.withTransaction((client) => repository.complete(client, owner.commandId, owner.ownerToken as Buffer, {
+      status: 201,
+      body: { id: customerId },
+      resource: { type: 'CUSTOMER', id: customerId, href: `/api/v1/customers/${customerId}` },
+      responseHeaders: { location: `/api/v1/customers/${customerId}` },
+    }));
+    await pool.query("UPDATE integration.idempotency_record SET response_headers = '{\"x-forwarded-host\":\"evil\"}'::jsonb WHERE id = $1", [owner.commandId]);
+
+    await expect(repository.execute(input, async () => ({ status: 201, body: {} }))).rejects.toThrow(/response headers/i);
   });
 });
