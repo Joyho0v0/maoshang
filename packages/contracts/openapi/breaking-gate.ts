@@ -75,14 +75,36 @@ function effectiveRequired(schema: RecordValue): string[] {
 
 function effectiveProperties(schema: RecordValue): RecordValue {
   const properties: RecordValue = {};
+  const merge = (source: RecordValue): void => {
+    for (const [property, propertySchema] of Object.entries(source)) {
+      const existing = properties[property];
+      properties[property] = existing === undefined ? propertySchema : mergePropertySchemas(existing, propertySchema);
+    }
+  };
   const allOf = schema.allOf;
   if (Array.isArray(allOf)) {
     for (const branch of allOf) {
-      if (isRecord(branch)) Object.assign(properties, effectiveProperties(branch));
+      if (isRecord(branch)) merge(effectiveProperties(branch));
     }
   }
-  if (isRecord(schema.properties)) Object.assign(properties, schema.properties);
+  if (isRecord(schema.properties)) merge(schema.properties);
   return properties;
+}
+
+function mergePropertySchemas(previous: unknown, next: unknown): unknown {
+  if (stableSerialize(previous) === stableSerialize(next)) return previous;
+  const branches: unknown[] = [];
+  const append = (value: unknown): void => {
+    if (isRecord(value) && Object.keys(value).length === 1 && Array.isArray(value.allOf)) {
+      branches.push(...value.allOf);
+    } else {
+      branches.push(value);
+    }
+  };
+  append(previous);
+  append(next);
+  branches.sort((left, right) => stableSerialize(left).localeCompare(stableSerialize(right)));
+  return { allOf: branches };
 }
 
 function allOfFlattenedInto(previous: RecordValue, next: RecordValue): boolean {
@@ -100,7 +122,10 @@ function allOfFlattenedInto(previous: RecordValue, next: RecordValue): boolean {
     for (const [property, previousSchema] of Object.entries(effectiveProperties(branch))) {
       const nextSchema = nextProperties[property];
       if (nextSchema === undefined) return false;
-      if (hasBreakingChange(previousSchema, nextSchema, `allOf.${property}`)) return false;
+      const comparableNextSchema = isRecord(nextSchema) && Array.isArray(nextSchema.allOf)
+        ? flattenAllOfForContainment(nextSchema)
+        : nextSchema;
+      if (hasBreakingChange(previousSchema, comparableNextSchema, `allOf.${property}`)) return false;
     }
     for (const key of ['oneOf', 'anyOf'] as const) {
       const options = branch[key];
@@ -143,8 +168,11 @@ function schemaContainsCompatibleOption(candidate: unknown, previousOption: unkn
 
   const previousRequired = new Set(effectiveRequired(previousOption));
   const redundantRequired = new Set([...inheritedRequired].filter((field) => !previousRequired.has(field)));
+  const comparablePrevious = Array.isArray(previousOption.allOf)
+    ? flattenAllOfForContainment(previousOption)
+    : previousOption;
   const comparableCandidate = removeRedundantRequired(candidate, redundantRequired);
-  return !hasBreakingChange(previousOption, comparableCandidate, 'composition');
+  return !hasBreakingChange(comparablePrevious, comparableCandidate, 'composition');
 }
 
 function hasBreakingChange(previous: unknown, next: unknown, path: string): boolean {
@@ -177,7 +205,8 @@ function schemaContainsOption(candidate: unknown, previousOption: unknown): bool
 const containmentConstraintKeys = [
   'type', 'format', 'pattern', 'const', 'enum', 'minLength', 'maxLength',
   'minimum', 'maximum', 'minItems', 'maxItems', 'minProperties', 'maxProperties',
-  'uniqueItems', 'multipleOf', 'contains', 'propertyNames', 'dependentRequired',
+  'exclusiveMinimum', 'exclusiveMaximum', 'uniqueItems', 'multipleOf', 'contains',
+  'propertyNames', 'dependentRequired', 'unevaluatedProperties',
 ] as const;
 
 function candidateAddsNarrowingRootConstraint(candidate: RecordValue, previousOption: RecordValue): boolean {
@@ -192,11 +221,16 @@ function candidateAddsNarrowingRootConstraint(candidate: RecordValue, previousOp
       if ([...previousValues].some((value) => !candidateValues.has(value))) return true;
       continue;
     }
-    if (key === 'maxLength' || key === 'maximum' || key === 'maxItems' || key === 'maxProperties') {
+    if (key === 'unevaluatedProperties') {
+      if (candidateValue === false && previousValue !== false) return true;
+      if (stableSerialize(previousValue) !== stableSerialize(candidateValue)) return true;
+      continue;
+    }
+    if (key === 'maxLength' || key === 'maximum' || key === 'maxItems' || key === 'maxProperties' || key === 'exclusiveMaximum') {
       if (typeof previousValue === 'number' && typeof candidateValue === 'number' && candidateValue < previousValue) return true;
       continue;
     }
-    if (key === 'minLength' || key === 'minimum' || key === 'minItems' || key === 'minProperties') {
+    if (key === 'minLength' || key === 'minimum' || key === 'minItems' || key === 'minProperties' || key === 'exclusiveMinimum') {
       if (typeof previousValue === 'number' && typeof candidateValue === 'number' && candidateValue > previousValue) return true;
       continue;
     }
@@ -225,7 +259,13 @@ function flattenAllOfForContainment(schema: RecordValue): RecordValue {
   const required = effectiveRequired(schema);
   if (required.length > 0) flattened.required = required;
   const properties = effectiveProperties(schema);
-  if (Object.keys(properties).length > 0) flattened.properties = properties;
+  const flattenedProperties: RecordValue = {};
+  for (const [property, propertySchema] of Object.entries(properties)) {
+    flattenedProperties[property] = isRecord(propertySchema) && Array.isArray(propertySchema.allOf)
+      ? flattenAllOfForContainment(propertySchema)
+      : propertySchema;
+  }
+  if (Object.keys(flattenedProperties).length > 0) flattened.properties = flattenedProperties;
   for (const key of containmentConstraintKeys) {
     const value = inheritedConstraint(schema, key);
     if (value !== undefined) flattened[key] = value;
@@ -466,7 +506,10 @@ function collectContent(previous: unknown, next: unknown, path: string, changes:
 
 function collectCommonSchemaConstraints(previous: RecordValue, next: RecordValue, path: string, changes: BreakingChange[]): void {
   if (shouldStop(changes)) return;
-  for (const key of ['type', 'format', 'pattern', 'const', 'minLength', 'maxLength', 'minimum', 'maximum', 'minItems', 'maxItems'] as const) {
+  for (const key of [
+    'type', 'format', 'pattern', 'const', 'minLength', 'maxLength', 'minimum', 'maximum',
+    'exclusiveMinimum', 'exclusiveMaximum', 'minItems', 'maxItems', 'unevaluatedProperties',
+  ] as const) {
     const previousValue = inheritedConstraint(previous, key);
     const nextValue = inheritedConstraint(next, key);
     if (previousValue === undefined) {
@@ -477,9 +520,9 @@ function collectCommonSchemaConstraints(previous: RecordValue, next: RecordValue
       addChange(changes, `${path}.${key}`, `constraint ${key} was removed.`, previousValue, undefined, key, previous);
       continue;
     }
-    const narrowed = key === 'maxLength' || key === 'maximum' || key === 'maxItems'
+    const narrowed = key === 'maxLength' || key === 'maximum' || key === 'exclusiveMaximum' || key === 'maxItems'
       ? typeof previousValue === 'number' && typeof nextValue === 'number' && nextValue < previousValue
-      : key === 'minLength' || key === 'minimum' || key === 'minItems'
+      : key === 'minLength' || key === 'minimum' || key === 'exclusiveMinimum' || key === 'minItems'
         ? typeof previousValue === 'number' && typeof nextValue === 'number' && nextValue > previousValue
         : JSON.stringify(previousValue) !== JSON.stringify(nextValue);
     if (narrowed) addChange(changes, `${path}.${key}`, `constraint ${key} was narrowed.`, previousValue, nextValue, key, previous);
@@ -606,7 +649,7 @@ function addChange(
   if (shouldStop(changes)) return;
   const kind = stableIdentity ?? 'value';
   const sourceIdentity = getSourceIdentity(changes, source ?? objectValue(oldValue) ?? objectValue(newValue));
-  const logicalIdentity = `${sourceIdentity}#${kind}#${fingerprint(reason)}#${fingerprint(oldValue)}->${fingerprint(newValue)}`;
+  const logicalIdentity = `${sourceIdentity}#${kind}#${fingerprint(reason)}#${identityFingerprint(oldValue, kind)}->${identityFingerprint(newValue, kind)}`;
   changes.push({
     jsonPath,
     reason,
@@ -640,20 +683,27 @@ function fingerprint(value: unknown): string {
   return createHash('sha256').update(stableSerialize(value)).digest('hex');
 }
 
+function identityFingerprint(value: unknown, kind: string): string {
+  const composition = /^(oneOf|anyOf|allOf)(?::|$)/.test(kind);
+  return createHash('sha256').update(stableSerialize(value, undefined, composition)).digest('hex');
+}
+
 function canonicalChangePath(path: string): string {
   return path.replace(/\.(oneOf|anyOf|allOf)\[\d+\]/g, '.$1[*]');
 }
 
-function stableSerialize(value: unknown, seen = new WeakSet<object>()): string {
+function stableSerialize(value: unknown, seen = new WeakSet<object>(), canonicalizeCompositions = false): string {
   if (value === undefined) return 'undefined';
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (seen.has(value)) return '"[Circular]"';
   seen.add(value);
   let serialized: string;
   if (Array.isArray(value)) {
-    serialized = `[${value.map((item) => stableSerialize(item, seen)).join(',')}]`;
+    const items = value.map((item) => stableSerialize(item, seen, canonicalizeCompositions));
+    if (canonicalizeCompositions) items.sort();
+    serialized = `[${items.join(',')}]`;
   } else {
-    serialized = `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize((value as Record<string, unknown>)[key], seen)}`).join(',')}}`;
+    serialized = `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize((value as Record<string, unknown>)[key], seen, canonicalizeCompositions && ['oneOf', 'anyOf', 'allOf'].includes(key))}`).join(',')}}`;
   }
   seen.delete(value);
   return serialized;
@@ -673,6 +723,8 @@ function indexSourceObjects(value: unknown, rootPath: string, sourceIds: WeakMap
       return;
     }
     if (!Array.isArray(current)) return;
+    if (sourceIds.has(current)) return;
+    sourceIds.set(current, path);
     const occurrences = new Map<string, number>();
     current
       .map((item) => ({ item, identity: fingerprint(item) }))

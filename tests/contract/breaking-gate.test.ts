@@ -138,6 +138,54 @@ describe('OpenAPI compatibility gate', () => {
     expect(collectBreakingChanges(previous, candidate).length).toBeGreaterThan(0);
   });
 
+  it('rejects 2020-12 sibling constraints added beside a nested union wrapper', () => {
+    expect(() => assertNoBreakingChanges(
+      { oneOf: [{ type: 'number' }] },
+      { oneOf: [{ oneOf: [{ type: 'number' }], exclusiveMinimum: 0 }] },
+    )).toThrow(/exclusiveMinimum|removed|composition/);
+    expect(() => assertNoBreakingChanges(
+      { oneOf: [{ type: 'object' }] },
+      { oneOf: [{ oneOf: [{ type: 'object' }], unevaluatedProperties: false }] },
+    )).toThrow(/unevaluatedProperties|removed|composition/);
+  });
+
+  it('treats equivalent allOf property splits as compatible and added constraints as narrowing', () => {
+    const oldSchema = {
+      oneOf: [{ type: 'object', properties: { id: { type: 'string' } } }],
+    };
+    const narrowed = {
+      oneOf: [{ allOf: [
+        { type: 'object', properties: { id: { minLength: 5 } } },
+        { type: 'object', properties: { id: { type: 'string' } } },
+      ] }],
+    };
+    expect(() => assertNoBreakingChanges(oldSchema, narrowed)).toThrow(/minLength|removed|narrowed|composition/);
+
+    const oldConstrained = {
+      oneOf: [{ type: 'object', properties: { id: { type: 'string', minLength: 5 } } }],
+    };
+    const equivalentSplit = {
+      oneOf: [{ allOf: [
+        { type: 'object', properties: { id: { minLength: 5 } } },
+        { type: 'object', properties: { id: { type: 'string' } } },
+      ] }],
+    };
+    expect(() => assertNoBreakingChanges(oldConstrained, equivalentSplit)).not.toThrow();
+    expect(() => assertNoBreakingChanges(equivalentSplit, oldConstrained)).not.toThrow();
+  });
+
+  it.each(['oneOf', 'anyOf', 'allOf'] as const)('keeps candidate-only %s identity stable across equivalent option reordering', (key) => {
+    const first = collectBreakingChanges({}, { [key]: [{ type: 'string' }, { type: 'null' }] })[0];
+    const reordered = collectBreakingChanges({}, { [key]: [{ type: 'null' }, { type: 'string' }] })[0];
+
+    expect(first).toBeDefined();
+    expect(reordered).toBeDefined();
+    expect(reordered?.sourceIdentity).toBe(first?.sourceIdentity);
+    expect(reordered?.logicalIdentity).toBe(first?.logicalIdentity);
+    expect(reordered?.stableIdentity).toBe(first?.stableIdentity);
+    expect(reordered?.affectedPaths).toEqual(first?.affectedPaths);
+  });
+
   it('reports the removed middle composition option rather than its successor', () => {
     const previous = { oneOf: [{ const: 'A' }, { const: 'B' }, { const: 'C' }] };
     const candidate = { oneOf: [{ const: 'A' }, { const: 'C' }] };
