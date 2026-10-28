@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { parse } from 'yaml';
 import { expect, it } from 'vitest';
 import inventory from '../../packages/contracts/openapi/breaking-inventory.json' with { type: 'json' };
-import { collectBreakingInventory } from '../../packages/contracts/openapi/breaking-inventory.js';
+import { collectBreakingInventory, normalizeDocument } from '../../packages/contracts/openapi/breaking-inventory.js';
+import { collectBreakingChanges } from '../../packages/contracts/openapi/breaking-gate.js';
 
 const baselinePath = new URL('../../packages/contracts/openapi/openapi.baseline.yaml', import.meta.url);
 const candidatePath = new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url);
@@ -38,6 +40,82 @@ it('keeps the complete breaking inventory auditable and synchronized with both a
   expect(persisted.entries.every((entry) => entry.authorization.requiredApprovers.length > 0)).toBe(true);
   expect(persisted.entries.every((entry) => entry.verification.evidence.length > 0)).toBe(true);
   expect(persisted.entries.every((entry) => entry.verification.affectedPaths.length > 0)).toBe(true);
+  expect(new Set(persisted.entries.map((entry) => entry.verification.comparatorIdentity)).size).toBe(persisted.count);
+  expect(Object.keys(persisted.affectedPathGroups).length).toBeGreaterThan(0);
+  expect(Object.values(persisted.affectedPathGroups).some((paths) => paths.length > 1)).toBe(true);
+  expect(Object.keys(persisted.valueStore).length).toBeGreaterThan(0);
+  expect(persisted.entries.every((entry) => {
+    const paths = persisted.affectedPathGroups[entry.verification.affectedPathGroupId];
+    return paths !== undefined && paths.includes(entry.jsonPath);
+  })).toBe(true);
 
-  expect(generated.entries).toEqual(persisted.entries);
+  expect(digest(generated.entries)).toBe(digest(persisted.entries));
+  expect(digest(generated.affectedPathGroups)).toBe(digest(persisted.affectedPathGroups));
+  expect(digest(generated.valueStore)).toBe(digest(persisted.valueStore));
 });
+
+it('persists raw old/new values from the structured event without lossy summarization', async () => {
+  type SyntheticDocument = {
+    openapi: string;
+    info: { title: string; version: string };
+    paths: {
+      '/records': {
+        get: {
+          operationId: string;
+          responses: {
+            '200': {
+              content: {
+                'application/json': {
+                  schema: { oneOf: Array<{ type: string; required: string[]; properties: Record<string, unknown> }> };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
+  const baseline: SyntheticDocument = {
+    openapi: '3.1.0',
+    info: { title: 'Inventory test', version: '1.0.0' },
+    paths: {
+      '/records': {
+        get: {
+          operationId: 'getRecords',
+          responses: {
+            '200': {
+              content: {
+                'application/json': {
+                  schema: { oneOf: [{ type: 'object', required: ['id'], properties: { id: { type: 'string' }, label: { type: 'string' } } }] },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+  const candidate = structuredClone(baseline);
+  const candidateSchema = candidate.paths['/records'].get.responses['200'].content['application/json'].schema.oneOf[0];
+  if (candidateSchema === undefined) throw new Error('synthetic schema branch is missing');
+  candidateSchema.required = ['id', 'version'];
+  candidateSchema.properties.version = { type: 'integer' };
+
+  const normalizedBaseline = await normalizeDocument(baseline);
+  const normalizedCandidate = await normalizeDocument(candidate);
+  const rawChanges = collectBreakingChanges(normalizedBaseline, normalizedCandidate);
+  const generated = await collectBreakingInventory(baseline, candidate);
+  const rawByIdentity = new Map(rawChanges.map((change) => [change.stableIdentity, change]));
+
+  expect(generated.entries).toHaveLength(rawChanges.length);
+  for (const entry of generated.entries) {
+    const raw = rawByIdentity.get(entry.verification.comparatorIdentity);
+    expect(raw, entry.jsonPath).toBeDefined();
+    expect(generated.valueStore[entry.oldValue.sha256]).toEqual(raw?.oldValue === undefined ? { present: false } : raw?.oldValue);
+    expect(generated.valueStore[entry.newValue.sha256]).toEqual(raw?.newValue === undefined ? { present: false } : raw?.newValue);
+  }
+});
+
+function digest(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}

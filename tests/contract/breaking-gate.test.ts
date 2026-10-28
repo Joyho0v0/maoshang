@@ -106,6 +106,34 @@ describe('OpenAPI compatibility gate', () => {
     )).toThrow(/oneOf|overlap|option/);
   });
 
+  it('uses the same compatible composition matching for the gate and inventory', () => {
+    const previous = { oneOf: [{ const: 'A' }, { const: 'B' }] };
+    const reordered = { oneOf: [{ const: 'B' }, { const: 'A' }] };
+
+    expect(() => assertNoBreakingChanges(previous, reordered)).not.toThrow();
+    expect(collectBreakingChanges(previous, reordered)).toEqual([]);
+  });
+
+  it('makes the fail-fast error the first structured event with identical values', () => {
+    const previous = { type: 'object', required: ['id'], properties: { id: { type: 'string' } } };
+    const next = { type: 'object', required: [], properties: { id: { type: 'string' } } };
+    const [first] = collectBreakingChanges(previous, next);
+    let error: unknown;
+    try {
+      assertNoBreakingChanges(previous, next);
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(first).toBeDefined();
+    if (first === undefined) throw new Error('expected a structured breaking event');
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain(first.jsonPath);
+    expect((error as Error).message).toContain(first.reason);
+    expect((error as Error).message).toContain(JSON.stringify(first.oldValue));
+    expect((error as Error).message).toContain(JSON.stringify(first.newValue));
+  });
+
   it('collects every nested breaking path instead of stopping at the first operation failure', () => {
     const previous = {
       openapi: '3.1.0',

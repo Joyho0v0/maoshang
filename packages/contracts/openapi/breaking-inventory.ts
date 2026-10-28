@@ -7,11 +7,18 @@ import { collectBreakingChanges, type BreakingChange } from './breaking-gate.js'
 
 type RecordValue = Record<string, unknown>;
 
+interface ValueReference {
+  readonly kind: 'content-addressed-value';
+  readonly sha256: string;
+  readonly jsonLength: number;
+  readonly valuePath: string;
+}
+
 export interface BreakingInventoryEntry {
   readonly id: string;
   readonly jsonPath: string;
-  readonly oldValue: unknown;
-  readonly newValue: unknown;
+  readonly oldValue: ValueReference;
+  readonly newValue: ValueReference;
   readonly reason: string;
   readonly ownership: {
     readonly domain: string;
@@ -34,6 +41,7 @@ export interface BreakingInventoryEntry {
     readonly evidence: readonly string[];
     readonly source: string;
     readonly affectedPaths: readonly string[];
+    readonly affectedPathGroupId: string;
     readonly comparatorIdentity: string;
   };
 }
@@ -41,6 +49,8 @@ export interface BreakingInventoryEntry {
 export interface BreakingInventory {
   readonly count: number;
   readonly entries: readonly BreakingInventoryEntry[];
+  readonly affectedPathGroups: Readonly<Record<string, readonly string[]>>;
+  readonly valueStore: Readonly<Record<string, unknown>>;
 }
 
 const APPROVERS = ['高级 Web 后端架构师', '高级 Web 前端架构师', '全栈交付 Leader'] as const;
@@ -53,8 +63,21 @@ export async function collectBreakingInventory(previousDocument: RecordValue, ne
   const previous = await normalizeDocument(previousDocument);
   const next = await normalizeDocument(nextDocument);
   const changes = collectBreakingChanges(previous, next);
-  const entries = changes.map((change, index) => enrichEntry(index + 1, change));
-  return { count: entries.length, entries };
+  const affectedPathGroups: Record<string, readonly string[]> = {};
+  const valueStore: Record<string, unknown> = {};
+  const storeValue = (value: unknown): ValueReference => {
+    const audited = auditValue(value);
+    const serialized = JSON.stringify(audited);
+    const sha256 = fingerprint(audited);
+    valueStore[sha256] = audited;
+    return { kind: 'content-addressed-value', sha256, jsonLength: serialized.length, valuePath: `#/valueStore/${sha256}` };
+  };
+  const entries = changes.map((change, index) => {
+    const groupId = `affected-paths-${fingerprint(change.logicalIdentity)}`;
+    affectedPathGroups[groupId] = change.affectedPaths;
+    return enrichEntry(index + 1, change, groupId, storeValue);
+  });
+  return { count: entries.length, entries, affectedPathGroups, valueStore };
 }
 
 export function buildAuditDocument(inventory: BreakingInventory, digests: {
@@ -64,7 +87,7 @@ export function buildAuditDocument(inventory: BreakingInventory, digests: {
   readonly generatedClient: string;
 }): RecordValue {
   return {
-    formatVersion: 1,
+    formatVersion: 2,
     purpose: 'Complete structured audit inventory for the candidate against the approved OpenAPI baseline.',
     baseline: { revision: BASELINE_REVISION, digest: digests.baseline, path: 'packages/contracts/openapi/openapi.baseline.yaml' },
     candidate: {
@@ -75,12 +98,14 @@ export function buildAuditDocument(inventory: BreakingInventory, digests: {
       path: 'packages/contracts/openapi/openapi.yaml',
     },
     count: inventory.count,
-    inventoryMethod: 'All structured BreakingChange records from the same normalized comparator used by the fail-fast gate; records retain exact paths, old/new domains, stable identities and affected paths after template expansion and Swagger dereference.',
+    inventoryMethod: 'All structured BreakingChange records from the same normalized comparator used by the fail-fast gate; entries retain exact paths and stable identities, raw old/new values via the content-addressed valueStore, and complete affected-path groups after template expansion and Swagger dereference.',
     promotionStatus: 'blocked: approved baseline is intentionally unchanged; only the Problem v1 semantic direction has frontend acceptance, not promotion authorization.',
+    affectedPathGroups: inventory.affectedPathGroups,
+    valueStore: inventory.valueStore,
     entries: inventory.entries,
   };
 }
-function enrichEntry(index: number, change: BreakingChange): BreakingInventoryEntry {
+function enrichEntry(index: number, change: BreakingChange, affectedPathGroupId: string, storeValue: (value: unknown) => ValueReference): BreakingInventoryEntry {
   const isProblem = change.jsonPath.includes('Problem') || change.jsonPath.includes('/auth/sessions');
   const isCommandStatus = change.jsonPath.includes('CommandStatus') || change.jsonPath.includes('/commands/status');
   const isInventory = change.jsonPath.includes('/inventory/') || change.jsonPath.includes('Inventory');
@@ -102,14 +127,14 @@ function enrichEntry(index: number, change: BreakingChange): BreakingInventoryEn
   return {
     id: `BRK-${String(index).padStart(3, '0')}`,
     jsonPath: change.jsonPath,
-    oldValue: summarizeValue(change.oldValue),
-    newValue: summarizeValue(change.newValue),
+    oldValue: storeValue(change.oldValue),
+    newValue: storeValue(change.newValue),
     reason: change.reason,
     ownership: {
       domain,
       decisionOwner,
       consumerImpact: impact,
-      scope: `stable comparator identity: ${change.stableIdentity ?? change.jsonPath}`,
+      scope: `stable comparator identity: ${change.stableIdentity}`,
     },
     disposition: {
       status,
@@ -131,77 +156,22 @@ function enrichEntry(index: number, change: BreakingChange): BreakingInventoryEn
         'complete structured comparator collection over normalized components, parameters, request bodies, response headers, response content and schemas',
       ],
       source: 'packages/contracts/openapi/breaking-gate.ts + packages/contracts/openapi/breaking-inventory.ts + tests/contract/breaking-inventory.test.ts',
+      // Keep the same complete logical-change aggregation on the entry and in
+      // the immutable top-level map. Consumers may audit one entry without
+      // having to infer sibling paths from the map first.
       affectedPaths: change.affectedPaths,
-      comparatorIdentity: change.stableIdentity ?? change.jsonPath,
+      affectedPathGroupId,
+      comparatorIdentity: change.stableIdentity,
     },
   };
 }
 
-function summarizeValue(value: unknown, depth = 0): unknown {
-  if (value === undefined) return { present: false };
-  if (value === null || typeof value !== 'object') return value;
-  if (depth >= 3) {
-    if (Array.isArray(value)) return { kind: 'array', length: value.length };
-    const record = value as RecordValue;
-    return {
-      kind: 'object',
-      keys: Object.keys(record).sort(),
-      ...(record.type === undefined ? {} : { type: record.type }),
-      ...(record.format === undefined ? {} : { format: record.format }),
-      ...(record.const === undefined ? {} : { const: record.const }),
-      ...(record.enum === undefined ? {} : { enum: record.enum }),
-      ...(record.required === undefined ? {} : { required: record.required }),
-    };
-  }
-  if (Array.isArray(value)) {
-    if (value.length > 12 && value.every((item) => isRecord(item))) {
-      return {
-        kind: 'schema-array',
-        length: value.length,
-        options: value.map((item) => summarizeSchemaOption(item as RecordValue)),
-      };
-    }
-    return value.map((item) => summarizeValue(item, depth + 1));
-  }
-  const record = value as RecordValue;
-  const result: RecordValue = {};
-  for (const key of Object.keys(record).sort()) result[key] = summarizeValue(record[key], depth + 1);
-  return result;
+function auditValue(value: unknown): unknown {
+  return value === undefined ? { present: false } : value;
 }
 
-function summarizeSchemaOption(option: RecordValue): RecordValue {
-  const result: RecordValue = { keys: Object.keys(option).sort(), domains: collectSchemaDomains(option) };
-  for (const key of ['type', 'format', 'const', 'enum', 'required', 'properties', 'oneOf', 'anyOf', 'allOf'] as const) {
-    if (option[key] === undefined) continue;
-    if (key === 'properties' && isRecord(option[key])) {
-      result[key] = Object.keys(option[key]).sort();
-      continue;
-    }
-    if (key === 'oneOf' || key === 'anyOf' || key === 'allOf') {
-      result[key] = Array.isArray(option[key]) ? { length: option[key].length } : option[key];
-      continue;
-    }
-    result[key] = summarizeValue(option[key], 2);
-  }
-  return result;
-}
-
-function collectSchemaDomains(schema: RecordValue, prefix = ''): RecordValue {
-  const domains: RecordValue = {};
-  for (const key of ['type', 'format', 'const', 'enum'] as const) {
-    if (schema[key] !== undefined) domains[prefix === '' ? key : `${prefix}.${key}`] = schema[key];
-  }
-  if (isRecord(schema.properties)) {
-    for (const [name, property] of Object.entries(schema.properties)) {
-      if (isRecord(property)) Object.assign(domains, collectSchemaDomains(property, `${prefix}properties.${name}`));
-    }
-  }
-  if (Array.isArray(schema.allOf)) {
-    for (const branch of schema.allOf) {
-      if (isRecord(branch)) Object.assign(domains, collectSchemaDomains(branch, prefix));
-    }
-  }
-  return domains;
+function fingerprint(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value) ?? 'undefined').digest('hex').slice(0, 16);
 }
 
 export async function normalizeDocument(document: RecordValue): Promise<RecordValue> {
@@ -249,7 +219,7 @@ async function main(): Promise<void> {
     candidate: await digest(currentPath),
     generated: 'b0be58f74d9118664e24d7df68c547235abdb3348fbbf894c6f4d7962c7a0831',
     generatedClient: 'c32e0e08f80a96ca893882d70ad13fd3a96c134fa97bef8a6346e383f0b527ab',
-  }), null, 2)}\n`);
+  }))}\n`);
 }
 
 if (fileURLToPath(import.meta.url) === process.argv[1]) {
