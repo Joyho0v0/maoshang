@@ -66,7 +66,6 @@ export interface AuditProvenance {
 
 const APPROVERS = ['高级 Web 后端架构师', '高级 Web 前端架构师', '全栈交付 Leader'] as const;
 const BASELINE_REVISION = '9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25';
-const CANDIDATE_REVISION = '9138ea8f5cf130c3664367e39cafc18812edaa55';
 const BREAKING_COMMAND = 'npm run contract:breaking (approved baseline remains unchanged)';
 const COMPARATOR_COMMAND = 'npm run contract:breaking -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml';
 const GENERATOR_COMMAND = 'npm run contract:breaking:inventory -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml';
@@ -75,12 +74,13 @@ export async function collectBreakingInventory(previousDocument: RecordValue, ne
   const previous = await normalizeDocument(previousDocument);
   const next = await normalizeDocument(nextDocument);
   const changes = collectBreakingChanges(previous, next);
+  const candidateRevision = latestRevision('packages/contracts/openapi/openapi.yaml');
   const affectedPathGroups: Record<string, readonly string[]> = {};
   const contentStore = createContentAddressedValueStore();
   const entries = changes.map((change, index) => {
     const groupId = `affected-paths-${fingerprint(change.logicalIdentity)}`;
     affectedPathGroups[groupId] = change.affectedPaths;
-    return enrichEntry(index + 1, change, groupId, contentStore.storeValue);
+    return enrichEntry(index + 1, change, groupId, contentStore.storeValue, candidateRevision);
   });
   return { count: entries.length, entries, affectedPathGroups, valueStore: contentStore.valueStore };
 }
@@ -90,13 +90,13 @@ export function buildAuditDocument(inventory: BreakingInventory, digests: {
   readonly candidate: string;
   readonly generated: string;
   readonly generatedClient: string;
-}, provenance: AuditProvenance): RecordValue {
+}, provenance: AuditProvenance, candidateRevision: string): RecordValue {
   return {
     formatVersion: 2,
     purpose: 'Complete structured audit inventory for the candidate against the approved OpenAPI baseline.',
     baseline: { revision: BASELINE_REVISION, digest: digests.baseline, path: 'packages/contracts/openapi/openapi.baseline.yaml' },
     candidate: {
-      revision: CANDIDATE_REVISION,
+      revision: candidateRevision,
       sha256: digests.candidate,
       generatedSha256: digests.generated,
       generatedClientSha256: digests.generatedClient,
@@ -120,7 +120,7 @@ export function buildAuditDocument(inventory: BreakingInventory, digests: {
     entries: inventory.entries,
   };
 }
-function enrichEntry(index: number, change: BreakingChange, affectedPathGroupId: string, storeValue: (value: unknown) => ValueReference): BreakingInventoryEntry {
+function enrichEntry(index: number, change: BreakingChange, affectedPathGroupId: string, storeValue: (value: unknown) => ValueReference, candidateRevision: string): BreakingInventoryEntry {
   const status = 'pending-owner-decision';
   return {
     id: `BRK-${String(index).padStart(3, '0')}`,
@@ -143,11 +143,11 @@ function enrichEntry(index: number, change: BreakingChange, affectedPathGroupId:
       status,
       requiredApprovers: APPROVERS,
       acceptedSemanticDecisionBy: [],
-      baselinePromotion: `not authorized in revision ${CANDIDATE_REVISION}`,
+      baselinePromotion: `not authorized in revision ${candidateRevision}`,
     },
     verification: {
       evidence: [
-        `candidate revision ${CANDIDATE_REVISION}; approved baseline ${BASELINE_REVISION}`,
+        `candidate revision ${candidateRevision}; approved baseline ${BASELINE_REVISION}`,
         BREAKING_COMMAND,
         'complete structured comparator collection over normalized components, parameters, request bodies, response headers, response content and schemas',
       ],
@@ -237,11 +237,12 @@ async function main(): Promise<void> {
   const digest = async (path: string) => createHash('sha256').update(await readFile(path)).digest('hex');
   const comparatorSource = await sourceProvenance('packages/contracts/openapi/breaking-gate.ts', fileURLToPath(new URL('./breaking-gate.ts', import.meta.url)));
   const generatorSource = await sourceProvenance('packages/contracts/openapi/breaking-inventory.ts', fileURLToPath(new URL('./breaking-inventory.ts', import.meta.url)));
+  const candidateRevision = latestRevision('packages/contracts/openapi/openapi.yaml');
   process.stdout.write(`${JSON.stringify(buildAuditDocument(inventory, {
     baseline: await digest(previousPath),
     candidate: await digest(currentPath),
-    generated: 'b0be58f74d9118664e24d7df68c547235abdb3348fbbf894c6f4d7962c7a0831',
-    generatedClient: 'c32e0e08f80a96ca893882d70ad13fd3a96c134fa97bef8a6346e383f0b527ab',
+    generated: await digest(fileURLToPath(new URL('./generated.ts', import.meta.url))),
+    generatedClient: await digest(fileURLToPath(new URL('./generated-client.ts', import.meta.url))),
   }, {
     comparatorRevision: comparatorSource.revision,
     generatorRevision: generatorSource.revision,
@@ -249,7 +250,13 @@ async function main(): Promise<void> {
     generatorSourceSha256: generatorSource.sha256,
     comparatorCommand: `${COMPARATOR_COMMAND} [sourceRevision=${comparatorSource.revision}]`,
     generatorCommand: `${GENERATOR_COMMAND} [sourceRevision=${generatorSource.revision}]`,
-  }))}\n`);
+  }, candidateRevision))}\n`);
+}
+
+function latestRevision(relativePath: string): string {
+  const revision = execFileSync('git', ['log', '-1', '--format=%H', '--', relativePath], { encoding: 'utf8' }).trim();
+  if (revision.length === 0) throw new Error(`Cannot determine committed revision for ${relativePath}.`);
+  return revision;
 }
 
 async function sourceProvenance(relativePath: string, currentPath: string): Promise<{ revision: string; sha256: string }> {
