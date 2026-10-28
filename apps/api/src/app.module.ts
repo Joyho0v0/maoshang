@@ -12,7 +12,7 @@ import { RequestSafetyGuard } from './common/security/request-safety.guard.js';
   controllers: [CsrfController, SessionController, CommandStatusController],
   providers: [
     CsrfService,
-    InMemoryIdempotencyStore,
+    { provide: InMemoryIdempotencyStore, useFactory: () => new InMemoryIdempotencyStore() },
     RequestSafetyGuard,
     { provide: CommandStatusService, useFactory: (store: InMemoryIdempotencyStore) => new CommandStatusService(store), inject: [InMemoryIdempotencyStore] },
   ],
