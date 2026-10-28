@@ -7,7 +7,7 @@ import { collectBreakingChanges, type BreakingChange } from './breaking-gate.js'
 
 type RecordValue = Record<string, unknown>;
 
-interface ValueReference {
+export interface ValueReference {
   readonly kind: 'content-addressed-value';
   readonly sha256: string;
   readonly jsonLength: number;
@@ -65,20 +65,13 @@ export async function collectBreakingInventory(previousDocument: RecordValue, ne
   const next = await normalizeDocument(nextDocument);
   const changes = collectBreakingChanges(previous, next);
   const affectedPathGroups: Record<string, readonly string[]> = {};
-  const valueStore: Record<string, unknown> = {};
-  const storeValue = (value: unknown): ValueReference => {
-    const audited = auditValue(value);
-    const serialized = JSON.stringify(audited);
-    const sha256 = fingerprint(audited);
-    valueStore[sha256] = audited;
-    return { kind: 'content-addressed-value', sha256, jsonLength: serialized.length, valuePath: `#/valueStore/${sha256}` };
-  };
+  const contentStore = createContentAddressedValueStore();
   const entries = changes.map((change, index) => {
     const groupId = `affected-paths-${fingerprint(change.logicalIdentity)}`;
     affectedPathGroups[groupId] = change.affectedPaths;
-    return enrichEntry(index + 1, change, groupId, storeValue);
+    return enrichEntry(index + 1, change, groupId, contentStore.storeValue);
   });
-  return { count: entries.length, entries, affectedPathGroups, valueStore };
+  return { count: entries.length, entries, affectedPathGroups, valueStore: contentStore.valueStore };
 }
 
 export function buildAuditDocument(inventory: BreakingInventory, digests: {
@@ -174,6 +167,30 @@ function auditValue(value: unknown): unknown {
 
 function fingerprint(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value) ?? 'undefined').digest('hex');
+}
+
+export function createContentAddressedValueStore(
+  hashValue: (value: unknown) => string = fingerprint,
+): {
+  readonly valueStore: Record<string, unknown>;
+  readonly storeValue: (value: unknown) => ValueReference;
+} {
+  const valueStore: Record<string, unknown> = {};
+  const storeValue = (value: unknown): ValueReference => {
+    const audited = auditValue(value);
+    const serialized = JSON.stringify(audited);
+    const sha256 = hashValue(audited);
+    if (Object.prototype.hasOwnProperty.call(valueStore, sha256)) {
+      const existingSerialized = JSON.stringify(valueStore[sha256]);
+      if (existingSerialized !== serialized) {
+        throw new Error(`content-address collision for ${sha256}`);
+      }
+    } else {
+      valueStore[sha256] = audited;
+    }
+    return { kind: 'content-addressed-value', sha256, jsonLength: serialized.length, valuePath: `#/valueStore/${sha256}` };
+  };
+  return { valueStore, storeValue };
 }
 
 export async function normalizeDocument(document: RecordValue): Promise<RecordValue> {

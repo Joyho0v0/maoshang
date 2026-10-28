@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { parse } from 'yaml';
 import { expect, it } from 'vitest';
 import inventory from '../../packages/contracts/openapi/breaking-inventory.json' with { type: 'json' };
-import { collectBreakingInventory, normalizeDocument } from '../../packages/contracts/openapi/breaking-inventory.js';
+import { collectBreakingInventory, createContentAddressedValueStore, normalizeDocument } from '../../packages/contracts/openapi/breaking-inventory.js';
 import { collectBreakingChanges } from '../../packages/contracts/openapi/breaking-gate.js';
 
 const baselinePath = new URL('../../packages/contracts/openapi/openapi.baseline.yaml', import.meta.url);
@@ -155,6 +155,16 @@ it('keeps undefined distinct from a legitimate present:false raw value', async (
   expect(generated.valueStore[removed.oldValue.sha256]).toEqual({ present: true, value: { present: false } });
   expect(generated.valueStore[removed.newValue.sha256]).toEqual({ present: false });
   expect(removed.oldValue.sha256).not.toBe(removed.newValue.sha256);
+});
+
+it('reuses equal content-address values but rejects same-key different-value collisions', () => {
+  const store = createContentAddressedValueStore(() => 'forced-collision');
+  const first = store.storeValue({ value: 'same' });
+  const second = store.storeValue({ value: 'same' });
+
+  expect(second).toEqual(first);
+  expect(Object.keys(store.valueStore)).toEqual(['forced-collision']);
+  expect(() => store.storeValue({ value: 'different' })).toThrow(/content-address collision/);
 });
 
 it('aggregates shared component paths but keeps equal inline schemas separate', async () => {
