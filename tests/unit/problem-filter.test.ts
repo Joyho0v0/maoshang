@@ -58,13 +58,41 @@ describe('problem exception operation boundary', () => {
     expect(state.body).toMatchObject({ status: 500, code: 'INTERNAL_ERROR' });
   });
 
-  it('accepts a typed permission problem through the generic public 403 response', async () => {
+  it('rejects a permission problem on the CSRF-only createSession response', async () => {
     const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
     const filter = new ProblemExceptionFilter(createContractValidator(document));
     const state: FilterState = { headers: {} };
     filter.catch(new ProblemError(buildProblem({ status: 403, code: 'PERMISSION_DENIED', title: 'Permission denied', requestId: 'f8b6e3a9-3a0a-4c1c-b3f3-8a8225e7f019', retryable: false })), hostFor({ method: 'POST', url: '/api/v1/auth/sessions', routeOptions: { url: '/api/v1/auth/sessions' }, headers: {} }, state));
+    expect(state.status).toBe(500);
+    expect(state.body).toMatchObject({ status: 500, code: 'INTERNAL_ERROR' });
+  });
+
+  it('requires the operation-specific CSRF meta refresh href', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const filter = new ProblemExceptionFilter(createContractValidator(document));
+    for (const meta of [undefined, { refreshHref: '/api/v1/auth/other' }]) {
+      const state: FilterState = { headers: {} };
+      filter.catch(new ProblemError({
+        type: 'urn:autoflow:problem:csrf-failed',
+        title: 'CSRF failed',
+        status: 403,
+        code: 'CSRF_FAILED',
+        requestId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2',
+        retryable: true,
+        ...(meta === undefined ? {} : { meta }),
+      } as never), hostFor({ method: 'POST', url: '/api/v1/auth/sessions', routeOptions: { url: '/api/v1/auth/sessions' }, headers: {} }, state));
+      expect(state.status).toBe(500);
+      expect(state.body).toMatchObject({ status: 500, code: 'INTERNAL_ERROR' });
+    }
+  });
+
+  it('preserves a valid operation-specific CSRF problem and refresh href', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const filter = new ProblemExceptionFilter(createContractValidator(document));
+    const state: FilterState = { headers: {} };
+    filter.catch(new ProblemError(buildProblem({ status: 403, code: 'CSRF_FAILED', title: 'CSRF failed', requestId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', retryable: true, meta: { refreshHref: '/api/v1/auth/csrf' } })), hostFor({ method: 'POST', url: '/api/v1/auth/sessions', routeOptions: { url: '/api/v1/auth/sessions' }, headers: {} }, state));
     expect(state.status).toBe(403);
-    expect(state.body).toMatchObject({ status: 403, code: 'PERMISSION_DENIED' });
+    expect(state.body).toMatchObject({ status: 403, code: 'CSRF_FAILED', meta: { refreshHref: '/api/v1/auth/csrf' } });
   });
 
   it('emits the required Retry-After value for a declared rate-limit response', async () => {

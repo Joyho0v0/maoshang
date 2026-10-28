@@ -85,10 +85,11 @@ describe('machine-readable Joint Contract v1 artifact', () => {
 
   it('freezes typed public 403/429 responses and endpoint filter allowlists', () => {
     const listOperationIds = ['listCustomers', 'listProducts', 'listSkus', 'listOrders', 'listInventoryBalances', 'listInventoryMovements', 'listInventoryReservations', 'listInventoryObservations', 'listPayments', 'listDocuments', 'listTasks', 'listAuditEvents'];
+    const csrfOperationIds = new Set(['createSession', 'deleteCurrentSession', 'createUser', 'updateUserRoleBindings', 'updateUserDataScopeGrants', 'disableUser', 'createCustomer', 'updateCustomer', 'reverseInventoryOperation', 'createDownloadIntent']);
     for (const [operationId, operation] of Object.entries(operations)) {
       const responses = operation.responses as Readonly<Record<string, { schema?: string; headers: Readonly<Record<string, { required: boolean }>> }>>;
       const forbidden = responses['403'];
-      if (forbidden !== undefined) expect(forbidden.schema).toBe('Problem');
+      if (forbidden !== undefined) expect(forbidden.schema).toBe(csrfOperationIds.has(operationId) ? 'CsrfFailedProblem' : 'Problem');
       const rateLimited = responses['429'];
       expect(rateLimited?.schema).toBe('Problem');
       expect(rateLimited?.headers['Retry-After']).toMatchObject({ required: true });

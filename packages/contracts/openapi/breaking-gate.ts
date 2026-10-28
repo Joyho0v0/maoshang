@@ -191,7 +191,7 @@ function compareComposition(previous: RecordValue, next: RecordValue, path: stri
       throw new Error(`Breaking change at ${path}: ${key} was removed.`);
     }
     for (const previousOption of previous[key]) {
-      if (!next[key].some((candidate) => schemaContainsOption(candidate, previousOption))) throw new Error(`Breaking change at ${path}: a ${key} option was removed.`);
+      if (!next[key].some((candidate) => schemaContainsCompatibleOption(candidate, previousOption))) throw new Error(`Breaking change at ${path}: a ${key} option was removed.`);
     }
   }
 }
@@ -255,11 +255,28 @@ function allOfFlattenedInto(previous: RecordValue, next: RecordValue): boolean {
       const options = branch[key];
       if (!Array.isArray(options)) continue;
       for (const option of options) {
-        if (!schemaContainsOption(next, option)) return false;
+        if (!schemaContainsCompatibleOption(next, option)) return false;
       }
     }
   }
   return true;
+}
+
+function schemaContainsCompatibleOption(candidate: unknown, previousOption: unknown): boolean {
+  if (schemaContainsOption(candidate, previousOption)) return true;
+  if (isRecord(candidate) && isRecord(previousOption)) {
+    try {
+      assertNoBreakingChanges(previousOption, candidate, 'composition');
+      return true;
+    } catch {
+      // The candidate may contain the compatible schema below another composition branch.
+    }
+    for (const key of ['oneOf', 'anyOf', 'allOf'] as const) {
+      const options = candidate[key];
+      if (Array.isArray(options) && options.some((option) => schemaContainsCompatibleOption(option, previousOption))) return true;
+    }
+  }
+  return false;
 }
 
 function schemaContainsOption(candidate: unknown, previousOption: unknown): boolean {

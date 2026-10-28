@@ -48,7 +48,7 @@ paths:
         '201': { $ref: '#/components/responses/Session' }
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Problem' }
         '502': { $ref: '#/components/responses/Problem' }
@@ -74,7 +74,7 @@ paths:
         '204': { $ref: '#/components/responses/NoContent' }
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Problem' }
         '502': { $ref: '#/components/responses/Problem' }
@@ -114,7 +114,7 @@ paths:
         '202': { $ref: '#/components/responses/CommandStatusInProgress' }
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
         '409': { $ref: '#/components/responses/Problem' }
         '428': { $ref: '#/components/responses/PreconditionRequired' }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -128,7 +128,7 @@ paths:
       x-safety: { csrf: required, idempotency: required, ifMatch: required }
       parameters: [{ $ref: '#/components/parameters/ResourceId' }, { $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/IfMatchHeader' }]
       requestBody: { $ref: '#/components/requestBodies/RoleBindingsUpdateRequest' }
-      responses: { '200': { $ref: '#/components/responses/User' }, '202': { $ref: '#/components/responses/CommandStatusInProgress' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
+      responses: { '200': { $ref: '#/components/responses/User' }, '202': { $ref: '#/components/responses/CommandStatusInProgress' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
   /users/{id}/data-scope-grants:
     put:
       tags: [identity]
@@ -136,14 +136,14 @@ paths:
       x-safety: { csrf: required, idempotency: required, ifMatch: required }
       parameters: [{ $ref: '#/components/parameters/ResourceId' }, { $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/IfMatchHeader' }]
       requestBody: { $ref: '#/components/requestBodies/DataScopeUpdateRequest' }
-      responses: { '200': { $ref: '#/components/responses/User' }, '202': { $ref: '#/components/responses/CommandStatusInProgress' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
+      responses: { '200': { $ref: '#/components/responses/User' }, '202': { $ref: '#/components/responses/CommandStatusInProgress' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
   /users/{id}/disable:
     post:
       tags: [identity]
       operationId: disableUser
       x-safety: { csrf: required, idempotency: required, ifMatch: required }
       parameters: [{ $ref: '#/components/parameters/ResourceId' }, { $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/IfMatchHeader' }]
-      responses: { '202': { $ref: '#/components/responses/CommandStatusInProgress' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
+      responses: { '202': { $ref: '#/components/responses/CommandStatusInProgress' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
 
   /customers:
     get: { $ref: '#/x-operationTemplates/listCustomers' }
@@ -153,7 +153,7 @@ paths:
       x-safety: { csrf: required, idempotency: required, ifMatch: exempt }
       parameters: [{ $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/RequestIdHeader' }]
       requestBody: { $ref: '#/components/requestBodies/CustomerCreateRequest' }
-      responses: { '201': { $ref: '#/components/responses/CreatedCustomer' }, '202': { $ref: '#/components/responses/CommandStatusInProgress' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
+      responses: { '201': { $ref: '#/components/responses/CreatedCustomer' }, '202': { $ref: '#/components/responses/CommandStatusInProgress' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
   /customers/{id}:
     get: { $ref: '#/x-operationTemplates/getCustomer' }
     patch:
@@ -162,7 +162,7 @@ paths:
       x-safety: { csrf: required, idempotency: required, ifMatch: required }
       parameters: [{ $ref: '#/components/parameters/ResourceId' }, { $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/IfMatchHeader' }]
       requestBody: { $ref: '#/components/requestBodies/CustomerUpdateRequest' }
-      responses: { '200': { $ref: '#/components/responses/Customer' }, '202': { $ref: '#/components/responses/CommandStatusInProgress' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
+      responses: { '200': { $ref: '#/components/responses/Customer' }, '202': { $ref: '#/components/responses/CommandStatusInProgress' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
   /customers/{id}/submit-approval:
     post:
       $ref: '#/x-operationTemplates/customerCommand'
@@ -269,7 +269,7 @@ paths:
       x-safety: { csrf: required, idempotency: required, ifMatch: required }
       parameters: [{ $ref: '#/components/parameters/OperationId' }, { $ref: '#/components/parameters/CsrfHeader' }, { $ref: '#/components/parameters/IdempotencyHeader' }, { $ref: '#/components/parameters/IfMatchHeader' }]
       requestBody: { $ref: '#/components/requestBodies/InventoryCommandRequest' }
-      responses: { '201': { $ref: '#/components/responses/CreatedInventoryOperation' }, '202': { $ref: '#/components/responses/CommandStatusInProgress' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
+      responses: { '201': { $ref: '#/components/responses/CreatedInventoryOperation' }, '202': { $ref: '#/components/responses/CommandStatusInProgress' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '409': { $ref: '#/components/responses/Problem' }, '428': { $ref: '#/components/responses/PreconditionRequired' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
 
   /payments:
     get: { $ref: '#/x-operationTemplates/listPayments' }
@@ -311,7 +311,7 @@ paths:
       operationId: createDownloadIntent
       x-safety: { csrf: required, idempotency: exempt, ifMatch: exempt }
       parameters: [{ $ref: '#/components/parameters/ResourceId' }, { $ref: '#/components/parameters/CsrfHeader' }]
-      responses: { '201': { $ref: '#/components/responses/CreatedFile' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/Problem' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
+      responses: { '201': { $ref: '#/components/responses/CreatedFile' }, '403': { $ref: '#/components/responses/CsrfFailed' }, '404': { $ref: '#/components/responses/Problem' }, '400': { $ref: '#/components/responses/Problem' }, '401': { $ref: '#/components/responses/Problem' }, '429': { $ref: '#/components/responses/RateLimited' }, '500': { $ref: '#/components/responses/Problem' }, '502': { $ref: '#/components/responses/Problem' }, '503': { $ref: '#/components/responses/Problem' } }
 
   /orders/{orderId}/documents:
     get: { $ref: '#/x-operationTemplates/listDocuments' }
@@ -517,6 +517,7 @@ components:
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     CsrfFailed:
       description: CSRF is missing or invalid before side effects.
+      headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/CsrfFailedProblem' }, examples: { CsrfFailed: { $ref: '#/components/examples/CsrfFailed' } } } }
     PreconditionRequired:
       description: A required If-Match or Idempotency-Key header is missing.

@@ -44,6 +44,20 @@ describe('generated contract client', () => {
     await expect(client.call('createSession', { headers: { 'X-CSRF-Token': 'csrf-token-value' }, body: { provider: 'LOCAL_PASSWORD' } })).rejects.toBeInstanceOf(ApiProblemError);
   });
 
+  it('rejects createSession CSRF problems without the required refresh metadata', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    for (const body of [
+      { type: 'urn:autoflow:problem:csrf-failed', title: 'CSRF failed', status: 403, code: 'CSRF_FAILED', requestId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', retryable: true },
+      { type: 'urn:autoflow:problem:csrf-failed', title: 'CSRF failed', status: 403, code: 'CSRF_FAILED', requestId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', retryable: true, meta: { refreshHref: '/api/v1/auth/other' } },
+    ]) {
+      const client = new GeneratedApiClient({
+        fetch: async () => new Response(JSON.stringify(body), { status: 403, headers: { 'content-type': 'application/problem+json', 'x-request-id': 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2' } }),
+        validator: createContractValidator(document),
+      });
+      await expect(client.call('createSession', { headers: { 'X-CSRF-Token': 'csrf-token-value' }, body: { provider: 'LOCAL_PASSWORD' } })).rejects.toThrow(/Invalid CsrfFailedProblem response/);
+    }
+  });
+
   it('exposes a declared dependency failure as a typed Problem instead of an undeclared-status error', async () => {
     const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
     const client = new GeneratedApiClient({
