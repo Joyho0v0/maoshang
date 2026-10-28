@@ -119,7 +119,8 @@ function mergePropertySchemas(previous: unknown, next: unknown): unknown {
   append(previous);
   append(next);
   branches.sort((left, right) => stableSerialize(left).localeCompare(stableSerialize(right)));
-  return withProvenance({ allOf: branches }, provenance);
+  const derivedBranches = withProvenance(branches, provenance);
+  return withProvenance({ allOf: derivedBranches }, provenance);
 }
 
 function provenanceSources(value: unknown): object[] {
