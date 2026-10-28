@@ -161,14 +161,18 @@ interface ResourceProjector {
   readonly status: number;
   readonly schema: string;
   readonly type: string;
+  readonly hrefPolicy: 'collection' | 'organization-user' | string;
+  readonly pathParameter: string | null;
   readonly href: (request: PrincipalRequest, resourceId: string) => string | undefined;
 }
 
-const collectionProjector = (status: number, schema: string, type: string, collection: string): ResourceProjector => ({ status, schema, type, href: (_request, id) => `${collection}/${id}` });
+const collectionProjector = (status: number, schema: string, type: string, collection: string): ResourceProjector => ({ status, schema, type, hrefPolicy: 'collection', pathParameter: null, href: (_request, id) => `${collection}/${id}` });
 const organizationUserProjector = (): ResourceProjector => ({
   status: 201,
   schema: 'User',
   type: 'USER',
+  hrefPolicy: 'organization-user',
+  pathParameter: 'id',
   href: (request, id) => {
     const params = isRecord(request.params) ? request.params : {};
     const organizationId = typeof params.id === 'string' ? params.id : undefined;
@@ -179,6 +183,8 @@ const existingProjector = (status: number, schema: string, type: string, collect
   status,
   schema,
   type,
+  hrefPolicy: 'existing:' + parameter,
+  pathParameter: parameter,
   href: (request, id) => {
     const params = isRecord(request.params) ? request.params : {};
     const pathId = typeof params[parameter] === 'string' ? params[parameter] : undefined;

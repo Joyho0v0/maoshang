@@ -372,6 +372,55 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
     expect(executions).toBe(1);
   });
 
+  it('bounds a naturally expired takeover while the old owner still holds the Phase B lock', async () => {
+    const shortLeaseRepository = new PostgresIdempotencyRepository(pool, {
+      leaseDurationMs: 50,
+      lockTimeoutMs: 100,
+      statementTimeoutMs: 1_000,
+    });
+    const input: PostgresIdempotencyInput = {
+      actorId,
+      organizationId,
+      operationId: 'createCustomerNaturalExpiry',
+      idempotencyKey: `natural-expiry-${randomUUID()}`,
+      requestHash: 'request-a',
+    };
+    let ownerStarted!: () => void;
+    const ownerStartedPromise = new Promise<void>((resolve) => { ownerStarted = resolve; });
+    let releaseOwner!: () => void;
+    const ownerRelease = new Promise<void>((resolve) => { releaseOwner = resolve; });
+    let executions = 0;
+    const owner = shortLeaseRepository.execute(input, async () => {
+      executions += 1;
+      ownerStarted();
+      await ownerRelease;
+      const id = randomUUID();
+      return { status: 201, body: { id }, resource: { type: 'CUSTOMER', id, href: `/api/v1/customers/${id}` } };
+    });
+
+    try {
+      await ownerStartedPromise;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const contenderStartedAt = Date.now();
+      const contender = await shortLeaseRepository.execute(input, async () => {
+        executions += 1;
+        const id = randomUUID();
+        return { status: 201, body: { id }, resource: { type: 'CUSTOMER', id, href: `/api/v1/customers/${id}` } };
+      });
+
+      expect(Date.now() - contenderStartedAt).toBeLessThan(750);
+      expect(contender).toMatchObject({ state: 'RECOVERY_REQUIRED', commandId: expect.any(String) });
+      expect(executions).toBe(1);
+    } finally {
+      releaseOwner();
+    }
+
+    await expect(owner).resolves.toMatchObject({ status: 201 });
+    await expect(shortLeaseRepository.execute(input, async () => {
+      throw new Error('terminal replay must not execute the callback');
+    })).resolves.toMatchObject({ status: 201, replayed: true });
+  });
+
   it('fails closed when a persisted terminal resource reference is corrupted', async () => {
     const input: PostgresIdempotencyInput = { actorId, organizationId, operationId: 'createCustomerCorruptResource', idempotencyKey: 'corrupt-resource-key', requestHash: 'request-a' };
     const owner = await repository.withTransaction((client) => repository.claim(client, input));

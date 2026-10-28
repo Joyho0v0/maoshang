@@ -17,7 +17,7 @@ export const IDEMPOTENCY_CLAIM_SQL = `
 INSERT INTO integration.idempotency_record
   (id, organization_id, actor_user_id, operation_id, key_hash, request_hash,
    state, owner_token, lease_expires_at, attempt_count, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, 'IN_PROGRESS', $7, now() + interval '30 seconds', 1, now() + interval '24 hours')
+VALUES ($1, $2, $3, $4, $5, $6, 'IN_PROGRESS', $7, clock_timestamp() + ($8::double precision * interval '1 millisecond'), 1, clock_timestamp() + interval '24 hours')
 ON CONFLICT (organization_id, actor_user_id, operation_id, key_hash)
 DO NOTHING
 RETURNING id, state, attempt_count, lease_expires_at;
@@ -27,8 +27,10 @@ export const IDEMPOTENCY_READ_SQL = `
 SELECT id, organization_id, actor_user_id, operation_id, key_hash, request_hash,
        state, owner_token, lease_expires_at, attempt_count, started_at,
        completed_at, expires_at, http_status, response_body, response_headers, resource_type, resource_id, resource_version, problem_body,
-       resource_href
+       resource_href, lease_expires_at <= db_clock.current_time AS lease_expired,
+       GREATEST(0, (EXTRACT(EPOCH FROM (lease_expires_at - db_clock.current_time)) * 1000)::integer) AS lease_remaining_ms
 FROM integration.idempotency_record
+CROSS JOIN LATERAL (SELECT clock_timestamp() AS current_time) AS db_clock
 WHERE organization_id = $1 AND actor_user_id = $2 AND operation_id = $3 AND key_hash = $4
 `;
 
@@ -36,31 +38,44 @@ export const IDEMPOTENCY_FENCE_SQL = `
 SELECT id, organization_id, actor_user_id, operation_id, key_hash, request_hash,
        state, owner_token, lease_expires_at, attempt_count, started_at,
        completed_at, expires_at, http_status, response_body, response_headers, resource_type, resource_id, resource_version, problem_body,
-       resource_href
+       resource_href, lease_expires_at <= db_clock.current_time AS lease_expired,
+       GREATEST(0, (EXTRACT(EPOCH FROM (lease_expires_at - db_clock.current_time)) * 1000)::integer) AS lease_remaining_ms
 FROM integration.idempotency_record
+CROSS JOIN LATERAL (SELECT clock_timestamp() AS current_time) AS db_clock
 WHERE id = $1
 FOR UPDATE
 `;
 
+export const IDEMPOTENCY_SNAPSHOT_BY_ID_SQL = `
+SELECT id, organization_id, actor_user_id, operation_id, key_hash, request_hash,
+       state, owner_token, lease_expires_at, attempt_count, started_at,
+       completed_at, expires_at, http_status, response_body, response_headers, resource_type, resource_id, resource_version, problem_body,
+       resource_href, lease_expires_at <= db_clock.current_time AS lease_expired,
+       GREATEST(0, (EXTRACT(EPOCH FROM (lease_expires_at - db_clock.current_time)) * 1000)::integer) AS lease_remaining_ms
+FROM integration.idempotency_record
+CROSS JOIN LATERAL (SELECT clock_timestamp() AS current_time) AS db_clock
+WHERE id = $1
+`;
+
 export const IDEMPOTENCY_TAKEOVER_SQL = `
 UPDATE integration.idempotency_record
-SET owner_token = $2, lease_expires_at = now() + interval '30 seconds', attempt_count = attempt_count + 1
-WHERE id = $1 AND owner_token = $3 AND state = 'IN_PROGRESS' AND lease_expires_at <= now()
+SET owner_token = $2, lease_expires_at = clock_timestamp() + ($4::double precision * interval '1 millisecond'), attempt_count = attempt_count + 1
+WHERE id = $1 AND owner_token = $3 AND state = 'IN_PROGRESS' AND lease_expires_at <= clock_timestamp()
 RETURNING id, state, attempt_count, lease_expires_at;
 `;
 
 export const IDEMPOTENCY_COMPLETE_SQL = `
 UPDATE integration.idempotency_record
-SET state = 'SUCCEEDED', completed_at = now(), http_status = $3,
-    response_body = $4, response_headers = $5, resource_type = $6, resource_id = $7, resource_version = $8, resource_href = $9, lease_expires_at = now()
+SET state = 'SUCCEEDED', completed_at = clock_timestamp(), http_status = $3,
+    response_body = $4, response_headers = $5, resource_type = $6, resource_id = $7, resource_version = $8, resource_href = $9, lease_expires_at = clock_timestamp()
 WHERE id = $1 AND owner_token = $2 AND state = 'IN_PROGRESS'
 RETURNING id, state, attempt_count;
 `;
 
 export const IDEMPOTENCY_FAIL_SQL = `
 UPDATE integration.idempotency_record
-SET state = 'FAILED', completed_at = now(), http_status = $3,
-    problem_body = $4, lease_expires_at = now()
+SET state = 'FAILED', completed_at = clock_timestamp(), http_status = $3,
+    problem_body = $4, lease_expires_at = clock_timestamp()
 WHERE id = $1 AND owner_token = $2 AND state = 'IN_PROGRESS'
 RETURNING id, state, attempt_count;
 `;
@@ -99,15 +114,39 @@ interface StoredIdempotencyRow extends QueryResultRow {
   resource_version: number | null;
   problem_body: ProblemDocument | null;
   resource_href: string | null;
+  lease_expired: boolean;
+  lease_remaining_ms: number;
 }
 
+export interface PostgresIdempotencyOptions {
+  leaseDurationMs?: number;
+  lockTimeoutMs?: number;
+  statementTimeoutMs?: number;
+}
+
+const DEFAULT_LEASE_DURATION_MS = 30_000;
+const DEFAULT_LOCK_TIMEOUT_MS = 1_000;
+const DEFAULT_STATEMENT_TIMEOUT_MS = 5_000;
+
 export class PostgresIdempotencyRepository {
-  constructor(private readonly pool: Pool) {}
+  private readonly options: Required<PostgresIdempotencyOptions>;
+
+  constructor(private readonly pool: Pool, options: PostgresIdempotencyOptions = {}) {
+    this.options = {
+      leaseDurationMs: positiveIntegerOption(options.leaseDurationMs, DEFAULT_LEASE_DURATION_MS, 'leaseDurationMs'),
+      lockTimeoutMs: positiveIntegerOption(options.lockTimeoutMs, DEFAULT_LOCK_TIMEOUT_MS, 'lockTimeoutMs'),
+      statementTimeoutMs: positiveIntegerOption(options.statementTimeoutMs, DEFAULT_STATEMENT_TIMEOUT_MS, 'statementTimeoutMs'),
+    };
+  }
 
   async withTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      await client.query(
+        "SELECT set_config('lock_timeout', $1, true), set_config('statement_timeout', $2, true)",
+        [String(this.options.lockTimeoutMs) + 'ms', String(this.options.statementTimeoutMs) + 'ms'],
+      );
       const result = await work(client);
       await client.query('COMMIT');
       return result;
@@ -126,11 +165,11 @@ export class PostgresIdempotencyRepository {
     if (existing.rows[0] !== undefined) {
       const row = existing.rows[0];
       if (!row.request_hash.equals(requestHash)) throw new IdempotencyConflictError();
-      if (row.state === 'IN_PROGRESS' && row.lease_expires_at <= new Date()) {
+      if (row.state === 'IN_PROGRESS' && row.lease_expired) {
         const ownerToken = randomBytes(32);
-        const takeover = await client.query<StoredIdempotencyRow>(IDEMPOTENCY_TAKEOVER_SQL, [row.id, ownerToken, row.owner_token]);
+        const takeover = await client.query<StoredIdempotencyRow>(IDEMPOTENCY_TAKEOVER_SQL, [row.id, ownerToken, row.owner_token, this.options.leaseDurationMs]);
         if (takeover.rows[0] === undefined) {
-          const current = await this.readById(client, row.id);
+          const current = await this.readSnapshotById(client, row.id);
           if (!current.request_hash.equals(requestHash)) throw new IdempotencyConflictError();
           return { ...toStatus(current), claimRole: current.state === 'IN_PROGRESS' ? 'OBSERVER' as const : 'TERMINAL' as const };
         }
@@ -141,7 +180,7 @@ export class PostgresIdempotencyRepository {
     }
 
     const ownerToken = randomBytes(32);
-    const inserted = await client.query<StoredIdempotencyRow>(IDEMPOTENCY_CLAIM_SQL, [randomUUID(), input.organizationId, input.actorId, input.operationId, keyHash, requestHash, ownerToken]);
+    const inserted = await client.query<StoredIdempotencyRow>(IDEMPOTENCY_CLAIM_SQL, [randomUUID(), input.organizationId, input.actorId, input.operationId, keyHash, requestHash, ownerToken, this.options.leaseDurationMs]);
     if (inserted.rows[0] !== undefined) {
       const row = await this.readById(client, inserted.rows[0].id);
       return { ...toStatus(row), ownerToken, claimRole: 'OWNER' as const };
@@ -166,57 +205,68 @@ export class PostgresIdempotencyRepository {
   }
 
   async releaseForRecovery(client: PoolClient, commandId: string, ownerToken: Buffer, code: string): Promise<void> {
-    await client.query('UPDATE integration.idempotency_record SET lease_expires_at = now(), last_internal_error_code = $3 WHERE id = $1 AND owner_token = $2 AND state = \'IN_PROGRESS\'', [commandId, ownerToken, code]);
+    await client.query('UPDATE integration.idempotency_record SET lease_expires_at = clock_timestamp(), last_internal_error_code = $3 WHERE id = $1 AND owner_token = $2 AND state = \'IN_PROGRESS\'', [commandId, ownerToken, code]);
   }
 
   async execute<T>(input: PostgresIdempotencyInput, work: (client: PoolClient, claim: PostgresClaim) => Promise<CommandResult<T>>): Promise<CommandResult<T> | CommandStatus> {
     // Claim/observe/replay is deliberately a short transaction. Keeping the row
     // lock while the owner calls application code would make every observer wait
     // for the business transaction instead of receiving 202 immediately.
-    const claim = await this.withTransaction((client) => this.claim(client, input));
+    let claim: PostgresClaim;
+    try {
+      claim = await this.withTransaction((client) => this.claim(client, input));
+    } catch (error) {
+      if (!isPostgresTimeoutError(error)) throw error;
+      return this.readCurrentOutcome<T>(input);
+    }
     if (claim.state === 'SUCCEEDED') {
       const stored = await this.withTransaction((client) => this.readById(client, claim.commandId));
-      const resource = toResourceReference(stored);
-      const responseHeaders = normalizeResponseHeaders(stored.response_headers);
-      return { status: claim.httpStatus ?? 200, body: stored.response_body as T, ...(stored.resource_href === null ? {} : { resultHref: stored.resource_href }), ...(resource === null ? {} : { resource }), ...(responseHeaders === undefined ? {} : { responseHeaders }), replayed: true };
+      return replayStoredResult<T>(stored);
     }
     if (claim.state === 'FAILED') throw new CommandFailureError(claim.problem ?? storedFailure());
     if (claim.claimRole !== 'OWNER') return claim;
     if (claim.ownerToken === undefined) throw new Error('Idempotency owner token is missing.');
 
-    const outcome = await this.withTransaction(async (client) => {
-      let savepointActive = false;
-      try {
-        const fencedClaim = await this.fenceOwner(client, claim);
-        await client.query('SAVEPOINT idempotency_command');
-        savepointActive = true;
-        const result = await work(client, fencedClaim);
-        if (result.status === 202) {
-          if (!isInProgressCommandStatus(result.body, fencedClaim)) throw new Error('CommandStatusInProgress result is invalid.');
+    let outcome: { kind: 'result'; value: CommandResult<T> } | { kind: 'failure' | 'transient' | 'ownership-lost'; error: Error };
+    try {
+      outcome = await this.withTransaction(async (client) => {
+        let savepointActive = false;
+        try {
+          const fencedClaim = await this.fenceOwner(client, claim);
+          await client.query('SAVEPOINT idempotency_command');
+          savepointActive = true;
+          const result = await work(client, fencedClaim);
+          if (result.status === 202) {
+            if (!isInProgressCommandStatus(result.body, fencedClaim)) throw new Error('CommandStatusInProgress result is invalid.');
+            await client.query('RELEASE SAVEPOINT idempotency_command');
+            savepointActive = false;
+            return { kind: 'result' as const, value: result };
+          }
+          await this.complete(client, fencedClaim.commandId, fencedClaim.ownerToken as Buffer, result);
           await client.query('RELEASE SAVEPOINT idempotency_command');
           savepointActive = false;
           return { kind: 'result' as const, value: result };
+        } catch (error) {
+          if (isPostgresTimeoutError(error)) throw error;
+          if (savepointActive) {
+            await client.query('ROLLBACK TO SAVEPOINT idempotency_command');
+            savepointActive = false;
+          }
+          if (error instanceof IdempotencyOwnershipLostError) return { kind: 'ownership-lost' as const, error };
+          if (error instanceof CommandFailureError) {
+            await this.fail(client, claim.commandId, claim.ownerToken as Buffer, error.problem);
+            return { kind: 'failure' as const, error };
+          }
+          await this.releaseForRecovery(client, claim.commandId, claim.ownerToken as Buffer, error instanceof Error ? error.name : 'UNKNOWN_FAILURE');
+          return { kind: 'transient' as const, error: error instanceof Error ? error : new Error('Unknown idempotency failure') };
         }
-        await this.complete(client, fencedClaim.commandId, fencedClaim.ownerToken as Buffer, result);
-        await client.query('RELEASE SAVEPOINT idempotency_command');
-        savepointActive = false;
-        return { kind: 'result' as const, value: result };
-      } catch (error) {
-        if (savepointActive) {
-          await client.query('ROLLBACK TO SAVEPOINT idempotency_command');
-          savepointActive = false;
-        }
-        if (error instanceof IdempotencyOwnershipLostError) return { kind: 'ownership-lost' as const, error };
-        if (error instanceof CommandFailureError) {
-          await this.fail(client, claim.commandId, claim.ownerToken as Buffer, error.problem);
-          return { kind: 'failure' as const, error };
-        }
-        await this.releaseForRecovery(client, claim.commandId, claim.ownerToken as Buffer, error instanceof Error ? error.name : 'UNKNOWN_FAILURE');
-        return { kind: 'transient' as const, error };
-      }
-    });
-    if (outcome.kind === 'failure' || outcome.kind === 'transient' || outcome.kind === 'ownership-lost') throw outcome.error;
-    return outcome.value;
+      });
+    } catch (error) {
+      if (!isPostgresTimeoutError(error)) throw error;
+      return this.readCurrentOutcome<T>(input);
+    }
+    if (outcome.kind === 'result') return outcome.value;
+    throw outcome.error;
   }
 
   async statusByKey(client: PoolClient, input: Omit<PostgresIdempotencyInput, 'requestHash'>): Promise<CommandStatus | undefined> {
@@ -225,7 +275,7 @@ export class PostgresIdempotencyRepository {
   }
 
   async statusById(client: PoolClient, commandId: string): Promise<CommandStatus | undefined> {
-    const row = await client.query<StoredIdempotencyRow>('SELECT id, operation_id, key_hash, request_hash, state, owner_token, lease_expires_at, attempt_count, started_at, completed_at, expires_at, http_status, response_body, response_headers, resource_type, resource_id, resource_version, problem_body, resource_href FROM integration.idempotency_record WHERE id = $1', [commandId]);
+    const row = await client.query<StoredIdempotencyRow>(IDEMPOTENCY_SNAPSHOT_BY_ID_SQL, [commandId]);
     return row.rows[0] === undefined ? undefined : toStatus(row.rows[0]);
   }
 
@@ -236,10 +286,35 @@ export class PostgresIdempotencyRepository {
     return row;
   }
 
+  private async readSnapshotById(client: PoolClient, id: string): Promise<StoredIdempotencyRow> {
+    const result = await client.query<StoredIdempotencyRow>(IDEMPOTENCY_SNAPSHOT_BY_ID_SQL, [id]);
+    const row = result.rows[0];
+    if (row === undefined) throw new Error('Idempotency row disappeared during takeover.');
+    return row;
+  }
+
+  private async readCurrentOutcome<T>(input: PostgresIdempotencyInput): Promise<CommandResult<T> | CommandStatus> {
+    const row = await this.withTransaction(async (client) => {
+      const result = await client.query<StoredIdempotencyRow>(IDEMPOTENCY_READ_SQL, [
+        input.organizationId,
+        input.actorId,
+        input.operationId,
+        hashBuffer(input.idempotencyKey),
+      ]);
+      const current = result.rows[0];
+      if (current === undefined) throw new Error('Idempotency row disappeared after a bounded lock wait.');
+      return current;
+    });
+    const status = toStatus(row);
+    if (status.state === 'SUCCEEDED') return replayStoredResult<T>(row);
+    if (status.state === 'FAILED') throw new CommandFailureError(status.problem ?? storedFailure());
+    return status;
+  }
+
   private async fenceOwner(client: PoolClient, claim: PostgresClaim): Promise<PostgresClaim> {
     if (claim.ownerToken === undefined) throw new IdempotencyOwnershipLostError();
     const row = await this.readById(client, claim.commandId);
-    if (row.operation_id !== claim.operationId || row.state !== 'IN_PROGRESS' || !row.owner_token.equals(claim.ownerToken) || row.lease_expires_at <= new Date()) {
+    if (row.operation_id !== claim.operationId || row.state !== 'IN_PROGRESS' || !row.owner_token.equals(claim.ownerToken) || row.lease_expired) {
       throw new IdempotencyOwnershipLostError();
     }
     return { ...toStatus(row), ownerToken: claim.ownerToken, claimRole: 'OWNER' as const };
@@ -257,8 +332,34 @@ function storedFailure(): ProblemDocument {
   return buildProblem({ status: 500, code: 'INTERNAL_ERROR', title: 'Stored command failure', requestId: randomUUID(), retryable: false });
 }
 
+function replayStoredResult<T>(row: StoredIdempotencyRow): CommandResult<T> {
+  const resource = toResourceReference(row);
+  const responseHeaders = normalizeResponseHeaders(row.response_headers);
+  return {
+    status: row.http_status ?? 200,
+    body: row.response_body as T,
+    ...(row.resource_href === null ? {} : { resultHref: row.resource_href }),
+    ...(resource === null ? {} : { resource }),
+    ...(responseHeaders === undefined ? {} : { responseHeaders }),
+    replayed: true,
+  };
+}
+
+function isPostgresTimeoutError(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && ((error as { code?: unknown }).code === '55P03' || (error as { code?: unknown }).code === '57014');
+}
+
+function positiveIntegerOption(value: number | undefined, fallback: number, name: string): number {
+  if (value === undefined) return fallback;
+  if (!Number.isInteger(value) || value < 1) throw new Error(`${name} must be a positive integer.`);
+  return value;
+}
+
 function toStatus(row: StoredIdempotencyRow): CommandStatus {
-  const recovery = row.state === 'IN_PROGRESS' && row.lease_expires_at <= new Date();
+  const recovery = row.state === 'IN_PROGRESS' && row.lease_expired;
   const resource = toResourceReference(row);
   if (row.state === 'SUCCEEDED' && (row.completed_at === null || row.http_status === null || row.http_status < 200 || row.http_status >= 300 || resource === null || row.problem_body !== null)) throw new Error('Persisted SUCCEEDED command has an invalid ResourceReference or terminal shape.');
   if (row.state === 'FAILED' && (row.completed_at === null || row.http_status === null || row.http_status < 400 || row.problem_body === null || resource !== null || row.resource_href !== null)) throw new Error('Persisted FAILED command has an invalid terminal shape.');
@@ -270,7 +371,7 @@ function toStatus(row: StoredIdempotencyRow): CommandStatus {
     startedAt: row.started_at.toISOString(),
     completedAt: row.completed_at?.toISOString() ?? null,
     expiresAt: row.expires_at.toISOString(),
-    retryAfterMs: recovery ? 0 : row.state === 'IN_PROGRESS' ? Math.max(1, row.lease_expires_at.getTime() - Date.now()) : 0,
+    retryAfterMs: recovery ? 0 : row.state === 'IN_PROGRESS' ? Math.max(1, row.lease_remaining_ms) : 0,
     httpStatus: row.http_status,
     resource,
     resultHref: null,
