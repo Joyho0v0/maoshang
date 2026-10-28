@@ -114,6 +114,24 @@ describe('OpenAPI compatibility gate', () => {
     expect(collectBreakingChanges(previous, reordered)).toEqual([]);
   });
 
+  it('accepts a nested union wrapper that contains every previous option', () => {
+    const previous = { oneOf: [{ const: 'A' }, { const: 'B' }, { const: 'C' }] };
+    const wrapped = { oneOf: [{ oneOf: [{ const: 'A' }, { const: 'B' }, { const: 'C' }] }, { type: 'null' }] };
+
+    expect(() => assertNoBreakingChanges(previous, wrapped)).not.toThrow();
+    expect(collectBreakingChanges(previous, wrapped)).toEqual([]);
+  });
+
+  it('reports the removed middle composition option rather than its successor', () => {
+    const previous = { oneOf: [{ const: 'A' }, { const: 'B' }, { const: 'C' }] };
+    const candidate = { oneOf: [{ const: 'A' }, { const: 'C' }] };
+
+    const changes = collectBreakingChanges(previous, candidate);
+    expect(changes.filter((change) => change.reason.includes('option was removed'))).toEqual([
+      expect.objectContaining({ oldValue: { const: 'B' } }),
+    ]);
+  });
+
   it('makes the fail-fast error the first structured event with identical values', () => {
     const previous = { type: 'object', required: ['id'], properties: { id: { type: 'string' } } };
     const next = { type: 'object', required: [], properties: { id: { type: 'string' } } };

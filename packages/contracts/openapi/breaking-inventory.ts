@@ -43,6 +43,7 @@ export interface BreakingInventoryEntry {
     readonly affectedPaths: readonly string[];
     readonly affectedPathGroupId: string;
     readonly comparatorIdentity: string;
+    readonly sourceIdentity: string;
   };
 }
 
@@ -162,16 +163,17 @@ function enrichEntry(index: number, change: BreakingChange, affectedPathGroupId:
       affectedPaths: change.affectedPaths,
       affectedPathGroupId,
       comparatorIdentity: change.stableIdentity,
+      sourceIdentity: change.sourceIdentity,
     },
   };
 }
 
 function auditValue(value: unknown): unknown {
-  return value === undefined ? { present: false } : value;
+  return value === undefined ? { present: false } : { present: true, value };
 }
 
 function fingerprint(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(value) ?? 'undefined').digest('hex').slice(0, 16);
+  return createHash('sha256').update(JSON.stringify(value) ?? 'undefined').digest('hex');
 }
 
 export async function normalizeDocument(document: RecordValue): Promise<RecordValue> {

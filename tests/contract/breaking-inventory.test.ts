@@ -44,6 +44,13 @@ it('keeps the complete breaking inventory auditable and synchronized with both a
   expect(Object.keys(persisted.affectedPathGroups).length).toBeGreaterThan(0);
   expect(Object.values(persisted.affectedPathGroups).some((paths) => paths.length > 1)).toBe(true);
   expect(Object.keys(persisted.valueStore).length).toBeGreaterThan(0);
+  expect(persisted.entries.every((entry) => entry.oldValue.sha256.length === 64 && entry.newValue.sha256.length === 64)).toBe(true);
+  for (const entry of persisted.entries) {
+    const oldValue = persisted.valueStore[entry.oldValue.sha256];
+    const newValue = persisted.valueStore[entry.newValue.sha256];
+    expect(createHash('sha256').update(JSON.stringify(oldValue)).digest('hex')).toBe(entry.oldValue.sha256);
+    expect(createHash('sha256').update(JSON.stringify(newValue)).digest('hex')).toBe(entry.newValue.sha256);
+  }
   expect(persisted.entries.every((entry) => {
     const paths = persisted.affectedPathGroups[entry.verification.affectedPathGroupId];
     return paths !== undefined && paths.includes(entry.jsonPath);
@@ -111,9 +118,75 @@ it('persists raw old/new values from the structured event without lossy summariz
   for (const entry of generated.entries) {
     const raw = rawByIdentity.get(entry.verification.comparatorIdentity);
     expect(raw, entry.jsonPath).toBeDefined();
-    expect(generated.valueStore[entry.oldValue.sha256]).toEqual(raw?.oldValue === undefined ? { present: false } : raw?.oldValue);
-    expect(generated.valueStore[entry.newValue.sha256]).toEqual(raw?.newValue === undefined ? { present: false } : raw?.newValue);
+    expect(generated.valueStore[entry.oldValue.sha256]).toEqual(raw?.oldValue === undefined ? { present: false } : { present: true, value: raw?.oldValue });
+    expect(generated.valueStore[entry.newValue.sha256]).toEqual(raw?.newValue === undefined ? { present: false } : { present: true, value: raw?.newValue });
   }
+});
+
+it('keeps undefined distinct from a legitimate present:false raw value', async () => {
+  const baseline = {
+    openapi: '3.1.0',
+    info: { title: 'Sentinel test', version: '1.0.0' },
+    paths: {
+      '/records': {
+        get: {
+          operationId: 'getRecords',
+          responses: {
+            '200': {
+              content: {
+                'application/json': {
+                  schema: { type: 'object', properties: { legacy: { present: false } } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+  const candidate = structuredClone(baseline);
+  const sentinelSchema = candidate.paths['/records'].get.responses['200'].content['application/json'].schema as { properties: Record<string, unknown> };
+  delete sentinelSchema.properties.legacy;
+
+  const generated = await collectBreakingInventory(baseline, candidate);
+  const removed = generated.entries.find((entry) => entry.reason.includes('property legacy was removed.'));
+  expect(removed).toBeDefined();
+  if (removed === undefined) throw new Error('expected legacy removal');
+  expect(generated.valueStore[removed.oldValue.sha256]).toEqual({ present: true, value: { present: false } });
+  expect(generated.valueStore[removed.newValue.sha256]).toEqual({ present: false });
+  expect(removed.oldValue.sha256).not.toBe(removed.newValue.sha256);
+});
+
+it('aggregates shared component paths but keeps equal inline schemas separate', async () => {
+  const baseline = {
+    openapi: '3.1.0',
+    info: { title: 'Source identity test', version: '1.0.0' },
+    components: {
+      schemas: {
+        Shared: { type: 'object', properties: { id: { type: 'string' } } },
+      },
+    },
+    paths: {
+      '/shared-a': { get: { operationId: 'getSharedA', responses: { '200': { content: { 'application/json': { schema: { $ref: '#/components/schemas/Shared' } } } } } } },
+      '/shared-b': { get: { operationId: 'getSharedB', responses: { '200': { content: { 'application/json': { schema: { $ref: '#/components/schemas/Shared' } } } } } } },
+      '/inline-a': { get: { operationId: 'getInlineA', responses: { '200': { content: { 'application/json': { schema: { type: 'object', properties: { id: { type: 'string' } } } } } } } } },
+      '/inline-b': { get: { operationId: 'getInlineB', responses: { '200': { content: { 'application/json': { schema: { type: 'object', properties: { id: { type: 'string' } } } } } } } } },
+    },
+  };
+  const candidate = structuredClone(baseline);
+  (candidate.components.schemas.Shared as { required?: string[] }).required = ['id'];
+  (candidate.paths['/inline-a'].get.responses['200'].content['application/json'].schema as { required?: string[] }).required = ['id'];
+  (candidate.paths['/inline-b'].get.responses['200'].content['application/json'].schema as { required?: string[] }).required = ['id'];
+
+  const normalizedBaseline = await normalizeDocument(baseline);
+  const normalizedCandidate = await normalizeDocument(candidate);
+  const changes = collectBreakingChanges(normalizedBaseline, normalizedCandidate);
+  const shared = changes.filter((change) => change.jsonPath.includes('/shared-') || change.jsonPath.includes('components.schemas.Shared'));
+  const inlineA = changes.find((change) => change.jsonPath.includes('/inline-a'));
+  const inlineB = changes.find((change) => change.jsonPath.includes('/inline-b'));
+  expect(shared.some((change) => change.affectedPaths.some((path) => path.includes('/shared-a')) && change.affectedPaths.some((path) => path.includes('/shared-b')))).toBe(true);
+  expect(inlineA?.affectedPaths).toEqual(['root.paths./inline-a.get.responses.200.content.application/json.schema.id.required']);
+  expect(inlineB?.affectedPaths).toEqual(['root.paths./inline-b.get.responses.200.content.application/json.schema.id.required']);
 });
 
 function digest(value: unknown): string {

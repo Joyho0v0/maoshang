@@ -15,9 +15,11 @@ export interface BreakingChange {
   readonly affectedPaths: readonly string[];
   readonly stableIdentity: string;
   readonly logicalIdentity: string;
+  readonly sourceIdentity: string;
 }
 
 const collectionLimits = new WeakMap<BreakingChange[], number>();
+const collectionContexts = new WeakMap<BreakingChange[], { readonly sourceIds: WeakMap<object, string>; nextSourceId: number }>();
 
 export function assertNoBreakingChanges(previous: unknown, next: unknown, path = 'root'): void {
   const first = collectBreakingChanges(previous, next, path)[0];
@@ -171,6 +173,7 @@ function schemaContainsOption(candidate: unknown, previousOption: unknown): bool
  */
 export function collectBreakingChanges(previous: unknown, next: unknown, path = 'root'): BreakingChange[] {
   const changes: BreakingChange[] = [];
+  collectionContexts.set(changes, { sourceIds: new WeakMap<object, string>(), nextSourceId: 1 });
   collectValue(previous, next, path, changes);
   const unique = new Map<string, BreakingChange>();
   for (const change of changes) {
@@ -182,10 +185,12 @@ export function collectBreakingChanges(previous: unknown, next: unknown, path = 
     paths.push(change.jsonPath);
     groupedPaths.set(change.logicalIdentity, paths);
   }
-  return [...unique.values()].map((change) => ({
+  const result = [...unique.values()].map((change) => ({
     ...change,
     affectedPaths: groupedPaths.get(change.logicalIdentity) ?? [change.jsonPath],
   }));
+  collectionContexts.delete(changes);
+  return result;
 }
 
 function collectValue(previous: unknown, next: unknown, path: string, changes: BreakingChange[]): void {
@@ -208,10 +213,10 @@ function collectValue(previous: unknown, next: unknown, path: string, changes: B
   const previousRequired = new Set(effectiveRequired(previous));
   const nextRequired = new Set(effectiveRequired(next));
   for (const field of previousRequired) {
-    if (!nextRequired.has(field)) addChange(changes, `${path}.${field}.required`, 'required field was removed.', true, false, field);
+    if (!nextRequired.has(field)) addChange(changes, `${path}.${field}.required`, 'required field was removed.', true, false, field, previous);
   }
   for (const field of nextRequired) {
-    if (!previousRequired.has(field)) addChange(changes, `${path}.${field}.required`, 'field became required.', false, true, field);
+    if (!previousRequired.has(field)) addChange(changes, `${path}.${field}.required`, 'field became required.', false, true, field, previous);
   }
 
   const previousProperties = effectiveProperties(previous);
@@ -306,8 +311,8 @@ function collectNamedCollection(previousValue: unknown, nextValue: unknown, iden
       addChange(changes, entryPath, 'named parameter was removed.', previousEntry, undefined, identityValue);
       continue;
     }
-    if (previousEntry.required === true && match.required !== true) addChange(changes, `${entryPath}.required`, 'required parameter was relaxed unexpectedly.', true, match.required ?? false, identityValue);
-    if (previousEntry.required !== true && match.required === true) addChange(changes, `${entryPath}.required`, 'optional parameter became required.', previousEntry.required ?? false, true, identityValue);
+    if (previousEntry.required === true && match.required !== true) addChange(changes, `${entryPath}.required`, 'required parameter was relaxed unexpectedly.', true, match.required ?? false, identityValue, previousEntry);
+    if (previousEntry.required !== true && match.required === true) addChange(changes, `${entryPath}.required`, 'optional parameter became required.', previousEntry.required ?? false, true, identityValue, previousEntry);
     if (previousEntry.schema !== undefined) {
       if (match.schema === undefined) addChange(changes, `${entryPath}.schema`, 'parameter schema was removed.', previousEntry.schema, undefined, identityValue);
       else collectValue(previousEntry.schema, match.schema, `${entryPath}.schema`, changes);
@@ -321,8 +326,8 @@ function collectRequestBody(previous: unknown, next: unknown, path: string, chan
     addChange(changes, path, 'request body was removed.', previous, undefined, 'requestBody');
     return;
   }
-  if (isRecord(previous) && previous.required === true && next.required !== true) addChange(changes, `${path}.required`, 'required request body was relaxed unexpectedly.', true, next.required ?? false, 'requestBody');
-  if (isRecord(previous) && previous.required !== true && next.required === true) addChange(changes, `${path}.required`, 'request body became required.', previous.required ?? false, true, 'requestBody');
+  if (isRecord(previous) && previous.required === true && next.required !== true) addChange(changes, `${path}.required`, 'required request body was relaxed unexpectedly.', true, next.required ?? false, 'requestBody', previous);
+  if (isRecord(previous) && previous.required !== true && next.required === true) addChange(changes, `${path}.required`, 'request body became required.', previous.required ?? false, true, 'requestBody', previous);
   if (isRecord(previous) && isRecord(next)) collectContent(previous.content, next.content, `${path}.content`, changes);
 }
 
@@ -389,11 +394,11 @@ function collectCommonSchemaConstraints(previous: RecordValue, next: RecordValue
     const previousValue = inheritedConstraint(previous, key);
     const nextValue = inheritedConstraint(next, key);
     if (previousValue === undefined) {
-      if (nextValue !== undefined) addChange(changes, `${path}.${key}`, `candidate-only constraint ${key} narrowed the value space.`, undefined, nextValue, key);
+      if (nextValue !== undefined) addChange(changes, `${path}.${key}`, `candidate-only constraint ${key} narrowed the value space.`, undefined, nextValue, key, previous);
       continue;
     }
     if (nextValue === undefined) {
-      addChange(changes, `${path}.${key}`, `constraint ${key} was removed.`, previousValue, undefined, key);
+      addChange(changes, `${path}.${key}`, `constraint ${key} was removed.`, previousValue, undefined, key, previous);
       continue;
     }
     const narrowed = key === 'maxLength' || key === 'maximum' || key === 'maxItems'
@@ -401,21 +406,21 @@ function collectCommonSchemaConstraints(previous: RecordValue, next: RecordValue
       : key === 'minLength' || key === 'minimum' || key === 'minItems'
         ? typeof previousValue === 'number' && typeof nextValue === 'number' && nextValue > previousValue
         : JSON.stringify(previousValue) !== JSON.stringify(nextValue);
-    if (narrowed) addChange(changes, `${path}.${key}`, `constraint ${key} was narrowed.`, previousValue, nextValue, key);
+    if (narrowed) addChange(changes, `${path}.${key}`, `constraint ${key} was narrowed.`, previousValue, nextValue, key, previous);
   }
 
   if ((previous.additionalProperties === true || previous.additionalProperties === undefined) && next.additionalProperties === false) {
-    addChange(changes, `${path}.additionalProperties`, 'additional properties were disallowed.', previous.additionalProperties ?? true, false, 'additionalProperties');
+    addChange(changes, `${path}.additionalProperties`, 'additional properties were disallowed.', previous.additionalProperties ?? true, false, 'additionalProperties', previous);
   }
 
   const previousEnumValue = inheritedConstraint(previous, 'enum');
   const previousEnum = arrayOfScalars(previousEnumValue);
   const nextEnumValue = inheritedConstraint(next, 'enum');
-  if (previousEnumValue === undefined && nextEnumValue !== undefined) addChange(changes, `${path}.enum`, 'candidate-only enum narrowed the value space.', undefined, nextEnumValue, 'enum');
+  if (previousEnumValue === undefined && nextEnumValue !== undefined) addChange(changes, `${path}.enum`, 'candidate-only enum narrowed the value space.', undefined, nextEnumValue, 'enum', previous);
   if (previousEnum.length > 0) {
     const nextEnum = new Set(arrayOfScalars(nextEnumValue).map((value) => JSON.stringify(value)));
     for (const value of previousEnum) {
-      if (!nextEnum.has(JSON.stringify(value))) addChange(changes, `${path}.enum`, `enum value ${String(value)} was removed.`, previousEnumValue, nextEnumValue, 'enum');
+      if (!nextEnum.has(JSON.stringify(value))) addChange(changes, `${path}.enum`, `enum value ${String(value)} was removed.`, previousEnumValue, nextEnumValue, 'enum', previous);
     }
   }
 }
@@ -439,20 +444,58 @@ function collectComposition(previous: RecordValue, next: RecordValue, path: stri
       addChange(changes, `${path}.${key}`, 'oneOf option was added without a disjointness proof.', previousOptions, nextOptions, key);
     }
 
-    const matchedNextIndexes = new Set<number>();
+    const inheritedRequired = new Set(effectiveRequired(previous));
+    const matchedPreviousIndexes = matchCompositionOptions(previousOptions, nextOptions, inheritedRequired);
     for (let index = 0; index < previousOptions.length; index += 1) {
+      if (matchedPreviousIndexes.has(index)) continue;
       const previousOption = previousOptions[index];
-      const matchIndex = nextOptions.findIndex((candidate, candidateIndex) => {
-        if (matchedNextIndexes.has(candidateIndex)) return false;
-        return schemaContainsCompatibleOption(candidate, previousOption, new Set(effectiveRequired(previous)));
-      });
-      if (matchIndex === -1) {
-        addChange(changes, `${path}.${key}[${index}]`, `a ${key} option was removed.`, previousOption, undefined, `${key}[${index}]`);
-        continue;
-      }
-      matchedNextIndexes.add(matchIndex);
+      addChange(changes, `${path}.${key}[${index}]`, `a ${key} option was removed.`, previousOption, undefined, `${key}[${index}]`);
     }
   }
+}
+
+function matchCompositionOptions(previousOptions: unknown[], nextOptions: unknown[], inheritedRequired: Set<string>): Set<number> {
+  const matchedPrevious = new Set<number>();
+  const reusableCandidates = new Set<number>();
+
+  // A nested composition is a single candidate branch that can intentionally
+  // contain several old branches. It must not be consumed by the first old
+  // option that happens to match it.
+  for (let candidateIndex = 0; candidateIndex < nextOptions.length; candidateIndex += 1) {
+    const candidate = nextOptions[candidateIndex];
+    const covered = previousOptions.filter((previousOption) => schemaContainsCompatibleOption(candidate, previousOption, inheritedRequired));
+    if (covered.length < 2 || !isRecord(candidate)) continue;
+    const hasNestedComposition = ['oneOf', 'anyOf', 'allOf'].some((key) => Array.isArray(candidate[key]));
+    if (!hasNestedComposition) continue;
+    reusableCandidates.add(candidateIndex);
+    for (let index = 0; index < previousOptions.length; index += 1) {
+      if (schemaContainsCompatibleOption(candidate, previousOptions[index], inheritedRequired)) matchedPrevious.add(index);
+    }
+  }
+
+  // For ordinary branches use deterministic maximum bipartite matching. A
+  // greedy first match can consume a branch needed by a later, more specific
+  // option and manufacture a false removal.
+  const assignedCandidate = new Map<number, number>();
+  const match = (previousIndex: number, visited: Set<number>): boolean => {
+    for (let candidateIndex = 0; candidateIndex < nextOptions.length; candidateIndex += 1) {
+      if (reusableCandidates.has(candidateIndex) || visited.has(candidateIndex)) continue;
+      if (!schemaContainsCompatibleOption(nextOptions[candidateIndex], previousOptions[previousIndex], inheritedRequired)) continue;
+      visited.add(candidateIndex);
+      const assignedPrevious = assignedCandidate.get(candidateIndex);
+      if (assignedPrevious === undefined || match(assignedPrevious, visited)) {
+        assignedCandidate.set(candidateIndex, previousIndex);
+        return true;
+      }
+    }
+    return false;
+  };
+
+  for (let previousIndex = 0; previousIndex < previousOptions.length; previousIndex += 1) {
+    if (matchedPrevious.has(previousIndex)) continue;
+    if (match(previousIndex, new Set())) matchedPrevious.add(previousIndex);
+  }
+  return matchedPrevious;
 }
 
 function collectSecurity(previous: unknown, next: unknown, path: string, changes: BreakingChange[]): void {
@@ -482,10 +525,12 @@ function addChange(
   oldValue: unknown,
   newValue: unknown,
   stableIdentity?: string,
+  source?: unknown,
 ): void {
   if (shouldStop(changes)) return;
   const kind = stableIdentity ?? 'value';
-  const logicalIdentity = `${kind}#${fingerprint(reason)}#${fingerprint(oldValue)}->${fingerprint(newValue)}`;
+  const sourceIdentity = getSourceIdentity(changes, source ?? objectValue(oldValue) ?? objectValue(newValue));
+  const logicalIdentity = `${sourceIdentity}#${kind}#${fingerprint(reason)}#${fingerprint(oldValue)}->${fingerprint(newValue)}`;
   changes.push({
     jsonPath,
     reason,
@@ -494,7 +539,25 @@ function addChange(
     affectedPaths: [jsonPath],
     stableIdentity: `${jsonPath}#${logicalIdentity}`,
     logicalIdentity,
+    sourceIdentity,
   });
+}
+
+function getSourceIdentity(changes: BreakingChange[], source: unknown): string {
+  if (typeof source !== 'object' || source === null) return 'value';
+  const context = collectionContexts.get(changes);
+  if (context === undefined) return 'value';
+  const object = source as object;
+  const existing = context.sourceIds.get(object);
+  if (existing !== undefined) return existing;
+  const identity = `source-${context.nextSourceId}`;
+  context.nextSourceId += 1;
+  context.sourceIds.set(object, identity);
+  return identity;
+}
+
+function objectValue(value: unknown): object | undefined {
+  return typeof value === 'object' && value !== null ? value : undefined;
 }
 
 function shouldStop(changes: BreakingChange[]): boolean {
@@ -502,7 +565,7 @@ function shouldStop(changes: BreakingChange[]): boolean {
 }
 
 function fingerprint(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(value) ?? 'undefined').digest('hex').slice(0, 16);
+  return createHash('sha256').update(JSON.stringify(value) ?? 'undefined').digest('hex');
 }
 
 function arrayOfStrings(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []; }
