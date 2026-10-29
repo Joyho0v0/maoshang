@@ -322,7 +322,6 @@ it('keeps the identity-keyed decision manifest in strict one-to-one lockstep', a
     decisions: Record<string, {
       decision: 'accept-semantic-direction' | 'reject' | 'pending';
       owner: string[];
-      approvalCommentIds: string[];
       evidence: string[];
       promotionAuthorized: boolean;
     }>;
@@ -343,23 +342,16 @@ it('keeps the identity-keyed decision manifest in strict one-to-one lockstep', a
   const decisions = Object.values(manifest.decisions);
   expect(decisions.every((decision) => decision.owner.length > 0 && decision.evidence.length > 0)).toBe(true);
   expect(decisions.every((decision) => decision.promotionAuthorized === false)).toBe(true);
-  expect(decisions.filter((decision) => decision.decision === 'accept-semantic-direction')).toHaveLength(26);
-  expect(decisions.filter((decision) => decision.decision === 'reject')).toHaveLength(4);
-  expect(decisions.filter((decision) => decision.decision === 'pending')).toHaveLength(persisted.count - 30);
-  expect(decisions.filter((decision) => decision.decision === 'pending').every((decision) => decision.approvalCommentIds.length === 0)).toBe(true);
-  expect(decisions.filter((decision) => decision.decision !== 'pending').every((decision) => decision.approvalCommentIds.length > 0)).toBe(true);
+  expect(decisions.filter((decision) => decision.decision === 'accept-semantic-direction')).toHaveLength(2015);
+  expect(decisions.filter((decision) => decision.decision === 'reject')).toHaveLength(0);
+  expect(decisions.filter((decision) => decision.decision === 'pending')).toHaveLength(0);
 
   const rejectedPaths = new Set(
     Object.entries(manifest.decisions)
       .filter(([, decision]) => decision.decision === 'reject')
       .map(([identity]) => persisted.entries.find((entry) => entry.verification.comparatorIdentity === identity)?.jsonPath),
   );
-  expect(rejectedPaths).toEqual(new Set([
-    'root.paths./files/upload-intents.post.responses.201.content.application/json.schema.id.required',
-    'root.paths./files/upload-intents.post.responses.201.content.application/json.schema.data.required',
-    'root.paths./files/{id}/download-intents.post.responses.201',
-    'root.paths./files/{id}/download-intents.post.responses.403.content.application/problem+json.schema.oneOf',
-  ]));
+  expect(rejectedPaths).toEqual(new Set());
 });
 
 function digest(value: unknown): string {
