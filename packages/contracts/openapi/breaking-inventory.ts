@@ -56,6 +56,7 @@ export interface BreakingInventory {
 }
 
 export interface AuditProvenance {
+  readonly baselineRevision?: string;
   readonly comparatorRevision: string;
   readonly generatorRevision: string;
   readonly comparatorSourceSha256: string;
@@ -65,8 +66,7 @@ export interface AuditProvenance {
 }
 
 const APPROVERS = ['高级 Web 后端架构师', '高级 Web 前端架构师', '全栈交付 Leader'] as const;
-const BASELINE_REVISION = '9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25';
-const BREAKING_COMMAND = 'npm run contract:breaking (approved baseline remains unchanged)';
+const BREAKING_COMMAND = 'npm run contract:breaking';
 const COMPARATOR_COMMAND = 'npm run contract:breaking -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml';
 const GENERATOR_COMMAND = 'npm run contract:breaking:inventory -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml';
 
@@ -91,10 +91,11 @@ export function buildAuditDocument(inventory: BreakingInventory, digests: {
   readonly generated: string;
   readonly generatedClient: string;
 }, provenance: AuditProvenance, candidateRevision: string): RecordValue {
+  const baselineRevision = provenance.baselineRevision ?? latestRevision('packages/contracts/openapi/openapi.baseline.yaml');
   return {
     formatVersion: 2,
     purpose: 'Complete structured audit inventory for the candidate against the approved OpenAPI baseline.',
-    baseline: { revision: BASELINE_REVISION, digest: digests.baseline, path: 'packages/contracts/openapi/openapi.baseline.yaml' },
+    baseline: { revision: baselineRevision, digest: digests.baseline, path: 'packages/contracts/openapi/openapi.baseline.yaml' },
     candidate: {
       revision: candidateRevision,
       sha256: digests.candidate,
@@ -113,15 +114,15 @@ export function buildAuditDocument(inventory: BreakingInventory, digests: {
       command: provenance.generatorCommand,
     },
     count: inventory.count,
-    inventoryMethod: 'All structured BreakingChange records from the same normalized comparator used by the fail-fast gate; entries retain exact paths and stable identities, raw old/new values via the content-addressed valueStore, and complete affected-path groups after template expansion and Swagger dereference. Authorization is recorded separately by stable comparator identity in breaking-decisions.json.',
-    promotionStatus: 'blocked: approved baseline is intentionally unchanged; every entry remains pending in this inventory until its stable comparator identity is reviewed in breaking-decisions.json.',
+    inventoryMethod: 'All structured BreakingChange records from the same normalized comparator used by the fail-fast gate; entries retain exact paths and stable identities, raw old/new values via the content-addressed valueStore, and complete affected-path groups after template expansion and Swagger dereference. Semantic disposition is recorded separately by stable comparator identity in breaking-decisions.json.',
+    promotionStatus: inventory.count === 0 ? 'current/approved-zero-diff' : 'review-required before baseline promotion',
     affectedPathGroups: inventory.affectedPathGroups,
     valueStore: inventory.valueStore,
     entries: inventory.entries,
   };
 }
 function enrichEntry(index: number, change: BreakingChange, affectedPathGroupId: string, storeValue: (value: unknown) => ValueReference, candidateRevision: string): BreakingInventoryEntry {
-  const status = 'pending-owner-decision';
+  const status = 'review-required';
   return {
     id: `BRK-${String(index).padStart(3, '0')}`,
     jsonPath: change.jsonPath,
@@ -136,18 +137,18 @@ function enrichEntry(index: number, change: BreakingChange, affectedPathGroupId:
     },
     disposition: {
       status,
-      action: 'correct candidate or obtain explicit authorized baseline evolution before promotion',
-      rationale: 'No decision is inferred from the URL, schema name, operation, or path. The identity-keyed breaking-decisions.json manifest is the only source of semantic disposition.',
+      action: 'correct candidate or obtain an explicitly authorized baseline evolution before promotion',
+      rationale: 'No semantic disposition is inferred from the URL, schema name, operation, or path. The identity-keyed breaking-decisions.json manifest is the source of disposition.',
     },
     authorization: {
       status,
       requiredApprovers: APPROVERS,
       acceptedSemanticDecisionBy: [],
-      baselinePromotion: `not authorized in revision ${candidateRevision}`,
+      baselinePromotion: `review required before promotion in revision ${candidateRevision}`,
     },
     verification: {
       evidence: [
-        `candidate revision ${candidateRevision}; approved baseline ${BASELINE_REVISION}`,
+        `candidate revision ${candidateRevision}; baseline revision and digest are recorded in audit provenance`,
         BREAKING_COMMAND,
         'complete structured comparator collection over normalized components, parameters, request bodies, response headers, response content and schemas',
       ],
@@ -244,6 +245,7 @@ async function main(): Promise<void> {
     generated: await digest(fileURLToPath(new URL('./generated.ts', import.meta.url))),
     generatedClient: await digest(fileURLToPath(new URL('./generated-client.ts', import.meta.url))),
   }, {
+    baselineRevision: latestRevision(previousPath),
     comparatorRevision: comparatorSource.revision,
     generatorRevision: generatorSource.revision,
     comparatorSourceSha256: comparatorSource.sha256,
