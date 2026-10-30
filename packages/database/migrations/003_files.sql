@@ -28,6 +28,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS file_object_organization_id_object_key_uq ON f
 CREATE INDEX IF NOT EXISTS file_object_organization_status_idx ON files.file_object (organization_id, status, updated_at DESC, id);
 CREATE INDEX IF NOT EXISTS file_object_created_by_idx ON files.file_object (organization_id, created_by, updated_at DESC, id);
 CREATE INDEX IF NOT EXISTS file_object_business_group_idx ON files.file_object (organization_id, business_group_id, updated_at DESC, id) WHERE business_group_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS file_object_business_group_fk_idx ON files.file_object (organization_id, business_group_id);
 
 CREATE TABLE IF NOT EXISTS files.upload_intent (
   file_id uuid PRIMARY KEY,

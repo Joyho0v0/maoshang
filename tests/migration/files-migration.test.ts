@@ -19,6 +19,7 @@ describe('Files migration', () => {
     expect(sql).toMatch(/file_link_linked_by_idx/i);
     expect(sql).toMatch(/file_link_resource_owner_idx/i);
     expect(sql).toMatch(/file_link_resource_group_idx/i);
+    expect(sql).toMatch(/file_object_business_group_fk_idx/i);
     expect(sql).toMatch(/upload_intent_file_object_idx/i);
     expect(down).not.toMatch(/DROP SCHEMA/i);
     expect(down).not.toMatch(/CASCADE/i);
@@ -47,8 +48,8 @@ describe('Files migration', () => {
               AND idx.indnkeyatts >= cardinality(fk.conkey)
               AND NOT EXISTS (
                 SELECT 1
-                  FROM generate_subscripts(fk.conkey, 1) AS pos
-                 WHERE idx.indkey[pos] <> fk.conkey[pos]
+                FROM generate_subscripts(fk.conkey, 1) AS position(index_position)
+                 WHERE idx.indkey[position.index_position] <> fk.conkey[position.index_position]
               )
          )
          ORDER BY conname`);

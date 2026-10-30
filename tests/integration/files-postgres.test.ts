@@ -265,4 +265,31 @@ describeFilesPostgres('Files PostgreSQL vertical slice', () => {
       expect(after.rows).toEqual(before.rows);
     }
   });
+
+  it('rejects an upload intent whose object key does not match its file object', async () => {
+    const client = await pool.connect();
+    const fileId = randomUUID();
+    const objectKey = `objects/${randomUUID()}/${randomUUID()}`;
+    const mismatchedObjectKey = `objects/${randomUUID()}/${randomUUID()}`;
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO files.file_object
+          (id, organization_id, created_by, object_key, original_name, declared_content_type, declared_size_bytes)
+         VALUES ($1, $2, $3, $4, 'constraint-check.pdf', 'application/pdf', 12)`,
+        [fileId, organizationId, actorId, objectKey],
+      );
+      await expect(
+        client.query(
+          `INSERT INTO files.upload_intent
+            (file_id, organization_id, object_key, expires_at, created_by)
+           VALUES ($1, $2, $3, now() + interval '15 minutes', $4)`,
+          [fileId, organizationId, mismatchedObjectKey, actorId],
+        ),
+      ).rejects.toSatisfy((error: unknown) => (error as { code?: string }).code === '23503');
+      await client.query('ROLLBACK');
+    } finally {
+      client.release();
+    }
+  });
 });
