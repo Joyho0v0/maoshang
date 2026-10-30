@@ -108,10 +108,12 @@ try {
     const inspection = await evaluate(socket, `(() => {
       const required = ${JSON.stringify(scenario.requiredSelectors)};
       const missing = required.filter((selector) => document.querySelector(selector) === null);
+      const clientWidth = document.documentElement.clientWidth;
+      const scrollWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
       return {
         missing,
-        horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1
-          || document.body.scrollWidth > window.innerWidth + 1,
+        horizontalOverflow: scrollWidth > clientWidth + 1,
+        layout: { clientWidth, scrollWidth },
         viewport: { width: window.innerWidth, height: window.innerHeight },
       };
     })()`);
@@ -128,6 +130,15 @@ try {
     } else if (scenario.interaction === 'reference-blocked') {
       inspection.interactions = await exerciseBlockedReferenceState(socket, context);
     }
+    const postInteractionLayout = await evaluate(socket, `(() => {
+      const clientWidth = document.documentElement.clientWidth;
+      const scrollWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
+      return { clientWidth, scrollWidth, horizontalOverflow: scrollWidth > clientWidth + 1 };
+    })()`);
+    inspection.horizontalOverflowBeforeInteraction = inspection.horizontalOverflow;
+    inspection.horizontalOverflowAfterInteraction = postInteractionLayout.horizontalOverflow;
+    inspection.horizontalOverflow = inspection.horizontalOverflow || postInteractionLayout.horizontalOverflow;
+    inspection.layoutAfterInteraction = postInteractionLayout;
     if (screenshotDirectory) {
       const screenshot = await socket.command('Page.captureScreenshot', { format: 'png' });
       await writeFile(join(screenshotDirectory, `${scenario.path.slice(1).replaceAll('/', '-')}-${scenario.name}.png`), Buffer.from(screenshot.result.data, 'base64'));
