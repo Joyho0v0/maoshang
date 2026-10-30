@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { parse } from 'yaml';
 import { describe, expect, it } from 'vitest';
 import { ApiProblemError } from '../../packages/contracts/openapi/client.js';
-import { GeneratedApiClient, TransferExecutor } from '../../packages/contracts/openapi/generated-client.js';
+import { GeneratedApiClient, operations, TransferExecutor } from '../../packages/contracts/openapi/generated-client.js';
 import { createContractValidator } from '../../packages/contracts/openapi/runtime-validator.js';
 
 const requestId = 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2';
@@ -65,6 +65,14 @@ function uploadInput() {
   return {
     headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': 'intent-key' },
     body: { fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes },
+  };
+}
+
+function completeInput() {
+  return {
+    pathParams: { id: fileId },
+    headers: { 'X-CSRF-Token': 'csrf-token-value', 'Idempotency-Key': 'complete-key', 'If-Match': '"v1"' },
+    body: { action: 'COMPLETE' },
   };
 }
 
@@ -186,6 +194,24 @@ describe('file intent contract', () => {
       validator,
     });
     await expect(notReady.call('createDownloadIntent', { pathParams: { id: fileId }, headers: { 'X-CSRF-Token': 'csrf-token-value' } })).rejects.toMatchObject({ name: 'ApiProblemError', status: 409, problem: { code: 'FILE_NOT_READY' } });
+  });
+
+  it('declares completeUpload 404 without dropping existing responses and maps a valid Problem to ApiProblemError', async () => {
+    expect(Object.keys(operations.completeUpload.responses).sort()).toEqual(['200', '202', '400', '401', '403', '404', '409', '428', '429', '500', '502', '503']);
+    const validator = createContractValidator(await document());
+    const problem = { type: 'urn:autoflow:problem:resource-not-found', title: 'Resource not found', status: 404, code: 'RESOURCE_NOT_FOUND', requestId, retryable: false, meta: null };
+    const client = new GeneratedApiClient({
+      fetch: async () => new Response(JSON.stringify(problem), { status: 404, headers: { 'content-type': 'application/problem+json', 'x-request-id': requestId, 'cache-control': 'no-store' } }),
+      validator,
+    });
+
+    await expect(client.call('completeUpload', completeInput())).rejects.toMatchObject({ name: 'ApiProblemError', status: 404, problem });
+
+    const malformed = new GeneratedApiClient({
+      fetch: async () => new Response(JSON.stringify({ ...problem, meta: { organizationId: requestId } }), { status: 404, headers: { 'content-type': 'application/problem+json', 'x-request-id': requestId, 'cache-control': 'no-store' } }),
+      validator,
+    });
+    await expect(malformed.call('completeUpload', completeInput())).rejects.toThrow(/Invalid Problem response/);
   });
 
   it('executes transfers in an isolated security context and never fetches invalid descriptors', async () => {

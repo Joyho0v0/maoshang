@@ -4293,6 +4293,7 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             428: components["responses"]["PreconditionRequired"];
             429: components["responses"]["RateLimited"];

@@ -10705,6 +10705,19 @@ export const operations = {
           "X-Request-ID"
         ]
       },
+      "404": {
+        "schema": "Problem",
+        "contentType": "application/problem+json",
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": "Uuid"
+          }
+        },
+        "requiredHeaders": [
+          "X-Request-ID"
+        ]
+      },
       "409": {
         "schema": "Problem",
         "contentType": "application/problem+json",

@@ -80,6 +80,15 @@ function updateShape(schema: string, requestSchema: string): ExpectedContractSha
 function commandShape(schema: string, requestSchema: string): ExpectedContractShape {
   return updateShape(schema, requestSchema);
 }
+function completeCommandShape(schema: string, requestSchema: string): ExpectedContractShape {
+  const shape = commandShape(schema, requestSchema);
+  return {
+    ...shape,
+    responseSchemas: { ...shape.responseSchemas, '404': 'Problem' },
+    responseHeaders: { ...shape.responseHeaders, '404': ['X-Request-ID'] },
+    headerSchemas: { ...shape.headerSchemas, '404': { 'X-Request-ID': REQUEST_ID } },
+  };
+}
 export const EXPECTED_CONTRACT_SHAPES: Readonly<Record<string, ExpectedContractShape>> = {
   getCsrfToken: { responseSchemas: { '200': 'CsrfToken' }, responseHeaders: { '200': ['X-Request-ID', 'Cache-Control'] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': NO_STORE } }, requiredResponseHeaders: { '200': ['X-Request-ID', 'Cache-Control'] } },
   createSession: { requestSchema: 'SessionRequest', responseSchemas: { '201': 'Session', '400': 'Problem', '401': 'Problem', '403': 'CsrfFailedProblem', '503': 'Problem' }, responseHeaders: { '201': ['X-Request-ID', 'Cache-Control'], '400': ['X-Request-ID'], '401': ['X-Request-ID'], '403': ['X-Request-ID'], '503': ['X-Request-ID'] }, headerSchemas: { '201': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': NO_STORE }, '400': { 'X-Request-ID': REQUEST_ID }, '401': { 'X-Request-ID': REQUEST_ID }, '403': { 'X-Request-ID': REQUEST_ID }, '503': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '201': ['X-Request-ID', 'Cache-Control'] } },
@@ -135,7 +144,7 @@ export const EXPECTED_CONTRACT_SHAPES: Readonly<Record<string, ExpectedContractS
   reversePayment: commandShape('Payment', 'PaymentCommandRequest'),
   getFile: getShape('File'),
   createUploadIntent: { requestSchema: 'FileCreateRequest', responseSchemas: { '201': 'UploadIntent', '403': 'Problem', '409': 'Problem', '413': 'ProblemFileTooLarge', '415': 'ProblemUnsupportedMediaType', '428': 'PreconditionRequiredProblem' }, responseHeaders: { '201': ['X-Request-ID', 'ETag', 'Location', 'Content-Location', 'Cache-Control', 'Idempotent-Replay'], '403': ['X-Request-ID'], '409': ['X-Request-ID'], '413': ['X-Request-ID'], '415': ['X-Request-ID'], '428': ['X-Request-ID'] }, headerSchemas: { '201': { 'X-Request-ID': REQUEST_ID, ETag: ETAG, Location: HREF, 'Content-Location': HREF, 'Cache-Control': NO_STORE, 'Idempotent-Replay': IDEMPOTENT_REPLAY }, '403': { 'X-Request-ID': REQUEST_ID }, '409': { 'X-Request-ID': REQUEST_ID }, '413': { 'X-Request-ID': REQUEST_ID }, '415': { 'X-Request-ID': REQUEST_ID }, '428': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '201': ['X-Request-ID', 'ETag', 'Location', 'Cache-Control'] } },
-  completeUpload: commandShape('File', 'FileCommandRequest'),
+  completeUpload: completeCommandShape('File', 'FileCommandRequest'),
   createDownloadIntent: { responseSchemas: { '200': 'DownloadIntent', '403': 'Problem', '404': 'Problem', '409': 'ProblemFileNotReady' }, responseHeaders: { '200': ['X-Request-ID', 'Cache-Control'], '403': ['X-Request-ID'], '404': ['X-Request-ID'], '409': ['X-Request-ID'] }, headerSchemas: { '200': { 'X-Request-ID': REQUEST_ID, 'Cache-Control': NO_STORE }, '403': { 'X-Request-ID': REQUEST_ID }, '404': { 'X-Request-ID': REQUEST_ID }, '409': { 'X-Request-ID': REQUEST_ID } }, requiredResponseHeaders: { '200': ['X-Request-ID', 'Cache-Control'] } },
   listDocuments: listShape('DocumentPage', ['filter[status]']),
   createDocument: createShape('Document', 'DocumentCreateRequest'),

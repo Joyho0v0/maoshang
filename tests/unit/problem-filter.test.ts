@@ -119,6 +119,18 @@ describe('problem exception operation boundary', () => {
     }
   });
 
+  it('preserves completeUpload resource-not-found as its operation-specific declared 404', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const filter = new ProblemExceptionFilter(createContractValidator(document));
+    const state: FilterState = { headers: {} };
+    filter.catch(new ProblemError(buildProblem({ status: 404, code: 'RESOURCE_NOT_FOUND', title: 'Resource not found', requestId: 'f8b6e3a9-3a0a-4c1c-b3f3-8a8225e7f019', retryable: false })), hostFor({ method: 'POST', url: '/api/v1/files/:id/complete', routeOptions: { url: '/api/v1/files/:id/complete' }, headers: {} }, state));
+    expect(state.status).toBe(404);
+    expect(state.contentType).toBe('application/problem+json');
+    expect(state.headers['Cache-Control']).toBe('no-store');
+    expect(state.body).toMatchObject({ status: 404, code: 'RESOURCE_NOT_FOUND', retryable: false });
+    expect(state.body).not.toHaveProperty('meta');
+  });
+
   it('emits the required Retry-After value for a declared rate-limit response', async () => {
     const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
     const filter = new ProblemExceptionFilter(createContractValidator(document));
