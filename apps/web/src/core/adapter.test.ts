@@ -6,7 +6,13 @@ describe('contract adapter seam', () => {
     const adapter = createContractAdapter({
       bootstrap: async () => ({ authenticated: false }),
       login: async () => ({
-        user: { id: '1', displayName: 'Sales', role: 'sales' },
+        user: { id: '1', organizationId: 'org-1', displayName: 'Sales', role: 'sales' },
+        identity: {
+          userId: '1',
+          organizationId: 'org-1',
+          capabilities: [],
+          scopeSummary: {},
+        },
         csrfToken: 'csrf',
       }),
       logout: async () => undefined,

@@ -10,12 +10,15 @@ export interface SignedTransferRequest {
   method: string;
   body?: BodyInit;
   credentials: 'omit';
+  referrerPolicy: 'no-referrer';
   headers: Record<string, string>;
 }
 
 export interface SignedTransferOptions {
   method: string;
   body?: BodyInit;
+  /** Provider-signed headers only; application credentials are rejected. */
+  headers?: Record<string, string>;
 }
 
 export interface SignedTransferClient {
@@ -91,12 +94,14 @@ export function createSignedTransferRequest(
   if (!['http:', 'https:'].includes(parsed.protocol)) {
     throw new Error('Signed transfer URL must use HTTP(S)');
   }
+  const headers = validateTransferHeaders(options.headers ?? {});
 
   const request: SignedTransferRequest = {
     url: parsed.toString(),
     method: options.method,
     credentials: 'omit',
-    headers: {},
+    referrerPolicy: 'no-referrer',
+    headers,
   };
   if (options.body !== undefined) {
     request.body = options.body;
@@ -113,10 +118,35 @@ export function createSignedTransferClient(
       const init: RequestInit = {
         method: request.method,
         credentials: request.credentials,
+        referrerPolicy: request.referrerPolicy,
         headers: request.headers,
       };
       if (request.body !== undefined) init.body = request.body;
       return fetcher(request.url, init);
     },
   };
+}
+
+function validateTransferHeaders(headers: Record<string, string>): Record<string, string> {
+  const forbidden = new Set([
+    'authorization',
+    'cookie',
+    'if-match',
+    'idempotency-key',
+    'origin',
+    'referer',
+    'traceparent',
+    'tracestate',
+    'x-csrf-token',
+    'x-request-id',
+  ]);
+  const validated: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    const normalized = name.trim().toLowerCase();
+    if (!normalized || forbidden.has(normalized) || /[\r\n]/.test(name) || /[\r\n]/.test(value)) {
+      throw new Error(`Signed transfer contains a forbidden header: ${name}`);
+    }
+    validated[name] = value;
+  }
+  return validated;
 }

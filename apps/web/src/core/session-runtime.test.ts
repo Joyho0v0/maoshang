@@ -1,5 +1,6 @@
 import {
   CsrfTokenMissingError,
+  PendingCommandFailedError,
   SessionEpochChangedError,
   SessionRuntime,
 } from './session-runtime';
@@ -10,7 +11,18 @@ import type {
 } from './types';
 
 function createUser(id: string): SessionUser {
-  return { id, displayName: `User ${id}`, role: 'sales' };
+  return { id, organizationId: `org-${id}`, displayName: `User ${id}`, role: 'sales' };
+}
+
+function createIdentity(id = 'sales-1', organizationId = 'org-1', authzVersion = 1, serverSessionEpoch = 1) {
+  return {
+    userId: id,
+    organizationId,
+    capabilities: ['dashboard.read'],
+    scopeSummary: { organizationId },
+    authzVersion,
+    serverSessionEpoch,
+  };
 }
 
 function deferred<T>() {
@@ -25,9 +37,10 @@ function deferred<T>() {
 
 function createAdapter(overrides: Partial<ContractAdapter> = {}): ContractAdapter {
   const user = createUser('sales-1');
+  const identity = createIdentity();
   return {
-    bootstrap: async () => ({ authenticated: true, user, csrfToken: 'csrf-1' }),
-    login: async () => ({ user, csrfToken: 'csrf-1' }),
+    bootstrap: async () => ({ authenticated: true, user, identity, csrfToken: 'csrf-1' }),
+    login: async () => ({ user, identity, csrfToken: 'csrf-1' }),
     logout: async () => undefined,
     rotateCsrf: async () => ({ csrfToken: 'csrf-2' }),
     request: async () => ({ status: 200, data: { ok: true }, headers: {} }),
@@ -109,8 +122,127 @@ describe('SessionRuntime', () => {
     expect(window.sessionStorage.length).toBe(0);
   });
 
+  it('keeps identity context in the authenticated snapshot and does not clear on the same identity', async () => {
+    const runtime = new SessionRuntime(createAdapter());
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+    const first = runtime.snapshot;
+    runtime.queryCache.set('dashboard', { value: 'fresh' }, first.epoch);
+
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+
+    expect(runtime.snapshot.identity).toEqual(createIdentity());
+    expect(runtime.snapshot.epoch).toBe(first.epoch);
+    expect(runtime.queryCache.get('dashboard', first.epoch)).toEqual({ value: 'fresh' });
+  });
+
+  it('publishes session transitions to the Pinia-facing provider seam', async () => {
+    const runtime = new SessionRuntime(createAdapter());
+    const snapshots: string[] = [];
+    const unsubscribe = runtime.subscribe((snapshot) => snapshots.push(snapshot.status));
+
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+    await runtime.logout();
+    unsubscribe();
+
+    expect(snapshots).toEqual(['bootstrapping', 'authenticated', 'logging-out', 'anonymous']);
+  });
+
+  it('advances identity epoch and isolates in-flight work when server identity changes', async () => {
+    const requestDeferred = deferred<{ status: number; data: { old: boolean }; headers: Record<string, string> }>();
+    const login = vi.fn()
+      .mockResolvedValueOnce({ user: createUser('sales-1'), identity: createIdentity(), csrfToken: 'csrf-1' })
+      .mockResolvedValueOnce({
+        user: createUser('sales-2'),
+        identity: createIdentity('sales-2', 'org-2', 2, 2),
+        csrfToken: 'csrf-2',
+      });
+    let requestSignal: AbortSignal | undefined;
+    const runtime = new SessionRuntime(createAdapter({
+      login,
+      request: async (_request, signal) => {
+        requestSignal = signal;
+        return requestDeferred.promise;
+      },
+    }));
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+    runtime.queryCache.set('dashboard', { value: 'old' }, runtime.snapshot.epoch);
+    runtime.pendingCommands.add({ id: 'command-identity', idempotencyKey: 'idem', sessionEpoch: runtime.snapshot.epoch, status: 'in-flight', createdAt: 1 });
+
+    const oldRequest = runtime.query('dashboard', { method: 'GET', href: '/api/v1/dashboard' });
+    await Promise.resolve();
+    const oldEpoch = runtime.snapshot.epoch;
+    await runtime.login({ email: 'new@example.test', password: 'password' });
+    requestDeferred.resolve({ status: 200, data: { old: true }, headers: {} });
+
+    await expect(oldRequest).rejects.toBeInstanceOf(SessionEpochChangedError);
+    expect(requestSignal?.aborted).toBe(true);
+    expect(runtime.snapshot).toMatchObject({ status: 'authenticated', epoch: oldEpoch + 1, user: { id: 'sales-2' } });
+    expect(runtime.snapshot.identity).toEqual(createIdentity('sales-2', 'org-2', 2, 2));
+    expect(runtime.queryCache.get('dashboard')).toBeUndefined();
+    expect(runtime.pendingCommands.list()).toHaveLength(0);
+    expect(runtime.snapshot.csrfToken).toBe('csrf-2');
+  });
+
+  it('clears an authenticated session exactly once when an API request reports session expiry', async () => {
+    const request = vi.fn().mockRejectedValue({
+      type: 'urn:autoflow:problem:authentication-required',
+      title: 'Authentication required',
+      status: 401,
+      code: 'SESSION_EXPIRED',
+    });
+    const runtime = new SessionRuntime(createAdapter({ request }));
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+    runtime.queryCache.set('private', { secret: true }, runtime.snapshot.epoch);
+    runtime.pendingCommands.add({ id: 'command-401', idempotencyKey: 'idem', sessionEpoch: runtime.snapshot.epoch, status: 'in-flight', createdAt: 1 });
+    const epoch = runtime.snapshot.epoch;
+
+    await expect(runtime.request({ method: 'GET', href: '/api/v1/customers' })).rejects.toMatchObject({ status: 401 });
+
+    expect(runtime.snapshot).toMatchObject({ status: 'anonymous', epoch: epoch + 1 });
+    expect(runtime.snapshot.csrfToken).toBeUndefined();
+    expect(runtime.queryCache.get('private')).toBeUndefined();
+    expect(runtime.pendingCommands.list()).toHaveLength(0);
+  });
+
+  it('aborts concurrent requests and rejects a late response after one request expires the session', async () => {
+    const secondRequest = deferred<{ status: number; data: { old: boolean }; headers: Record<string, string> }>();
+    const request = vi.fn()
+      .mockRejectedValueOnce({ type: 'about:blank', title: 'Expired', status: 401, code: 'AUTHENTICATION_REQUIRED' })
+      .mockImplementationOnce(async (_request: unknown, signal: AbortSignal) => {
+        signal.addEventListener('abort', () => undefined);
+        return secondRequest.promise;
+      });
+    const runtime = new SessionRuntime(createAdapter({ request }));
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+
+    const expired = runtime.request({ method: 'GET', href: '/api/v1/customers' });
+    const late = runtime.query('private', { method: 'GET', href: '/api/v1/orders' });
+    await expect(expired).rejects.toMatchObject({ status: 401 });
+    secondRequest.resolve({ status: 200, data: { old: true }, headers: {} });
+
+    await expect(late).rejects.toBeInstanceOf(SessionEpochChangedError);
+    expect(runtime.snapshot.status).toBe('anonymous');
+    expect(runtime.queryCache.get('private')).toBeUndefined();
+  });
+
+  it('does not treat login credentials failure as a session epoch change', async () => {
+    const login = vi.fn()
+      .mockResolvedValueOnce({ user: createUser('sales-1'), identity: createIdentity(), csrfToken: 'csrf-1' })
+      .mockRejectedValueOnce({ type: 'about:blank', title: 'Invalid credentials', status: 401, code: 'INVALID_CREDENTIALS' });
+    const runtime = new SessionRuntime(createAdapter({ login }));
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+    const epoch = runtime.snapshot.epoch;
+
+    await runtime.login({ email: 'wrong@example.test', password: 'wrong' });
+
+    expect(runtime.snapshot.epoch).toBe(epoch);
+    expect(runtime.snapshot.status).toBe('authenticated');
+    expect(runtime.snapshot.identity).toEqual(createIdentity());
+    expect(runtime.snapshot.csrfToken).toBe('csrf-1');
+  });
+
   it('ignores a stale login response that arrives after logout changed the epoch', async () => {
-    const loginDeferred = deferred<{ user: SessionUser; csrfToken: string }>();
+    const loginDeferred = deferred<{ user: SessionUser; identity: ReturnType<typeof createIdentity>; csrfToken: string }>();
     const runtime = new SessionRuntime(
       createAdapter({ login: async () => loginDeferred.promise }),
     );
@@ -118,7 +250,7 @@ describe('SessionRuntime', () => {
     await Promise.resolve();
 
     await runtime.logout();
-    loginDeferred.resolve({ user: createUser('stale-user'), csrfToken: 'stale-csrf' });
+    loginDeferred.resolve({ user: createUser('stale-user'), identity: createIdentity('stale-user', 'org-stale'), csrfToken: 'stale-csrf' });
     await login;
 
     expect(runtime.snapshot.status).toBe('anonymous');
@@ -278,8 +410,123 @@ describe('SessionRuntime', () => {
     });
   });
 
+  it('records stable replay failures as terminal failed commands', async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce({ status: 202, data: { accepted: true }, headers: {} })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: {
+          commandId: 'command-stable', operationId: 'createOrder', state: 'RECOVERY_REQUIRED',
+          startedAt: '2030-01-01T00:00:00.000Z', completedAt: null, expiresAt: '2030-01-01T00:05:00.000Z',
+          retryAfterMs: 0, httpStatus: null, resource: null, resultHref: null, problem: null,
+        },
+        headers: {},
+      })
+      .mockRejectedValueOnce({
+        type: 'urn:autoflow:problem:version-conflict', title: 'Version conflict', status: 409,
+        code: 'VERSION_CONFLICT', meta: { currentEtag: '"v2"' },
+      });
+    const runtime = new SessionRuntime(createAdapter({ request }));
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+    await runtime.executeCommand({ method: 'POST', href: '/api/v1/orders', operationId: 'createOrder', body: { order: 'draft' }, idempotencyKey: 'idem-stable', etag: '"v1"' });
+    const commandId = runtime.pendingCommands.list()[0]?.id ?? '';
+
+    await expect(runtime.recoverPendingCommand(commandId)).rejects.toMatchObject({ status: 409 });
+    expect(runtime.pendingCommands.get(commandId)).toMatchObject({ status: 'failed', state: 'failed-stable', idempotencyKey: 'idem-stable', etag: '"v1"' });
+    await expect(runtime.recoverPendingCommand(commandId)).rejects.toBeInstanceOf(PendingCommandFailedError);
+    expect(request).toHaveBeenCalledTimes(3);
+  });
+
+  it('replays a command-not-found result with the exact original identity', async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce({ status: 202, data: { accepted: true }, headers: {} })
+      .mockRejectedValueOnce({ type: 'about:blank', title: 'Command not found', status: 404, code: 'COMMAND_NOT_FOUND' })
+      .mockResolvedValueOnce({ status: 201, data: { id: 'order-1' }, headers: {} });
+    const runtime = new SessionRuntime(createAdapter({ request }));
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+    await runtime.executeCommand({ method: 'POST', href: '/api/v1/orders', operationId: 'createOrder', body: { z: 1, a: 2 }, idempotencyKey: 'idem-not-found', etag: '"v1"' });
+    const commandId = runtime.pendingCommands.list()[0]?.id ?? '';
+
+    await expect(runtime.recoverPendingCommand(commandId)).resolves.toMatchObject({ status: 201 });
+    expect(request.mock.calls[2]?.[0]).toMatchObject({
+      method: 'POST',
+      operationId: 'createOrder',
+      href: expect.stringContaining('/api/v1/orders'),
+      body: '{"a":2,"z":1}',
+      idempotencyKey: 'idem-not-found',
+      etag: '"v1"',
+    });
+    expect(runtime.pendingCommands.get(commandId)).toMatchObject({ status: 'succeeded', state: 'succeeded' });
+  });
+
+  it('records a terminal recovery-window expiry without replaying a command', async () => {
+    let now = 100;
+    const request = vi.fn().mockResolvedValueOnce({ status: 202, data: { accepted: true }, headers: {} });
+    const runtime = new SessionRuntime(createAdapter({ request }), { now: () => now, recoveryWindowMs: 10 });
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+    await runtime.executeCommand({ method: 'POST', href: '/api/v1/orders', operationId: 'createOrder', body: { order: 'draft' }, idempotencyKey: 'idem-expired' });
+    const commandId = runtime.pendingCommands.list()[0]?.id ?? '';
+    now = 111;
+
+    await expect(runtime.recoverPendingCommand(commandId)).rejects.toThrow('recovery window has expired');
+    expect(runtime.pendingCommands.get(commandId)).toMatchObject({ status: 'failed', state: 'failed-stable', idempotencyKey: 'idem-expired' });
+    expect(request).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an unavailable replay result recoverable while making a command failure terminal', async () => {
+    const failedRequest = vi.fn()
+      .mockResolvedValueOnce({ status: 202, data: { accepted: true }, headers: {} })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: {
+          commandId: 'command-failed', operationId: 'createOrder', state: 'FAILED',
+          startedAt: '2030-01-01T00:00:00.000Z', completedAt: '2030-01-01T00:00:01.000Z', expiresAt: '2030-01-01T00:05:00.000Z',
+          retryAfterMs: 0, httpStatus: 409, resource: null, resultHref: null,
+          problem: { type: 'about:blank', title: 'Version conflict', status: 409, code: 'VERSION_CONFLICT' },
+        },
+        headers: {},
+      });
+    const failedRuntime = new SessionRuntime(createAdapter({ request: failedRequest }));
+    await failedRuntime.login({ email: 'sales@example.test', password: 'password' });
+    await failedRuntime.executeCommand({ method: 'POST', href: '/api/v1/orders', operationId: 'createOrder', body: { order: 'draft' }, idempotencyKey: 'idem-failed' });
+    const failedId = failedRuntime.pendingCommands.list()[0]?.id ?? '';
+    await expect(failedRuntime.recoverPendingCommand(failedId)).rejects.toMatchObject({ problem: { code: 'VERSION_CONFLICT' } });
+    expect(failedRuntime.pendingCommands.get(failedId)).toMatchObject({ status: 'failed', state: 'failed-stable' });
+
+    const unavailableRequest = vi.fn()
+      .mockResolvedValueOnce({ status: 202, data: { accepted: true }, headers: {} })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: {
+          commandId: 'command-unavailable', operationId: 'createOrder', state: 'RECOVERY_REQUIRED',
+          startedAt: '2030-01-01T00:00:00.000Z', completedAt: null, expiresAt: '2030-01-01T00:05:00.000Z',
+          retryAfterMs: 0, httpStatus: null, resource: null, resultHref: null, problem: null,
+        },
+        headers: {},
+      })
+      .mockRejectedValueOnce({ type: 'about:blank', title: 'Unavailable', status: 503, code: 'SERVICE_UNAVAILABLE' });
+    const unavailableRuntime = new SessionRuntime(createAdapter({ request: unavailableRequest }));
+    await unavailableRuntime.login({ email: 'sales@example.test', password: 'password' });
+    await unavailableRuntime.executeCommand({ method: 'POST', href: '/api/v1/orders', operationId: 'createOrder', body: { order: 'draft' }, idempotencyKey: 'idem-unavailable' });
+    const unavailableId = unavailableRuntime.pendingCommands.list()[0]?.id ?? '';
+    await expect(unavailableRuntime.recoverPendingCommand(unavailableId)).rejects.toMatchObject({ status: 503 });
+    expect(unavailableRuntime.pendingCommands.get(unavailableId)).toMatchObject({ status: 'in-flight', state: 'result-unknown' });
+  });
+
+  it('requires an explicit operation identity for commands and bounds a stalled request', async () => {
+    const runtime = new SessionRuntime(createAdapter({ request: async (_request, signal) => await new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+    }) }), { requestTimeoutMs: 10 });
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+
+    await expect(runtime.executeCommand({ method: 'POST', href: '/api/v1/orders', body: { order: 'draft' } })).rejects.toThrow('operationId');
+    await expect(runtime.request({ method: 'GET', href: '/api/v1/customers' })).rejects.toMatchObject({ code: 'REQUEST_TIMEOUT' });
+    await expect(runtime.executeCommand({ method: 'POST', href: '/api/v1/orders', operationId: 'createOrder', body: { order: 'draft' }, idempotencyKey: 'idem-timeout' })).rejects.toMatchObject({ code: 'REQUEST_TIMEOUT' });
+    expect(runtime.pendingCommands.list()).toEqual([expect.objectContaining({ status: 'in-flight', state: 'result-unknown', problem: expect.objectContaining({ code: 'REQUEST_TIMEOUT' }) })]);
+  });
+
   it('ignores a stale login rejection after logout changed the epoch', async () => {
-    const loginDeferred = deferred<{ user: SessionUser; csrfToken: string }>();
+    const loginDeferred = deferred<{ user: SessionUser; identity: ReturnType<typeof createIdentity>; csrfToken: string }>();
     const runtime = new SessionRuntime(
       createAdapter({ login: async () => loginDeferred.promise }),
     );

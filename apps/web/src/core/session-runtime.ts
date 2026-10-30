@@ -1,4 +1,5 @@
 import { ApiProblemError } from '../../../../packages/contracts/openapi/client.js';
+import { QueryClient } from '@tanstack/vue-query';
 import { assertSafeApiHref, createIdempotencyKey, createRequestHeaders, createRequestId, stableStringify } from './security';
 import type {
   ApiRequest,
@@ -7,6 +8,7 @@ import type {
   LoginInput,
   PendingCommand,
   ProblemDetails,
+  SessionIdentity,
   SessionSnapshot,
   SessionUser,
 } from './types';
@@ -27,6 +29,15 @@ export class CsrfTokenMissingError extends Error {
   constructor() {
     super('A CSRF token is required before this request can be sent.');
     this.name = 'CsrfTokenMissingError';
+  }
+}
+
+export class RequestTimeoutError extends Error {
+  readonly code = 'REQUEST_TIMEOUT';
+
+  constructor() {
+    super('The API request exceeded its bounded timeout.');
+    this.name = 'RequestTimeoutError';
   }
 }
 
@@ -52,20 +63,22 @@ export class PendingCommandFailedError extends Error {
 }
 
 export class QueryCache {
-  private readonly values = new Map<string, { epoch: number; value: unknown }>();
+  private readonly namespace = 'session-runtime';
+
+  constructor(private readonly queryClient: QueryClient) {}
 
   set<T>(key: string, value: T, epoch: number): void {
-    this.values.set(key, { epoch, value });
+    this.queryClient.setQueryData([this.namespace, key], { epoch, value });
   }
 
   get<T>(key: string, epoch?: number): T | undefined {
-    const entry = this.values.get(key);
+    const entry = this.queryClient.getQueryData<{ epoch: number; value: unknown }>([this.namespace, key]);
     if (entry === undefined || (epoch !== undefined && entry.epoch !== epoch)) return undefined;
     return entry.value as T;
   }
 
   clear(): void {
-    this.values.clear();
+    this.queryClient.clear();
   }
 }
 
@@ -117,19 +130,26 @@ class MemorySensitiveStore {
 export interface SessionRuntimeOptions {
   readonly now?: () => number;
   readonly recoveryWindowMs?: number;
+  readonly requestTimeoutMs?: number;
   readonly sleep?: (milliseconds: number) => Promise<void>;
 }
 
+export type SessionSnapshotListener = (snapshot: SessionSnapshot) => void;
+
 export class SessionRuntime {
-  readonly queryCache = new QueryCache();
+  readonly queryClient: QueryClient;
+  readonly queryCache: QueryCache;
   readonly pendingCommands = new PendingCommandStore();
 
   private state: SessionSnapshot = { status: 'anonymous', epoch: 0 };
+  private identityFingerprint: string | undefined;
   private readonly sensitive = new MemorySensitiveStore();
   private readonly activeRequests = new Set<AbortController>();
   private readonly now: () => number;
   private readonly recoveryWindowMs: number;
+  private readonly requestTimeoutMs: number;
   private readonly sleep: (milliseconds: number) => Promise<void>;
+  private readonly listeners = new Set<SessionSnapshotListener>();
 
   constructor(
     private readonly adapter: ContractAdapter,
@@ -137,7 +157,10 @@ export class SessionRuntime {
   ) {
     this.now = options.now ?? (() => Date.now());
     this.recoveryWindowMs = options.recoveryWindowMs ?? DEFAULT_RECOVERY_WINDOW_MS;
+    this.requestTimeoutMs = options.requestTimeoutMs ?? 30_000;
     this.sleep = options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+    this.queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    this.queryCache = new QueryCache(this.queryClient);
   }
 
   get snapshot(): SessionSnapshot {
@@ -147,21 +170,26 @@ export class SessionRuntime {
     return snapshot;
   }
 
+  subscribe(listener: SessionSnapshotListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
   async bootstrap(): Promise<SessionSnapshot> {
     const operationEpoch = this.state.epoch;
     const controller = this.trackRequest();
-    this.state = { status: 'bootstrapping', epoch: operationEpoch };
+    this.setState({ status: 'bootstrapping', epoch: operationEpoch });
     try {
       const response = await this.adapter.bootstrap(controller.signal);
       if (this.state.epoch !== operationEpoch) return this.snapshot;
       if (response.authenticated && response.user && response.csrfToken) {
-        this.activateSession(response.user, response.csrfToken);
+        this.activateSession(response.user, response.identity, response.csrfToken);
       } else {
         this.transitionToAnonymous();
       }
     } catch (error) {
       if (this.state.epoch !== operationEpoch) return this.snapshot;
-      this.state = { status: 'error', epoch: this.state.epoch, problem: toProblem(error) };
+      this.setState({ status: 'error', epoch: this.state.epoch, problem: toProblem(error) });
     } finally {
       this.activeRequests.delete(controller);
     }
@@ -170,15 +198,20 @@ export class SessionRuntime {
 
   async login(input: LoginInput): Promise<SessionSnapshot> {
     const operationEpoch = this.state.epoch;
+    const previousState = this.state;
     const controller = this.trackRequest();
-    this.state = { status: 'bootstrapping', epoch: operationEpoch };
+    this.setState({ status: 'bootstrapping', epoch: operationEpoch });
     try {
       const credentials = await this.adapter.login(input, controller.signal);
       if (this.state.epoch !== operationEpoch) return this.snapshot;
-      this.activateSession(credentials.user, credentials.csrfToken);
+      this.activateSession(credentials.user, credentials.identity, credentials.csrfToken);
     } catch (error) {
       if (this.state.epoch !== operationEpoch) return this.snapshot;
-      this.state = { status: 'error', epoch: this.state.epoch, problem: toProblem(error) };
+      if (previousState.status === 'authenticated' && this.identityFingerprint !== undefined) {
+        this.setState(previousState);
+      } else {
+        this.setState({ status: 'error', epoch: this.state.epoch, problem: toProblem(error) });
+      }
     } finally {
       this.activeRequests.delete(controller);
     }
@@ -188,7 +221,7 @@ export class SessionRuntime {
   async logout(): Promise<SessionSnapshot> {
     const operationEpoch = this.state.epoch;
     const controller = this.trackRequest();
-    this.state = { status: 'logging-out', epoch: operationEpoch };
+    this.setState({ status: 'logging-out', epoch: operationEpoch });
     let failure: unknown;
     try {
       await this.adapter.logout(controller.signal, this.sensitive.get('csrfToken'));
@@ -218,16 +251,27 @@ export class SessionRuntime {
   async request<T>(request: ApiRequest): Promise<HttpResponse<T>> {
     const epoch = this.state.epoch;
     const controller = this.trackRequest();
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, this.requestTimeoutMs);
     let csrfReplayUsed = false;
     try {
       while (true) {
         try {
           const prepared = this.prepareRequest(request);
           const response = await this.adapter.request(prepared, controller.signal);
+          if (timedOut) throw new RequestTimeoutError();
           if (this.state.epoch !== epoch) throw new SessionEpochChangedError();
           return response as HttpResponse<T>;
         } catch (error) {
+          if (timedOut) throw new RequestTimeoutError();
           if (this.state.epoch !== epoch) throw new SessionEpochChangedError();
+          if (isSessionInvalidation(error) && this.state.status === 'authenticated') {
+            this.transitionToAnonymous();
+            throw error;
+          }
           if (!csrfReplayUsed && isCsrfFailure(error)) {
             csrfReplayUsed = true;
             await this.rotateCsrf();
@@ -237,6 +281,7 @@ export class SessionRuntime {
         }
       }
     } finally {
+      clearTimeout(timeoutId);
       this.activeRequests.delete(controller);
     }
   }
@@ -250,6 +295,7 @@ export class SessionRuntime {
   }
 
   async executeCommand(request: ApiRequest): Promise<HttpResponse<unknown>> {
+    if (request.operationId === undefined) throw new Error('operationId is required for command execution.');
     const idempotencyKey = request.idempotencyKey ?? createIdempotencyKey();
     const command: PendingCommand = {
       id: createRequestId(),
@@ -298,8 +344,12 @@ export class SessionRuntime {
   async recoverPendingCommand(commandId: string): Promise<HttpResponse<unknown>> {
     const stored = this.pendingCommands.get(commandId);
     if (stored === undefined) throw new PendingCommandNotFoundError(commandId);
+    if (stored.status === 'failed' && stored.problem !== undefined) {
+      throw new PendingCommandFailedError(stored.problem);
+    }
     if (stored.sessionEpoch !== this.state.epoch) throw new SessionEpochChangedError();
     if (stored.recoveryDeadline !== undefined && this.now() > stored.recoveryDeadline) {
+      this.markRecoveryWindowExpired(commandId);
       throw new PendingCommandRecoveryError('The pending command recovery window has expired.');
     }
     if (stored.operationId === undefined || stored.href === undefined || stored.method === undefined) {
@@ -322,6 +372,7 @@ export class SessionRuntime {
           this.pendingCommands.update(commandId, { state: 'in-progress' });
           const delay = status.retryAfterMs > 0 ? status.retryAfterMs : parseRetryAfter(statusResponse.headers);
           if (this.now() + delay > (stored.recoveryDeadline ?? this.now())) {
+            this.markRecoveryWindowExpired(commandId);
             throw new PendingCommandRecoveryError('The pending command recovery window has expired.');
           }
           await this.sleep(delay);
@@ -357,12 +408,18 @@ export class SessionRuntime {
         }
       }
       if (this.state.epoch !== stored.sessionEpoch) throw new SessionEpochChangedError();
+      this.pendingCommands.update(commandId, {
+        status: isResultUnknownFailure(error, problem) ? 'in-flight' : 'failed',
+        state: isResultUnknownFailure(error, problem) ? 'result-unknown' : 'failed-stable',
+        problem,
+      });
       throw error;
     }
   }
 
   private async replayPendingCommand(command: PendingCommand): Promise<HttpResponse<unknown>> {
     if (command.recoveryDeadline !== undefined && this.now() > command.recoveryDeadline) {
+      this.markRecoveryWindowExpired(command.id);
       throw new PendingCommandRecoveryError('The pending command recovery window has expired.');
     }
     if (command.href === undefined || command.method === undefined) {
@@ -386,7 +443,7 @@ export class SessionRuntime {
     } catch (error) {
       const problem = toProblem(error);
       this.pendingCommands.update(command.id, {
-        status: 'in-flight',
+        status: isResultUnknownFailure(error, problem) ? 'in-flight' : 'failed',
         state: isResultUnknownFailure(error, problem) ? 'result-unknown' : 'failed-stable',
         problem,
       });
@@ -416,15 +473,36 @@ export class SessionRuntime {
     return prepared;
   }
 
-  private activateSession(user: SessionUser, csrfToken: string): void {
+  observeIdentity(identity: SessionIdentity, user: SessionUser = this.state.user ?? {
+    id: identity.userId,
+    organizationId: identity.organizationId,
+    displayName: identity.userId,
+  }): boolean {
+    const fingerprint = createIdentityFingerprint(identity);
+    if (this.identityFingerprint === fingerprint) return false;
     const epoch = this.advanceEpoch();
+    this.identityFingerprint = fingerprint;
+    this.setState({ status: 'authenticated', epoch, user, identity });
+    return true;
+  }
+
+  private activateSession(user: SessionUser, identity: SessionIdentity, csrfToken: string): void {
+    const fingerprint = createIdentityFingerprint(identity);
+    if (this.identityFingerprint === fingerprint) {
+      this.sensitive.set('csrfToken', csrfToken);
+      this.setState({ status: 'authenticated', epoch: this.state.epoch, user, identity });
+      return;
+    }
+    const epoch = this.advanceEpoch();
+    this.identityFingerprint = fingerprint;
     this.sensitive.set('csrfToken', csrfToken);
-    this.state = { status: 'authenticated', epoch, user };
+    this.setState({ status: 'authenticated', epoch, user, identity });
   }
 
   private transitionToAnonymous(): void {
     const epoch = this.advanceEpoch();
-    this.state = { status: 'anonymous', epoch };
+    this.identityFingerprint = undefined;
+    this.setState({ status: 'anonymous', epoch });
   }
 
   private advanceEpoch(): number {
@@ -436,10 +514,29 @@ export class SessionRuntime {
     return this.state.epoch + 1;
   }
 
+  private markRecoveryWindowExpired(commandId: string): void {
+    this.pendingCommands.update(commandId, {
+      status: 'failed',
+      state: 'failed-stable',
+      problem: {
+        type: 'about:blank',
+        title: 'Pending command recovery window expired',
+        status: 409,
+        code: 'RECOVERY_WINDOW_EXPIRED',
+      },
+    });
+  }
+
   private trackRequest(): AbortController {
     const controller = new AbortController();
     this.activeRequests.add(controller);
     return controller;
+  }
+
+  private setState(state: SessionSnapshot): void {
+    this.state = state;
+    const snapshot = this.snapshot;
+    for (const listener of this.listeners) listener(snapshot);
   }
 }
 
@@ -450,6 +547,16 @@ function canonicalBody(value: unknown): string {
 function toProblem(error: unknown): ProblemDetails {
   if (error instanceof ApiProblemError) {
     return { ...error.problem, headers: { ...error.headers } };
+  }
+  if (error instanceof RequestTimeoutError) {
+    return {
+      type: 'about:blank',
+      title: 'Request timeout',
+      status: 408,
+      code: error.code,
+      retryable: true,
+      detail: error.message,
+    };
   }
   if (isProblemDetails(error)) return error;
   if (error instanceof PendingCommandFailedError) return error.problem;
@@ -474,7 +581,20 @@ function isCsrfFailure(error: unknown): boolean {
 
 function isResultUnknownFailure(error: unknown, problem: ProblemDetails): boolean {
   if (problem.status === 502 || problem.status === 503) return true;
+  if (error instanceof RequestTimeoutError) return true;
   return error instanceof TypeError || (error instanceof Error && error.name === 'AbortError');
+}
+
+function isSessionInvalidation(error: unknown): boolean {
+  const problem = toProblem(error);
+  return problem.status === 401 && (problem.code === 'AUTHENTICATION_REQUIRED' || problem.code === 'SESSION_EXPIRED');
+}
+
+function createIdentityFingerprint(identity: SessionIdentity): string {
+  return stableStringify({
+    ...identity,
+    capabilities: [...identity.capabilities].sort(),
+  });
 }
 
 interface ParsedCommandStatus {

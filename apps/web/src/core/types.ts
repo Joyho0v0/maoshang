@@ -2,8 +2,19 @@ export type UserRole = 'super-admin' | 'team-admin' | 'sales' | 'customer';
 
 export interface SessionUser {
   id: string;
+  organizationId: string;
   displayName: string;
-  role: UserRole;
+  /** Display/compatibility metadata only. Authorization uses capabilities. */
+  role?: UserRole;
+}
+
+export interface SessionIdentity {
+  userId: string;
+  organizationId: string;
+  capabilities: string[];
+  scopeSummary: Record<string, unknown>;
+  authzVersion?: number;
+  serverSessionEpoch?: number;
 }
 
 export interface ProblemDetails {
@@ -20,11 +31,9 @@ export interface ProblemDetails {
   headers?: Record<string, string>;
 }
 
-export interface SessionBootstrapResponse {
-  authenticated: boolean;
-  user?: SessionUser;
-  csrfToken?: string;
-}
+export type SessionBootstrapResponse =
+  | { authenticated: false; csrfToken?: string }
+  | { authenticated: true; user: SessionUser; identity: SessionIdentity; csrfToken: string };
 
 export interface LoginInput {
   email: string;
@@ -33,6 +42,7 @@ export interface LoginInput {
 
 export interface SessionCredentials {
   user: SessionUser;
+  identity: SessionIdentity;
   csrfToken: string;
 }
 
@@ -51,6 +61,7 @@ export interface SessionSnapshot {
   status: SessionStatus;
   epoch: number;
   user?: SessionUser;
+  identity?: SessionIdentity;
   csrfToken?: string;
   problem?: ProblemDetails;
 }

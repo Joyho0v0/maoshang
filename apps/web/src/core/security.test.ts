@@ -82,6 +82,34 @@ describe('API URL and request security boundaries', () => {
     expect(init?.headers).not.toHaveProperty('X-CSRF-Token');
   });
 
+  it('forwards only validated provider headers and keeps the transfer referrer isolated', async () => {
+    const fetcher = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => {
+      void _url;
+      void _init;
+      return new Response(null, { status: 204 });
+    });
+    const client = createSignedTransferClient(fetcher);
+
+    await client.send('https://files.example.test/signed-url', {
+      method: 'PUT',
+      body: 'bytes',
+      headers: { 'x-ms-blob-type': 'BlockBlob', 'Content-MD5': 'digest' },
+    });
+
+    expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      headers: { 'x-ms-blob-type': 'BlockBlob', 'Content-MD5': 'digest' },
+    });
+  });
+
+  it('rejects application credentials from a signed transfer header set', () => {
+    expect(() => createSignedTransferRequest('https://files.example.test/signed-url', {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer application-token' },
+    })).toThrow('forbidden');
+  });
+
   it('passes binary signed transfer bodies through without JSON serialization', async () => {
     const fetcher = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       void url;
