@@ -83,6 +83,14 @@ describe('domain vertical-slice pages', () => {
     const sku = await mountPage(CatalogFormPage, '/catalog/skus/new');
     expect((sku.get('#catalog-product').element as HTMLInputElement).value).toBe('');
     expect(sku.get('#catalog-product').element.tagName).toBe('SELECT');
+    expect(sku.findAll('#catalog-product')).toHaveLength(1);
+    expect(sku.find('input[name="productId"]').exists()).toBe(false);
+
+    const editSku = await mountPage(CatalogFormPage, '/catalog/skus/00000000-0000-4000-8000-000000000301/edit');
+    expect(editSku.findAll('#catalog-product')).toHaveLength(1);
+    expect(editSku.get('#catalog-product').element.tagName).toBe('INPUT');
+    expect(editSku.find('input[name="productId"]').exists()).toBe(true);
+    expect(editSku.find('select#catalog-product').exists()).toBe(false);
 
     const order = await mountPage(OrderFormPage, '/orders/new');
     expect((order.get('#order-customer').element as HTMLInputElement).value).toBe('');
@@ -298,11 +306,17 @@ describe('domain vertical-slice pages', () => {
     api.listProducts = listProducts;
 
     const wrapper = await mountPage(CatalogFormPage, '/catalog/skus/new', api);
+    expect(wrapper.findAll('#catalog-product')).toHaveLength(1);
+    expect(wrapper.get('#catalog-product').element.tagName).toBe('SELECT');
+    expect(wrapper.find('input[name="productId"]').exists()).toBe(false);
     expect(wrapper.findAll('#catalog-product option')).toHaveLength(21);
     await wrapper.get('[data-testid="catalog-products-load-more"]').trigger('click');
     await flushPromises();
 
     expect(listProducts).toHaveBeenLastCalledWith({ cursor: 'opaque-products-next' });
+    expect(wrapper.findAll('#catalog-product')).toHaveLength(1);
+    expect(wrapper.get('#catalog-product').element.tagName).toBe('SELECT');
+    expect(wrapper.find('input[name="productId"]').exists()).toBe(false);
     expect(wrapper.findAll('#catalog-product option')).toHaveLength(22);
     await wrapper.get('#catalog-product').setValue(products[20]?.id ?? '');
     expect((wrapper.get('#catalog-product').element as HTMLSelectElement).value).toBe(products[20]?.id);
@@ -356,6 +370,9 @@ describe('domain vertical-slice pages', () => {
     api.listProducts = () => new Promise<ResourcePage<Product>>((resolve) => { resolveProducts = resolve; });
 
     const wrapper = await mountPage(CatalogFormPage, '/catalog/skus/new', api);
+    expect(wrapper.findAll('#catalog-product')).toHaveLength(1);
+    expect(wrapper.get('#catalog-product').element.tagName).toBe('SELECT');
+    expect(wrapper.find('input[name="productId"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="catalog-product-reference-state"] .state-panel--loading').exists()).toBe(true);
     expect((wrapper.get('button[type="submit"]').element as HTMLButtonElement).disabled).toBe(true);
 
@@ -371,6 +388,9 @@ describe('domain vertical-slice pages', () => {
   ])('blocks SKU create when Product references are $scenario', async ({ scenario, stateClass }) => {
     const wrapper = await mountPage(CatalogFormPage, '/catalog/skus/new', createFixtureDomainApi({ scenario }));
 
+    expect(wrapper.findAll('#catalog-product')).toHaveLength(1);
+    expect(wrapper.get('#catalog-product').element.tagName).toBe('SELECT');
+    expect(wrapper.find('input[name="productId"]').exists()).toBe(false);
     expect(wrapper.find(`[data-testid="catalog-product-reference-state"] .${stateClass}`).exists()).toBe(true);
     expect((wrapper.get('button[type="submit"]').element as HTMLButtonElement).disabled).toBe(true);
   });
@@ -388,11 +408,17 @@ describe('domain vertical-slice pages', () => {
 
     const wrapper = await mountPage(CatalogFormPage, '/catalog/skus/new', api);
     expect(wrapper.find('[data-testid="catalog-product-reference-state"] .state-panel--offline').exists()).toBe(true);
+    expect(wrapper.findAll('#catalog-product')).toHaveLength(1);
+    expect(wrapper.get('#catalog-product').element.tagName).toBe('SELECT');
+    expect(wrapper.find('input[name="productId"]').exists()).toBe(false);
     await wrapper.get('[data-testid="catalog-product-reference-state"] button').trigger('click');
     await flushPromises();
 
     expect(attempts).toBe(2);
     expect(wrapper.find('[data-testid="catalog-product-reference-state"] .state-panel--offline').exists()).toBe(false);
+    expect(wrapper.findAll('#catalog-product')).toHaveLength(1);
+    expect(wrapper.get('#catalog-product').element.tagName).toBe('SELECT');
+    expect(wrapper.find('input[name="productId"]').exists()).toBe(false);
     expect(wrapper.findAll('#catalog-product option')).toHaveLength(2);
     expect((wrapper.get('button[type="submit"]').element as HTMLButtonElement).disabled).toBe(false);
   });

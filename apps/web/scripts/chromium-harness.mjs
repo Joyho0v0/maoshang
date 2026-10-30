@@ -283,18 +283,30 @@ async function exerciseCustomerReject(cdp, context) {
 
 async function exerciseCatalogReferencePagination(cdp, context) {
   await waitForSelectors(cdp, ['[data-testid="catalog-products-load-more"]', '#catalog-product option:nth-child(21)'], context);
+  const initial = await evaluate(cdp, `(() => {
+    const controls = document.querySelectorAll('#catalog-product');
+    return {
+      pass: controls.length === 1
+        && controls[0] instanceof HTMLSelectElement
+        && document.querySelector('input[name="productId"]') === null,
+      name: 'catalog create has one Product select before pagination',
+    };
+  })()`);
   await evaluate(cdp, `document.querySelector('[data-testid="catalog-products-load-more"]')?.click()`);
   await waitForSelectors(cdp, ['#catalog-product option:nth-child(22)'], context);
-  return [await evaluate(cdp, `(() => {
+  return [initial, await evaluate(cdp, `(() => {
     const select = document.querySelector('#catalog-product');
+    const controls = document.querySelectorAll('#catalog-product');
     const submit = document.querySelector('form button[type="submit"]');
     if (!(select instanceof HTMLSelectElement)) return { pass: false, name: 'catalog reference pagination and selection' };
     const last = select.options[select.options.length - 1];
     select.value = last?.value ?? '';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     return {
-      pass: select.options.length === 22
+      pass: controls.length === 1
+        && select.options.length === 22
         && select.value === last?.value
+        && document.querySelector('input[name="productId"]') === null
         && submit instanceof HTMLButtonElement
         && !submit.disabled,
       name: 'catalog reference pagination and selection',

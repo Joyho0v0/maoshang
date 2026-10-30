@@ -224,46 +224,48 @@ function recoverPending(): void {
               @action="retryProducts"
             />
           </div>
-          <select
-            v-if="!isEdit"
-            id="catalog-product"
-            v-model="productId"
-            name="productId"
-            autocomplete="off"
-            :disabled="productReferenceState !== 'ready' || isLoadingProducts"
-            :aria-invalid="errors.some((error) => error.field === 'catalog-product')"
-            :aria-describedby="errors.some((error) => error.field === 'catalog-product') ? formErrorId('catalog-product') : undefined"
-          >
-            <option value="">
-              请选择已授权商品
-            </option>
-            <option
-              v-for="product in productOptions"
-              :key="product.id"
-              :value="product.id"
+          <template v-if="!isEdit">
+            <select
+              id="catalog-product"
+              v-model="productId"
+              name="productId"
+              autocomplete="off"
+              :disabled="productReferenceState !== 'ready' || isLoadingProducts"
+              :aria-invalid="errors.some((error) => error.field === 'catalog-product')"
+              :aria-describedby="errors.some((error) => error.field === 'catalog-product') ? formErrorId('catalog-product') : undefined"
             >
-              {{ product.name }}（{{ product.productCode }}）
-            </option>
-          </select>
-          <button
-            v-if="!isEdit && productReferenceState === 'ready' && productNextCursor"
-            class="button button--quiet"
-            type="button"
-            data-testid="catalog-products-load-more"
-            :disabled="isLoadingProducts"
-            @click="loadMoreProducts"
-          >
-            {{ isLoadingProducts ? '正在加载商品…' : '加载更多商品' }}
-          </button>
-          <input
-            v-else
-            id="catalog-product"
-            :value="productId"
-            name="productId"
-            autocomplete="off"
-            readonly
-            aria-readonly="true"
-          >
+              <option value="">
+                请选择已授权商品
+              </option>
+              <option
+                v-for="product in productOptions"
+                :key="product.id"
+                :value="product.id"
+              >
+                {{ product.name }}（{{ product.productCode }}）
+              </option>
+            </select>
+            <button
+              v-if="productReferenceState === 'ready' && productNextCursor"
+              class="button button--quiet"
+              type="button"
+              data-testid="catalog-products-load-more"
+              :disabled="isLoadingProducts"
+              @click="loadMoreProducts"
+            >
+              {{ isLoadingProducts ? '正在加载商品…' : '加载更多商品' }}
+            </button>
+          </template>
+          <template v-else>
+            <input
+              id="catalog-product"
+              :value="productId"
+              name="productId"
+              autocomplete="off"
+              readonly
+              aria-readonly="true"
+            >
+          </template>
           <label for="catalog-price">价格（DecimalString）</label>
           <input
             id="catalog-price"
