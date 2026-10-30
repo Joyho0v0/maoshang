@@ -79,6 +79,17 @@ describe('Files service security and command boundaries', () => {
     expect(first.responseHeaders).toMatchObject({ 'cache-control': 'no-store' });
   });
 
+  it('returns a declared state conflict when an upload intent replay is expired', async () => {
+    const expired = { ...snapshot(new Date(Date.now() - 60_000)), intentStatus: 'EXPIRED' as const };
+    const service = new FilesService({ findUploadIntentForReplay: async () => expired } as unknown as PostgresFilesStore, {} as ObjectStorageAdapter);
+
+    await expect(service.replayUploadIntent(principal(), fileId, 'request-1', {
+      status: 201,
+      body: {},
+      resource: { type: 'FILE', id: fileId, version: 1, href: `/api/v1/files/${fileId}` },
+    })).rejects.toSatisfy((error: unknown) => error instanceof FileCommandFailureError && error.problem.status === 409 && error.problem.code === 'STATE_CONFLICT' && error.problem.meta?.currentState === 'UPLOAD_INTENT_EXPIRED');
+  });
+
   it('returns a stable resource-not-found command failure for missing or out-of-scope complete targets', async () => {
     const store = { findCompletionSnapshot: async () => undefined } as unknown as PostgresFilesStore;
     const service = new FilesService(store, {} as ObjectStorageAdapter);
