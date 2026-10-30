@@ -1,0 +1,100 @@
+{
+  "formatVersion": 1,
+  "recordType": "openapi-baseline-promotion",
+  "status": "implemented-awaiting-independent-acceptance",
+  "sourceRevisions": {
+    "gateC2InputHead": "6a32eab7afdf1241fe8b2135d971d960057d9ac5",
+    "exactBase": "b06da0b024e2555a98a2c370c5fdf3195d45d591",
+    "decisionManifest": "f342f1567518921cb0e337a4522306dd93cebad4",
+    "candidateContent": "a8f0d37a615e2338de4774d8d13f7498b49aa9b8",
+    "promotionMechanism": "fdc718a95301f884bb4101c1e78c57051d71c91c",
+    "baselinePromotion": "f9c8325b89854d88579c6bebab73dc60cc90a8e9",
+    "contentIdentityFastPath": "9ba22dddd4ffd8e04cc99339398a9d445854a8ad"
+  },
+  "baselineTransition": {
+    "baselinePath": "packages/contracts/openapi/openapi.baseline.yaml",
+    "fromSha256": "9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25",
+    "toSha256": "149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984",
+    "candidatePath": "packages/contracts/openapi/openapi.yaml",
+    "candidateSha256": "149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984"
+  },
+  "liveArtifacts": {
+    "inventory": {
+      "path": "packages/contracts/openapi/breaking-inventory.json",
+      "formatVersion": 3,
+      "sha256": "88282c07f858d7fb3fe25130ed9c2786774813ab6cf9e411b5f3da6f4387fa2c",
+      "byteLength": 2376,
+      "count": 0
+    },
+    "decisions": {
+      "path": "packages/contracts/openapi/breaking-decisions.json",
+      "formatVersion": 1,
+      "sha256": "c775b0a7973b6f57bfb704715165e006e63aaff0f02361f70f7535c563985e59",
+      "byteLength": 444,
+      "decisionCount": 0
+    }
+  },
+  "archive": {
+    "directory": "packages/contracts/openapi/audit/baseline-promotions/2026-10-29-joint-contract-v1",
+    "baseline": {
+      "path": "openapi.baseline.before.yaml",
+      "sha256": "9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25"
+    },
+    "inventory": {
+      "path": "breaking-inventory.before.json",
+      "sha256": "b89df569dad1b68675618c22696ff2177a7710cf0bd3913d9fd5cd06a5332735",
+      "count": 2015,
+      "uniqueIdentityCount": 2015
+    },
+    "decisions": {
+      "path": "breaking-decisions.before.json",
+      "sha256": "80fce55403521eee5a4bc91be9fad6cc4a66f4651bf663ca1ec5d88675cd063b",
+      "acceptSemanticDirectionCount": 2015,
+      "rejectCount": 0,
+      "pendingCount": 0,
+      "promotionAuthorizedFalseCount": 2015,
+      "promotionAuthorizedTrueCount": 0
+    },
+    "dispositionPackage": {
+      "path": "contract-disposition-package.json",
+      "sha256": "0c82a27e2356fed17dd8c1881b6067b1d9abf8c4334417c6c5419ee00c71a948",
+      "identityCount": 2015,
+      "orphanCount": 0,
+      "duplicateCount": 0,
+      "mismatchCount": 0
+    }
+  },
+  "sourceProvenance": {
+    "comparator": {
+      "revision": "9ba22dddd4ffd8e04cc99339398a9d445854a8ad",
+      "sourceSha256": "c0a911f1ab3284aaad1f74de4af51ffa7de66f5c780e106b0e1fa13636a4c699"
+    },
+    "generator": {
+      "revision": "9ba22dddd4ffd8e04cc99339398a9d445854a8ad",
+      "sourceSha256": "bf20cda8721d728fcdc4391935180c073ab124f656824ca2f4ab5248e6d78bef"
+    },
+    "contentIdentity": {
+      "revision": "9ba22dddd4ffd8e04cc99339398a9d445854a8ad",
+      "sourceSha256": "e8884c903f744151641651aba218acdaa3ced430de5e5a9a33b624cb920bff97"
+    },
+    "generatedTypesSha256": "ae349a7f9f81b712bc0ef276a12ff0127ca40db9e83878b64c47fab5e1b5dc16",
+    "generatedClientSha256": "d4b5144d568a460a1b0bae89772fd519eb95ef6747d3cb95fa04e6e810907044"
+  },
+  "evidence": {
+    "semanticDispositionCommentId": "01a18410-56e1-7b83-b2b2-ec9c7e8e1976",
+    "dispositionAttachmentId": "01a18410-5580-7ed1-b912-acc7971f3dd7",
+    "qaCommentId": "01a18668-a201-7c33-81bb-3b360ae61f31",
+    "leaderFreezeCommentId": "01a1866c-1c7e-70e3-b8b3-c2a9e1f1f468",
+    "gateC2DecisionCommentId": "01a18678-bd26-7c47-91a0-fb48b58b4794",
+    "p2aReviewCommentId": "01a18b1a-70a4-7414-a59b-67b781a63036",
+    "boundaryDecisionCommentId": "01a18b27-1593-714d-8a89-f80346c8dfdc"
+  },
+  "gates": {
+    "contractPromotionDoesNotAuthorizeRuntime": true,
+    "runtime": "closed",
+    "liveApi": "closed",
+    "databaseMigration": "closed",
+    "deployment": "closed",
+    "adrAcceptance": "pending-review-qa-leader-completion"
+  }
+}
