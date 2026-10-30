@@ -16,6 +16,11 @@ import { PostgresIdentityStore } from './modules/identity/infrastructure/postgre
 import { PostgresLoginAttemptStore } from './modules/identity/infrastructure/postgres-login-attempt.store.js';
 import { IdentityCommandService, type IdentityAuditQueryStore, type IdentityMutationStore } from './modules/identity/application/identity-command.service.js';
 import { IdentityController } from './modules/identity/transport/identity.controller.js';
+import { FilesController } from './modules/files/transport/files.controller.js';
+import { FilesService } from './modules/files/application/files.service.js';
+import { PostgresFilesStore } from './modules/files/infrastructure/postgres-files.store.js';
+import { ControlledFakeObjectStorageAdapter } from './modules/files/infrastructure/file-adapters.js';
+import type { ObjectStorageAdapter } from './modules/files/infrastructure/file-adapters.js';
 
 @Injectable()
 class DatabasePoolProvider implements OnModuleDestroy {
@@ -31,7 +36,7 @@ class DatabasePoolProvider implements OnModuleDestroy {
 }
 
 @Module({
-  controllers: [CsrfController, SessionController, CommandStatusController, IdentityController],
+  controllers: [CsrfController, SessionController, CommandStatusController, IdentityController, FilesController],
   providers: [
     CsrfService,
     {
@@ -56,8 +61,28 @@ class DatabasePoolProvider implements OnModuleDestroy {
     { provide: IDEMPOTENCY_REPOSITORY, useFactory: (database: DatabasePoolProvider) => new PostgresIdempotencyRepository(database.pool), inject: [DatabasePoolProvider] },
     RequestSafetyGuard,
     { provide: CommandStatusService, useFactory: (repository: PostgresIdempotencyRepository, database: DatabasePoolProvider) => new CommandStatusService(repository, () => database.pool.connect()), inject: [IDEMPOTENCY_REPOSITORY, DatabasePoolProvider] },
+    {
+      provide: PostgresFilesStore,
+      useFactory: (database: DatabasePoolProvider) => new PostgresFilesStore(database.pool),
+      inject: [DatabasePoolProvider],
+    },
+    {
+      provide: 'OBJECT_STORAGE_ADAPTER',
+      useFactory: (config: RuntimeConfig): ObjectStorageAdapter => {
+        if (config.nodeEnv === 'production') {
+          throw new Error('Controlled object storage adapter is disabled in production.');
+        }
+        return new ControlledFakeObjectStorageAdapter();
+      },
+      inject: ['RUNTIME_CONFIG'],
+    },
+    {
+      provide: FilesService,
+      useFactory: (store: PostgresFilesStore, objectStorage: ObjectStorageAdapter) => new FilesService(store, objectStorage),
+      inject: [PostgresFilesStore, 'OBJECT_STORAGE_ADAPTER'],
+    },
   ],
-  exports: [CsrfService, InMemoryIdempotencyStore, CommandStatusService, IDEMPOTENCY_REPOSITORY],
+  exports: [CsrfService, InMemoryIdempotencyStore, CommandStatusService, IDEMPOTENCY_REPOSITORY, FilesService, PostgresFilesStore, 'OBJECT_STORAGE_ADAPTER'],
 })
 export class AppModule {
   static register(config: RuntimeConfig, validator: ContractValidator, authenticationProvider?: AuthenticationProvider): DynamicModule {

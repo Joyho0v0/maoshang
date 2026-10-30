@@ -8,13 +8,20 @@ import { OutboxWorker, type EventPublisher } from './worker.js';
 import { IdentityCommandProcessor } from './identity-command-processor.js';
 import { PostgresIdentityStore } from '../../api/src/modules/identity/infrastructure/postgres-identity.store.js';
 import { PostgresIdempotencyRepository } from '../../api/src/modules/integration/idempotency/postgres-idempotency-repository.js';
+import { PostgresFilesStore } from '../../api/src/modules/files/infrastructure/postgres-files.store.js';
+import { ControlledFakeObjectStorageAdapter, ControlledFakeScanAdapter } from '../../api/src/modules/files/infrastructure/file-adapters.js';
+import { FileCommandProcessor } from './file-command-processor.js';
 
 export function buildWorker(config: RuntimeConfig, pool: pg.Pool = new pg.Pool({ connectionString: config.databaseUrl, max: 4 })): { worker: OutboxWorker; pool: pg.Pool } {
+  if (config.nodeEnv === 'production') throw new Error('Controlled file adapters are disabled in production.');
   const source = new CombinedOutboxSource(new PostgresOutboxSource(pool), new PostgresOutboxSource(pool, 'integration.identity_outbox_event'));
-  const identityCommands = new IdentityCommandProcessor(new PostgresIdentityStore(pool), new PostgresIdempotencyRepository(pool));
+  const idempotency = new PostgresIdempotencyRepository(pool);
+  const identityCommands = new IdentityCommandProcessor(new PostgresIdentityStore(pool), idempotency);
+  const fileCommands = new FileCommandProcessor(new PostgresFilesStore(pool), idempotency, new ControlledFakeObjectStorageAdapter(), new ControlledFakeScanAdapter());
   const publisher: EventPublisher = {
     async publish(event) {
       await identityCommands.process(event);
+      await fileCommands.process(event);
       process.stdout.write(JSON.stringify({ eventId: event.id, topic: event.topic }) + '\n');
     },
   };
