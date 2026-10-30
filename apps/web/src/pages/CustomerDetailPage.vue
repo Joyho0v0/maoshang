@@ -3,12 +3,14 @@ import { computed, ref } from 'vue';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { RouterLink, useRoute } from 'vue-router';
 
-import type { CustomerCommandInput } from '../core/domain-api';
+import type { CustomerCommandInput, DomainMutationResult, PendingMutation } from '../core/domain-api';
 import { isConflictError } from '../core/domain-api';
-import { etagFor, listState, pageStateMessage, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
 import CapabilityGate from '../ui/CapabilityGate.vue';
 import ConflictDialog from '../ui/ConflictDialog.vue';
+import Dialog from '../ui/Dialog.vue';
 import PageState from '../ui/PageState.vue';
+import { formErrorId } from '../ui/form-error';
+import { canUsePageCapability, listState, pageStateMessage, pendingRecoveryFeedback, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
 
 const route = useRoute();
 const api = useDomainApi();
@@ -19,35 +21,95 @@ const customerQuery = useQuery({
   queryFn: () => api.getCustomer(id.value),
   enabled: computed(() => id.value.length > 0),
 });
-const isCommandPending = computed(() => commandMutation.isPending.value);
 const customer = computed(() => customerQuery.data.value?.data);
 const state = computed(() => listState(customerQuery.isPending.value, customer.value ? 1 : 0, customerQuery.error.value));
 const stateCopy = computed(() => pageStateMessage(state.value));
 const conflictOpen = ref(false);
 const commandError = ref('');
+const pendingFeedback = ref('');
+const pendingResult = ref<PendingMutation<unknown>>();
+const dialogMode = ref<'reject' | 'reassign' | undefined>();
+const reason = ref('');
+const assigneeUserId = ref('');
+const dialogError = ref('');
 const commandMutation = useMutation({
-  mutationFn: (action: CustomerCommandInput['action']) => {
+  mutationFn: (input: CustomerCommandInput): Promise<DomainMutationResult<unknown>> => {
     if (!customer.value) throw new Error('Customer is not loaded.');
-    return api.commandCustomer(customer.value.id, { action }, etagFor(customer.value.version));
+    const etag = customerQuery.data.value?.etag;
+    if (!etag) throw new Error('缺少服务端 ETag，请先刷新页面。');
+    return api.commandCustomer(customer.value.id, input, etag);
   },
-  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['customer', id.value] }),
+  onSuccess: (result) => complete(result),
   onError: (error) => {
-    commandError.value = isConflictError(error) ? '内容已变化，请刷新后重做。' : '操作没有完成，请稍后重试。';
+    commandError.value = isConflictError(error) ? '内容已变化，请刷新后重做。' : '操作没有完成，请检查服务端返回。';
     if (isConflictError(error)) conflictOpen.value = true;
   },
 });
+const isCommandPending = computed(() => commandMutation.isPending.value);
 
-function hasTransition(action: string): boolean {
-  return customer.value?.allowedTransitions?.includes(action) ?? false;
+async function complete<T>(result: DomainMutationResult<T>): Promise<void> {
+  let current = result;
+  if (current.kind === 'pending') {
+    pendingResult.value = current;
+    pendingFeedback.value = '请求已提交，正在确认服务端结果；请勿重复提交。';
+  }
+  try {
+    while (current.kind === 'pending') {
+      current = await current.recover();
+      if (current.kind === 'pending') pendingResult.value = current;
+    }
+    pendingResult.value = undefined;
+    pendingFeedback.value = '';
+    dialogMode.value = undefined;
+    await queryClient.invalidateQueries({ queryKey: ['customer', id.value] });
+    await customerQuery.refetch();
+  } catch (error) {
+    const recovery = pendingRecoveryFeedback(error);
+    if (recovery.stable) pendingResult.value = undefined;
+    pendingFeedback.value = recovery.message;
+  }
 }
+
+function hasTransition(action: string): boolean { return customer.value?.allowedTransitions?.includes(action) ?? false; }
+function hasEtag(): boolean { return Boolean(customerQuery.data.value?.etag); }
 
 function execute(action: CustomerCommandInput['action']): void {
-  commandMutation.mutate(action);
+  if (!hasEtag() || !hasTransition(action)) return;
+  if (action === 'REJECT') {
+    dialogMode.value = 'reject';
+    reason.value = '';
+    dialogError.value = '';
+    return;
+  }
+  if (action === 'REASSIGN') {
+    dialogMode.value = 'reassign';
+    assigneeUserId.value = '';
+    dialogError.value = '';
+    return;
+  }
+  commandMutation.mutate({ action });
 }
 
-function retry(): void {
-  void customerQuery.refetch();
+function submitDialog(): void {
+  if (dialogMode.value === 'reject') {
+    if (!reason.value.trim()) { dialogError.value = '请填写驳回原因。'; return; }
+    commandMutation.mutate({ action: 'REJECT', reason: reason.value.trim() });
+    return;
+  }
+  if (dialogMode.value === 'reassign') {
+    if (!assigneeUserId.value.trim()) { dialogError.value = '请选择新的负责人。'; return; }
+    if (assigneeUserId.value === customer.value?.ownerUserId) { dialogError.value = '交接负责人必须不同于当前负责人。'; return; }
+    commandMutation.mutate({ action: 'REASSIGN', assigneeUserId: assigneeUserId.value.trim() });
+  }
 }
+
+function recoverPending(): void {
+  const pending = pendingResult.value;
+  if (!pending || isCommandPending.value) return;
+  void complete(pending);
+}
+
+function retry(): void { void customerQuery.refetch(); }
 </script>
 
 <template>
@@ -77,13 +139,13 @@ function retry(): void {
           <p>版本 {{ customer.version }} · 审批结果由服务端的 approvalSummary 返回。</p>
         </div>
         <RouterLink
+          v-if="canUsePageCapability(api, 'customer.update')"
           class="button button--quiet"
           :to="`/customers/${customer.id}/edit`"
         >
           编辑档案
         </RouterLink>
       </section>
-
       <section
         class="detail-grid"
         aria-label="客户信息"
@@ -109,14 +171,13 @@ function retry(): void {
           </p>
         </article>
       </section>
-
       <section
         class="command-panel"
         aria-label="客户操作"
       >
         <h2>按职责执行</h2>
         <p class="muted-copy">
-          操作按钮同时受 capabilities 与 allowedTransitions 约束；角色名称不会绕过服务端授权。
+          操作按钮同时受 capabilities、allowedTransitions 和服务端 ETag 约束；列表页不直接创建命令意图。
         </p>
         <div class="command-actions">
           <CapabilityGate
@@ -129,7 +190,8 @@ function retry(): void {
               <button
                 class="button"
                 type="button"
-                :disabled="slotProps.disabled || !hasTransition('SUBMIT_APPROVAL') || isCommandPending"
+                data-testid="customer-submit-approval"
+                :disabled="slotProps.disabled || !hasTransition('SUBMIT_APPROVAL') || !hasEtag() || isCommandPending"
                 @click="execute('SUBMIT_APPROVAL')"
               >
                 提交审核
@@ -146,7 +208,8 @@ function retry(): void {
               <button
                 class="button"
                 type="button"
-                :disabled="slotProps.disabled || !hasTransition('APPROVE') || isCommandPending"
+                data-testid="customer-approve"
+                :disabled="slotProps.disabled || !hasTransition('APPROVE') || !hasEtag() || isCommandPending"
                 @click="execute('APPROVE')"
               >
                 批准
@@ -163,7 +226,8 @@ function retry(): void {
               <button
                 class="button button--quiet"
                 type="button"
-                :disabled="slotProps.disabled || !hasTransition('REJECT') || isCommandPending"
+                data-testid="customer-reject"
+                :disabled="slotProps.disabled || !hasTransition('REJECT') || !hasEtag() || isCommandPending"
                 @click="execute('REJECT')"
               >
                 驳回
@@ -180,7 +244,8 @@ function retry(): void {
               <button
                 class="button button--quiet"
                 type="button"
-                :disabled="slotProps.disabled || !hasTransition('REASSIGN') || isCommandPending"
+                data-testid="customer-reassign"
+                :disabled="slotProps.disabled || !hasTransition('REASSIGN') || !hasEtag() || isCommandPending"
                 @click="execute('REASSIGN')"
               >
                 交接
@@ -189,16 +254,88 @@ function retry(): void {
           </CapabilityGate>
         </div>
         <p
-          v-if="commandError"
+          v-if="!hasEtag()"
+          class="muted-copy"
+        >
+          服务端未返回 ETag，写操作已禁用，请刷新后重试。
+        </p>
+        <p
+          v-if="commandError || pendingFeedback"
           class="inline-error"
           role="alert"
         >
-          {{ commandError }}
+          {{ commandError || pendingFeedback }}
         </p>
+        <button
+          v-if="pendingResult"
+          class="button button--quiet"
+          type="button"
+          data-testid="recover-pending"
+          :disabled="isCommandPending"
+          @click="recoverPending"
+        >
+          继续确认结果
+        </button>
       </section>
     </template>
+    <Dialog
+      :open="dialogMode !== undefined"
+      :title="dialogMode === 'reject' ? '驳回原因' : '选择交接负责人'"
+      :busy="isCommandPending"
+      @close="dialogMode = undefined"
+    >
+      <form
+        id="customer-command-form"
+        class="domain-form"
+        @submit.prevent="submitDialog"
+      >
+        <template v-if="dialogMode === 'reject'">
+          <label for="customer-reject-reason">驳回原因</label>
+          <textarea
+            id="customer-reject-reason"
+            v-model="reason"
+            name="reason"
+            autocomplete="off"
+            rows="4"
+            :aria-invalid="Boolean(dialogError)"
+            :aria-describedby="dialogError ? formErrorId('customer-reject-reason') : undefined"
+          />
+        </template>
+        <template v-else>
+          <label for="customer-reassign-assignee">新负责人 UUID</label>
+          <input
+            id="customer-reassign-assignee"
+            v-model="assigneeUserId"
+            name="assigneeUserId"
+            autocomplete="off"
+            :aria-invalid="Boolean(dialogError)"
+            :aria-describedby="dialogError ? formErrorId('customer-reassign-assignee') : undefined"
+          >
+        </template>
+        <p
+          v-if="dialogError"
+          :id="formErrorId(dialogMode === 'reject' ? 'customer-reject-reason' : 'customer-reassign-assignee')"
+          class="inline-error"
+          role="alert"
+        >
+          {{ dialogError }}
+        </p>
+      </form>
+      <template #actions>
+        <button
+          class="button"
+          type="submit"
+          form="customer-command-form"
+        >
+          提交
+        </button>
+      </template>
+    </Dialog>
     <ConflictDialog
       :open="conflictOpen"
+      :current-version="customerQuery.data.value?.data.version ?? 0"
+      :current-etag="customerQuery.data.value?.etag ?? ''"
+      :request-id="problemRequestId(commandMutation.error.value)"
       @close="conflictOpen = false"
       @refresh="conflictOpen = false; void customerQuery.refetch()"
     />

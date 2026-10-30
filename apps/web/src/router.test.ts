@@ -32,6 +32,29 @@ describe('application router', () => {
     expect(router.currentRoute.value.name).toBe('orders');
   });
 
+  it('blocks authenticated deep links when the bootstrap capability is absent', async () => {
+    const router = createAppRouter(createMemoryHistory(), {
+      snapshot: {
+        status: 'authenticated',
+        epoch: 3,
+        identity: {
+          userId: 'user-1',
+          organizationId: 'org-1',
+          capabilities: ['customer.read'],
+          scopeSummary: { groupIds: ['group-1'] },
+          authzVersion: 1,
+          serverSessionEpoch: 3,
+        },
+      },
+    });
+
+    await router.push('/customers/new');
+    await router.isReady();
+
+    expect(router.currentRoute.value.name).toBe('workspace');
+    expect(router.currentRoute.value.query).toEqual({ forbidden: '1' });
+  });
+
   it('guards the local UI harness route to dev and test builds', () => {
     const webRoot = process.cwd().endsWith('/apps/web') ? process.cwd() : join(process.cwd(), 'apps/web');
     const source = readFileSync(join(webRoot, 'src/router.ts'), 'utf8');

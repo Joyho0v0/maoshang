@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/vue-query';
 import { RouterLink, useRoute } from 'vue-router';
 
 import PageState from '../ui/PageState.vue';
-import { listState, pageStateMessage, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
+import { canUsePageCapability, listState, pageStateMessage, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
 
 const route = useRoute();
 const api = useDomainApi();
@@ -40,6 +40,7 @@ const copy = computed(() => pageStateMessage(state.value));
           </p><h1>{{ product.name }}</h1><p>{{ product.productCode }} · {{ product.unit }}</p>
         </div>
         <RouterLink
+          v-if="canUsePageCapability(api, 'product.update')"
           class="button button--quiet"
           :to="`/catalog/products/${product.id}/edit`"
         >

@@ -124,7 +124,7 @@ const publicRouteCodec = createUrlStateCodec({
     status: enumCodec([
       'OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'CLOSED', 'DRAFT',
       'CONFIRMED', 'FULFILLED', 'ACTIVE', 'INACTIVE', 'PENDING', 'PAID',
-      'FAILED', 'REVERSED', 'SUBMITTED', 'APPROVED', 'REJECTED', 'FINALIZED',
+      'PENDING_APPROVAL', 'FAILED', 'REVERSED', 'SUBMITTED', 'APPROVED', 'REJECTED', 'FINALIZED',
       'ISSUED', 'VOID',
     ], 64),
     type: enumCodec([
@@ -134,7 +134,7 @@ const publicRouteCodec = createUrlStateCodec({
     state: enumCodec([
       'OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'CLOSED', 'DRAFT',
       'CONFIRMED', 'FULFILLED', 'ACTIVE', 'INACTIVE', 'PENDING', 'PAID',
-      'FAILED', 'REVERSED', 'SUBMITTED', 'APPROVED', 'REJECTED', 'FINALIZED',
+      'PENDING_APPROVAL', 'FAILED', 'REVERSED', 'SUBMITTED', 'APPROVED', 'REJECTED', 'FINALIZED',
       'ISSUED', 'VOID',
     ], 64),
     ownerId: uuidCodec(),

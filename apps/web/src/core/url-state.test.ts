@@ -42,6 +42,13 @@ describe('URL state privacy boundary', () => {
     expect(parseUrlState(query)).toEqual({ tab: 'catalog-skus' });
   });
 
+  it('round-trips the customer pending-approval filter', () => {
+    const query = serializeUrlState({ filter: { status: 'PENDING_APPROVAL' } });
+
+    expect(query.get('filter[status]')).toBe('PENDING_APPROVAL');
+    expect(parseUrlState(query)).toEqual({ filter: { status: 'PENDING_APPROVAL' } });
+  });
+
   it('ignores unknown and sensitive query keys when reading state', () => {
     const state = parseUrlState(
       new URLSearchParams(

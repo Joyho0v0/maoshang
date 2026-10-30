@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 
@@ -7,7 +7,7 @@ import DataTable from '../ui/DataTable.vue';
 import MoneyText from '../ui/MoneyText.vue';
 import PageState from '../ui/PageState.vue';
 import { asDecimalString } from '../core/formatters';
-import { displayStatus, listState, pageStateMessage, problemRequestId, routeString, routeStatus, useDomainApi } from './domain-page-helpers';
+import { canUsePageCapability, displayStatus, listState, pageStateMessage, problemRequestId, routeString, routeStatus, useDomainApi } from './domain-page-helpers';
 import type { Product, ResourcePage, Sku } from '../core/domain-api';
 
 const route = useRoute();
@@ -15,8 +15,10 @@ const router = useRouter();
 const api = useDomainApi();
 const view = computed<'products' | 'skus'>(() => route.query.tab === 'catalog-skus' ? 'skus' : 'products');
 const status = computed(() => routeStatus(route.query['filter[status]']));
+const sort = computed(() => typeof route.query.sort === 'string' ? route.query.sort : undefined);
 const cursor = computed(() => routeString(route.query.cursor));
-const options = computed(() => ({ status: status.value, cursor: cursor.value }));
+const cursorHistory = ref<Array<string | undefined>>([]);
+const options = computed(() => ({ status: status.value, sort: sort.value, cursor: cursor.value }));
 const catalogQuery = useQuery<ResourcePage<Product> | ResourcePage<Sku>>({
   queryKey: computed(() => ['catalog', view.value, options.value]),
   queryFn: () => view.value === 'products' ? api.listProducts(options.value) : api.listSkus(options.value),
@@ -39,7 +41,34 @@ const skuColumns = [
 function decimal(value: string) { return asDecimalString(value); }
 
 function selectView(next: 'products' | 'skus'): void {
-  void router.replace({ path: '/catalog', query: { tab: next === 'skus' ? 'catalog-skus' : 'catalog-products', ...(status.value ? { 'filter[status]': status.value } : {}) } });
+  cursorHistory.value = [];
+  void router.replace({ path: '/catalog', query: { tab: next === 'skus' ? 'catalog-skus' : 'catalog-products', ...(status.value ? { 'filter[status]': status.value } : {}), ...(sort.value ? { sort: sort.value } : {}) } });
+}
+
+function updateStatus(event: globalThis.Event): void {
+  const value = (event.target as globalThis.HTMLSelectElement).value;
+  cursorHistory.value = [];
+  void router.replace({ path: '/catalog', query: { tab: view.value === 'skus' ? 'catalog-skus' : 'catalog-products', ...(value ? { 'filter[status]': value } : {}), ...(sort.value ? { sort: sort.value } : {}) } });
+}
+
+function updateSort(event: globalThis.Event): void {
+  const value = (event.target as globalThis.HTMLSelectElement).value;
+  cursorHistory.value = [];
+  void router.replace({ path: '/catalog', query: { tab: view.value === 'skus' ? 'catalog-skus' : 'catalog-products', ...(status.value ? { 'filter[status]': status.value } : {}), ...(value ? { sort: value } : {}) } });
+}
+
+function nextPage(): void {
+  const nextCursor = catalogQuery.data.value?.page.nextCursor;
+  if (nextCursor) {
+    cursorHistory.value.push(cursor.value);
+    void router.replace({ path: '/catalog', query: { tab: view.value === 'skus' ? 'catalog-skus' : 'catalog-products', ...(status.value ? { 'filter[status]': status.value } : {}), ...(sort.value ? { sort: sort.value } : {}), cursor: nextCursor } });
+  }
+}
+
+function previousPage(): void {
+  const previous = cursorHistory.value.pop();
+  if (cursor.value === undefined) return;
+  void router.replace({ path: '/catalog', query: { tab: view.value === 'skus' ? 'catalog-skus' : 'catalog-products', ...(status.value ? { 'filter[status]': status.value } : {}), ...(sort.value ? { sort: sort.value } : {}), ...(previous ? { cursor: previous } : {}) } });
 }
 
 function retry(): void {
@@ -58,6 +87,7 @@ function retry(): void {
         <p>标准件与非标件共享同一份服务端契约；金额、单位和库存阈值始终按字符串展示。</p>
       </div>
       <RouterLink
+        v-if="canUsePageCapability(api, view === 'products' ? 'product.create' : 'sku.create')"
         class="button"
         :to="view === 'products' ? '/catalog/products/new' : '/catalog/skus/new'"
       >
@@ -98,6 +128,46 @@ function retry(): void {
         SKU
       </button>
     </div>
+    <section
+      class="list-toolbar"
+      aria-label="目录列表筛选"
+    >
+      <label for="catalog-status">状态</label>
+      <select
+        id="catalog-status"
+        :value="status ?? ''"
+        @change="updateStatus"
+      >
+        <option value="">
+          全部状态
+        </option>
+        <option value="ACTIVE">
+          启用
+        </option>
+        <option value="INACTIVE">
+          停用
+        </option>
+      </select>
+      <label for="catalog-sort">排序</label>
+      <select
+        id="catalog-sort"
+        :value="sort ?? ''"
+        @change="updateSort"
+      >
+        <option value="">
+          默认排序
+        </option>
+        <option value="name">
+          名称升序
+        </option>
+        <option value="-name">
+          名称降序
+        </option>
+        <option value="-updatedAt,-id">
+          最近更新
+        </option>
+      </select>
+    </section>
 
     <PageState
       v-if="state !== 'ready' && state !== 'empty'"
@@ -137,5 +207,27 @@ function retry(): void {
         {{ row.trackingMode === 'NONE' ? '不跟踪' : row.trackingMode === 'LOT' ? '批次' : '序列号' }}
       </template>
     </DataTable>
+    <nav
+      v-if="state === 'ready'"
+      class="cursor-pager"
+      aria-label="目录列表分页"
+    >
+      <button
+        class="button button--quiet"
+        type="button"
+        :disabled="cursor === undefined"
+        @click="previousPage"
+      >
+        上一页
+      </button>
+      <button
+        class="button button--quiet"
+        type="button"
+        :disabled="!catalogQuery.data.value?.page.nextCursor"
+        @click="nextPage"
+      >
+        下一页
+      </button>
+    </nav>
   </div>
 </template>

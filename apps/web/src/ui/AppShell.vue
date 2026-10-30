@@ -1,5 +1,13 @@
 <script setup lang="ts">
+import { inject } from 'vue';
 import { RouterLink, RouterView } from 'vue-router';
+
+import { DOMAIN_API_KEY, type DomainApi } from '../core/domain-api';
+
+const api = inject<DomainApi>(DOMAIN_API_KEY);
+function canNavigate(capability: string): boolean {
+  return api?.capabilities === undefined || api.capabilities.includes(capability);
+}
 </script>
 
 <template>
@@ -27,13 +35,22 @@ import { RouterLink, RouterView } from 'vue-router';
           <RouterLink to="/workspace">
             工作台
           </RouterLink>
-          <RouterLink to="/customers">
+          <RouterLink
+            v-if="canNavigate('customer.read')"
+            to="/customers"
+          >
             客户
           </RouterLink>
-          <RouterLink to="/catalog">
+          <RouterLink
+            v-if="canNavigate('product.read')"
+            to="/catalog"
+          >
             商品目录
           </RouterLink>
-          <RouterLink to="/orders">
+          <RouterLink
+            v-if="canNavigate('order.read')"
+            to="/orders"
+          >
             订单
           </RouterLink>
           <RouterLink to="/empty">

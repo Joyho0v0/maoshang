@@ -7,7 +7,7 @@ import MoneyText from '../ui/MoneyText.vue';
 import QuantityText from '../ui/QuantityText.vue';
 import PageState from '../ui/PageState.vue';
 import { asDecimalString } from '../core/formatters';
-import { listState, pageStateMessage, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
+import { canUsePageCapability, listState, pageStateMessage, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
 
 const route = useRoute();
 const api = useDomainApi();
@@ -44,6 +44,7 @@ function decimal(value: string) { return asDecimalString(value); }
           </p><h1>{{ sku.name }}</h1><p>{{ sku.skuCode }} · {{ sku.status }}</p>
         </div>
         <RouterLink
+          v-if="canUsePageCapability(api, 'sku.update')"
           class="button button--quiet"
           :to="`/catalog/skus/${sku.id}/edit`"
         >
@@ -55,10 +56,7 @@ function decimal(value: string) { return asDecimalString(value); }
           <h2>计量与跟踪</h2><dl>
             <div>
               <dt>基础单位</dt><dd>
-                <QuantityText
-                  :value="decimal(sku.lowStockThreshold)"
-                  :unit="sku.baseUnit"
-                />
+                {{ sku.baseUnit }}
               </dd>
             </div><div><dt>跟踪方式</dt><dd>{{ sku.trackingMode }}</dd></div><div>
               <dt>库存阈值</dt><dd>

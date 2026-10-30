@@ -3,10 +3,14 @@ import { computed, ref, watch } from 'vue';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 
-import FormErrorSummary from '../ui/FormErrorSummary.vue';
-import type { Product, ProductCreateInput, ProductUpdateInput, ResourceResult, Sku, SkuCreateInput, SkuUpdateInput } from '../core/domain-api';
+import type { Product, ProductCreateInput, ProductUpdateInput, DomainMutationResult, PendingMutation, ResourceResult, Sku, SkuCreateInput, SkuUpdateInput } from '../core/domain-api';
+import { isConflictError } from '../core/domain-api';
 import { asDecimalString } from '../core/formatters';
-import { listState, pageStateMessage, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
+import ConflictDialog from '../ui/ConflictDialog.vue';
+import FormErrorSummary from '../ui/FormErrorSummary.vue';
+import { formErrorId } from '../ui/form-error';
+import PageState from '../ui/PageState.vue';
+import { listState, pageStateMessage, pendingRecoveryFeedback, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
 
 interface FormError { readonly field: string; readonly message: string }
 
@@ -22,15 +26,17 @@ const itemQuery = useQuery<ResourceResult<Product> | ResourceResult<Sku>>({
   queryFn: () => isSku.value ? api.getSku(id.value ?? '') : api.getProduct(id.value ?? ''),
   enabled: computed(() => isEdit.value),
 });
-const isSaving = computed(() => saveMutation.isPending.value);
 const name = ref('');
 const code = ref('');
 const unit = ref('件');
-const productId = ref('00000000-0000-4000-8000-000000000201');
+const productId = ref('');
 const price = ref('');
 const description = ref('');
 const errors = ref<FormError[]>([]);
 const feedback = ref('');
+const pendingFeedback = ref('');
+const pendingResult = ref<PendingMutation<unknown>>();
+const conflictOpen = ref(false);
 watch(() => itemQuery.data.value?.data, (item) => {
   if (!item) return;
   name.value = item.name;
@@ -49,36 +55,71 @@ watch(() => itemQuery.data.value?.data, (item) => {
 const state = computed(() => isEdit.value ? listState(itemQuery.isPending.value, itemQuery.data.value ? 1 : 0, itemQuery.error.value) : 'ready');
 const copy = computed(() => pageStateMessage(state.value));
 const saveMutation = useMutation({
-  mutationFn: async () => {
+  mutationFn: async (): Promise<DomainMutationResult<unknown>> => {
     if (isSku.value) {
       if (isEdit.value && itemQuery.data.value?.data) {
         const input: SkuUpdateInput = { ...(name.value ? { name: name.value } : {}), ...(unit.value ? { unit: unit.value } : {}), ...(price.value ? { price: asDecimalString(price.value) } : {}) };
-        return api.updateSku(itemQuery.data.value.data.id, input, `"v${itemQuery.data.value.data.version}"`);
+        const etag = itemQuery.data.value.etag;
+        if (!etag) throw new Error('缺少服务端 ETag，请先刷新页面。');
+        return api.updateSku(itemQuery.data.value.data.id, input, etag);
       }
       const input: SkuCreateInput = { productId: productId.value, skuCode: code.value, name: name.value, unit: unit.value, ...(price.value ? { price: asDecimalString(price.value) } : {}) };
       return api.createSku(input);
     }
     if (isEdit.value && itemQuery.data.value?.data) {
       const input: ProductUpdateInput = { ...(name.value ? { name: name.value } : {}), ...(unit.value ? { unit: unit.value } : {}), ...(description.value ? { description: description.value } : {}) };
-      return api.updateProduct(itemQuery.data.value.data.id, input, `"v${itemQuery.data.value.data.version}"`);
+      const etag = itemQuery.data.value.etag;
+      if (!etag) throw new Error('缺少服务端 ETag，请先刷新页面。');
+      return api.updateProduct(itemQuery.data.value.data.id, input, etag);
     }
     const input: ProductCreateInput = { name: name.value, productCode: code.value, unit: unit.value, ...(description.value ? { description: description.value } : {}) };
     return api.createProduct(input);
   },
-  onSuccess: async (result) => {
-    await queryClient.invalidateQueries({ queryKey: ['catalog'] });
-    await router.push(`/catalog/${isSku.value ? 'skus' : 'products'}/${result.data.id}`);
+  onSuccess: (result) => complete(result),
+  onError: (error) => {
+    feedback.value = isConflictError(error) ? '内容已变化，请刷新后重做。' : '保存没有完成，请检查字段与服务端返回。';
+    if (isConflictError(error)) conflictOpen.value = true;
   },
-  onError: () => { feedback.value = '保存没有完成，请检查字段与服务端返回。'; },
 });
+const isSaving = computed(() => saveMutation.isPending.value);
+
+async function complete<T>(result: DomainMutationResult<T>): Promise<void> {
+  let current = result;
+  if (current.kind === 'pending') {
+    pendingResult.value = current;
+    pendingFeedback.value = '请求已提交，正在确认服务端结果；请勿重复提交。';
+  }
+  try {
+    while (current.kind === 'pending') {
+      current = await current.recover();
+      if (current.kind === 'pending') pendingResult.value = current;
+    }
+    pendingResult.value = undefined;
+    pendingFeedback.value = '';
+    await queryClient.invalidateQueries({ queryKey: ['catalog'] });
+    const resource = current.data as T & { id?: string };
+    if (resource.id) await router.push(`/catalog/${isSku.value ? 'skus' : 'products'}/${resource.id}`);
+  } catch (error) {
+    const recovery = pendingRecoveryFeedback(error);
+    if (recovery.stable) pendingResult.value = undefined;
+    pendingFeedback.value = recovery.message;
+  }
+}
 
 function submit(): void {
   errors.value = [];
   if (!name.value.trim()) errors.value.push({ field: 'catalog-name', message: '请填写名称。' });
-  if (!code.value.trim()) errors.value.push({ field: 'catalog-code', message: `请填写${isSku.value ? 'SKU' : '商品'}编码。` });
+  if (!isEdit.value && !code.value.trim()) errors.value.push({ field: 'catalog-code', message: `请填写${isSku.value ? 'SKU' : '商品'}编码。` });
   if (!unit.value.trim()) errors.value.push({ field: 'catalog-unit', message: '请填写单位。' });
+  if (!isEdit.value && isSku.value && !productId.value.trim()) errors.value.push({ field: 'catalog-product', message: '请选择真实商品。' });
   if (isSku.value && price.value && !/^(-?\d+)(\.\d+)?$/.test(price.value)) errors.value.push({ field: 'catalog-price', message: '价格必须是 DecimalString。' });
   if (errors.value.length === 0) saveMutation.mutate();
+}
+
+function recoverPending(): void {
+  const pending = pendingResult.value;
+  if (!pending || isSaving.value) return;
+  void complete(pending);
 }
 </script>
 
@@ -112,39 +153,65 @@ function submit(): void {
         class="domain-form"
         @submit.prevent="submit"
       >
-        <label for="catalog-name">名称</label><input
+        <label for="catalog-name">名称</label>
+        <input
           id="catalog-name"
           v-model="name"
+          name="name"
+          autocomplete="off"
+          :aria-invalid="errors.some((error) => error.field === 'catalog-name')"
+          :aria-describedby="errors.some((error) => error.field === 'catalog-name') ? formErrorId('catalog-name') : undefined"
         >
-        <label for="catalog-code">{{ isSku ? 'SKU 编码' : '商品编码' }}</label><input
+        <label for="catalog-code">{{ isSku ? 'SKU 编码' : '商品编码' }}</label>
+        <input
           id="catalog-code"
           v-model="code"
+          name="code"
+          autocomplete="off"
+          :readonly="isEdit"
+          :aria-readonly="isEdit"
+          :aria-invalid="errors.some((error) => error.field === 'catalog-code')"
+          :aria-describedby="errors.some((error) => error.field === 'catalog-code') ? formErrorId('catalog-code') : undefined"
         >
-        <label
-          v-if="isSku"
-          for="catalog-product"
-        >商品 UUID</label><input
-          v-if="isSku"
-          id="catalog-product"
-          v-model="productId"
-        >
-        <label for="catalog-unit">单位</label><input
+        <template v-if="isSku">
+          <label for="catalog-product">商品 UUID</label>
+          <input
+            id="catalog-product"
+            v-model="productId"
+            name="productId"
+            autocomplete="off"
+            :readonly="isEdit"
+            :aria-readonly="isEdit"
+            :aria-invalid="errors.some((error) => error.field === 'catalog-product')"
+            :aria-describedby="errors.some((error) => error.field === 'catalog-product') ? formErrorId('catalog-product') : undefined"
+          >
+          <label for="catalog-price">价格（DecimalString）</label>
+          <input
+            id="catalog-price"
+            v-model="price"
+            name="price"
+            autocomplete="off"
+            inputmode="decimal"
+            :aria-invalid="errors.some((error) => error.field === 'catalog-price')"
+            :aria-describedby="errors.some((error) => error.field === 'catalog-price') ? formErrorId('catalog-price') : undefined"
+          >
+        </template>
+        <label for="catalog-unit">单位</label>
+        <input
           id="catalog-unit"
           v-model="unit"
+          name="unit"
+          autocomplete="off"
+          :aria-invalid="errors.some((error) => error.field === 'catalog-unit')"
+          :aria-describedby="errors.some((error) => error.field === 'catalog-unit') ? formErrorId('catalog-unit') : undefined"
         >
-        <label
-          v-if="isSku"
-          for="catalog-price"
-        >价格（DecimalString）</label><input
-          v-if="isSku"
-          id="catalog-price"
-          v-model="price"
-          inputmode="decimal"
-        >
-        <template v-else>
-          <label for="catalog-description">说明</label><textarea
+        <template v-if="!isSku">
+          <label for="catalog-description">说明</label>
+          <textarea
             id="catalog-description"
             v-model="description"
+            name="description"
+            autocomplete="off"
             rows="4"
           />
         </template>
@@ -154,7 +221,8 @@ function submit(): void {
             to="/catalog"
           >
             取消
-          </RouterLink><button
+          </RouterLink>
+          <button
             class="button"
             type="submit"
             :disabled="isSaving"
@@ -163,13 +231,31 @@ function submit(): void {
           </button>
         </div>
         <p
-          v-if="feedback"
+          v-if="feedback || pendingFeedback"
           class="inline-error"
           role="alert"
         >
-          {{ feedback }}
+          {{ feedback || pendingFeedback }}
         </p>
+        <button
+          v-if="pendingResult"
+          class="button button--quiet"
+          type="button"
+          data-testid="recover-pending"
+          :disabled="isSaving"
+          @click="recoverPending"
+        >
+          继续确认结果
+        </button>
       </form>
     </template>
+    <ConflictDialog
+      :open="conflictOpen"
+      :current-version="itemQuery.data.value?.data.version ?? 0"
+      :current-etag="itemQuery.data.value?.etag ?? ''"
+      :request-id="problemRequestId(saveMutation.error.value)"
+      @close="conflictOpen = false"
+      @refresh="conflictOpen = false; void itemQuery.refetch()"
+    />
   </div>
 </template>

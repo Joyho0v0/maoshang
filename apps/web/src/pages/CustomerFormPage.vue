@@ -3,15 +3,15 @@ import { computed, ref, watch } from 'vue';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 
+import type { CustomerCreateInput, CustomerUpdateInput, DomainMutationResult, PendingMutation } from '../core/domain-api';
+import { isConflictError } from '../core/domain-api';
+import { formErrorId } from '../ui/form-error';
+import ConflictDialog from '../ui/ConflictDialog.vue';
 import FormErrorSummary from '../ui/FormErrorSummary.vue';
 import PageState from '../ui/PageState.vue';
-import type { CustomerCreateInput, CustomerUpdateInput } from '../core/domain-api';
-import { etagFor, listState, pageStateMessage, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
+import { listState, pageStateMessage, pendingRecoveryFeedback, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
 
-interface FormError {
-  readonly field: string;
-  readonly message: string;
-}
+interface FormError { readonly field: string; readonly message: string }
 
 const route = useRoute();
 const router = useRouter();
@@ -24,11 +24,13 @@ const customerQuery = useQuery({
   queryFn: () => api.getCustomer(id.value ?? ''),
   enabled: computed(() => isEdit.value),
 });
-const isSaving = computed(() => saveMutation.isPending.value);
 const name = ref('');
-const ownerUserId = ref('00000000-0000-4000-8000-000000000002');
+const ownerUserId = ref('');
 const errors = ref<FormError[]>([]);
 const feedback = ref('');
+const pendingFeedback = ref('');
+const pendingResult = ref<PendingMutation<unknown>>();
+const conflictOpen = ref(false);
 watch(() => customerQuery.data.value?.data, (customer) => {
   if (!customer) return;
   name.value = customer.name ?? '';
@@ -40,23 +42,49 @@ const state = computed(() => isEdit.value
   : 'ready');
 const stateCopy = computed(() => pageStateMessage(state.value));
 const saveMutation = useMutation({
-  mutationFn: async () => {
+  mutationFn: async (): Promise<DomainMutationResult<unknown>> => {
     if (isEdit.value && customerQuery.data.value) {
       const input: CustomerUpdateInput = {
         ...(name.value ? { name: name.value } : {}),
         ...(ownerUserId.value ? { ownerUserId: ownerUserId.value } : {}),
       };
-      return api.updateCustomer(customerQuery.data.value.data.id, input, etagFor(customerQuery.data.value.data.version));
+      const etag = customerQuery.data.value.etag;
+      if (!etag) throw new Error('缺少服务端 ETag，请先刷新页面。');
+      return api.updateCustomer(customerQuery.data.value.data.id, input, etag);
     }
     const input: CustomerCreateInput = { name: name.value, ownerUserId: ownerUserId.value };
     return api.createCustomer(input);
   },
-  onSuccess: async (result) => {
-    await queryClient.invalidateQueries({ queryKey: ['customers'] });
-    if (result.data?.id) await router.push(`/customers/${result.data.id}`);
+  onSuccess: (result) => complete(result),
+  onError: (error) => {
+    feedback.value = isConflictError(error) ? '内容已变化，请刷新后重做。' : '保存没有完成，请检查服务端返回。';
+    if (isConflictError(error)) conflictOpen.value = true;
   },
-  onError: () => { feedback.value = '保存没有完成，请检查服务端返回。'; },
 });
+const isSaving = computed(() => saveMutation.isPending.value);
+
+async function complete<T>(result: DomainMutationResult<T>): Promise<void> {
+  let current = result;
+  if (current.kind === 'pending') {
+    pendingResult.value = current;
+    pendingFeedback.value = '请求已提交，正在确认服务端结果；请勿重复提交。';
+  }
+  try {
+    while (current.kind === 'pending') {
+      current = await current.recover();
+      if (current.kind === 'pending') pendingResult.value = current;
+    }
+    pendingResult.value = undefined;
+    pendingFeedback.value = '';
+    await queryClient.invalidateQueries({ queryKey: ['customers'] });
+    const resource = current.data as T & { id?: string };
+    if (resource.id) await router.push(`/customers/${resource.id}`);
+  } catch (error) {
+    const recovery = pendingRecoveryFeedback(error);
+    if (recovery.stable) pendingResult.value = undefined;
+    pendingFeedback.value = recovery.message;
+  }
+}
 
 function submit(): void {
   errors.value = [];
@@ -67,9 +95,13 @@ function submit(): void {
   saveMutation.mutate();
 }
 
-function retry(): void {
-  void customerQuery.refetch();
+function recoverPending(): void {
+  const pending = pendingResult.value;
+  if (!pending || isSaving.value) return;
+  void complete(pending);
 }
+
+function retry(): void { void customerQuery.refetch(); }
 </script>
 
 <template>
@@ -109,6 +141,7 @@ function retry(): void {
           name="name"
           autocomplete="organization"
           :aria-invalid="errors.some((error) => error.field === 'customer-name')"
+          :aria-describedby="errors.some((error) => error.field === 'customer-name') ? formErrorId('customer-name') : undefined"
         >
         <label for="customer-owner">负责人 UUID</label>
         <input
@@ -117,6 +150,7 @@ function retry(): void {
           name="ownerUserId"
           autocomplete="off"
           :aria-invalid="errors.some((error) => error.field === 'customer-owner')"
+          :aria-describedby="errors.some((error) => error.field === 'customer-owner') ? formErrorId('customer-owner') : undefined"
         >
         <div class="form-actions">
           <RouterLink
@@ -134,13 +168,31 @@ function retry(): void {
           </button>
         </div>
         <p
-          v-if="feedback"
+          v-if="feedback || pendingFeedback"
           class="inline-error"
           role="alert"
         >
-          {{ feedback }}
+          {{ feedback || pendingFeedback }}
         </p>
+        <button
+          v-if="pendingResult"
+          class="button button--quiet"
+          type="button"
+          data-testid="recover-pending"
+          :disabled="isSaving"
+          @click="recoverPending"
+        >
+          继续确认结果
+        </button>
       </form>
     </template>
+    <ConflictDialog
+      :open="conflictOpen"
+      :current-version="customerQuery.data.value?.data.version ?? 0"
+      :current-etag="customerQuery.data.value?.etag ?? ''"
+      :request-id="problemRequestId(saveMutation.error.value)"
+      @close="conflictOpen = false"
+      @refresh="conflictOpen = false; void customerQuery.refetch()"
+    />
   </div>
 </template>

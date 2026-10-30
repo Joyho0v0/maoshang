@@ -13,6 +13,25 @@ const scenarios = [
   { path: '/customers', requiredSelectors: ['main', 'h1', 'table', '[data-testid="scope-notice"]'] },
   { path: '/catalog', requiredSelectors: ['main', 'h1', 'table', '[data-testid="scope-notice"]'] },
   { path: '/orders', requiredSelectors: ['main', 'h1', 'table', '[data-testid="scope-notice"]'] },
+  { path: '/customers?fixture=empty-group', requiredSelectors: ['main', 'h1', '.table-state', '[data-testid="scope-notice"]'] },
+  { path: '/catalog?fixture=empty-group', requiredSelectors: ['main', 'h1', '.table-state', '[data-testid="scope-notice"]'] },
+  { path: '/orders?fixture=empty-group', requiredSelectors: ['main', 'h1', '.table-state', '[data-testid="scope-notice"]'] },
+  { path: '/customers?fixture=forbidden', requiredSelectors: ['main', 'h1', '.state-panel--forbidden'] },
+  { path: '/catalog?fixture=offline', requiredSelectors: ['main', 'h1', '.state-panel--offline'] },
+  { path: '/orders?fixture=error', requiredSelectors: ['main', 'h1', '.state-panel--error'] },
+  { path: '/customers/00000000-0000-4000-8000-000000000101', requiredSelectors: ['main', 'h1', '[data-testid="customer-approve"]'] },
+  { path: '/customers/00000000-0000-4000-8000-000000000101/edit', requiredSelectors: ['main', 'h1', 'form', '#customer-name'] },
+  { path: '/catalog/products/00000000-0000-4000-8000-000000000201', requiredSelectors: ['main', 'h1', '.detail-card'] },
+  { path: '/catalog/products/00000000-0000-4000-8000-000000000201/edit', requiredSelectors: ['main', 'h1', 'form', '#catalog-name'] },
+  { path: '/catalog/skus/00000000-0000-4000-8000-000000000301', requiredSelectors: ['main', 'h1', '.detail-card'] },
+  { path: '/catalog/skus/00000000-0000-4000-8000-000000000301/edit', requiredSelectors: ['main', 'h1', 'form', '#catalog-name'] },
+  { path: '/orders/00000000-0000-4000-8000-000000000401', requiredSelectors: ['main', 'h1', '[data-testid="order-transition-CONFIRM"]'] },
+  { path: '/orders/00000000-0000-4000-8000-000000000401/edit', requiredSelectors: ['main', 'h1', 'form', '#order-no'] },
+  { path: '/customers/new', requiredSelectors: ['main', 'h1', 'form', '#customer-name'], interaction: 'form' },
+  { path: '/catalog/products/new', requiredSelectors: ['main', 'h1', 'form', '#catalog-name'], interaction: 'form' },
+  { path: '/catalog/skus/new', requiredSelectors: ['main', 'h1', 'form', '#catalog-product'], interaction: 'form' },
+  { path: '/orders/new', requiredSelectors: ['main', 'h1', 'form', '#order-no'], interaction: 'form' },
+  { path: '/customers/00000000-0000-4000-8000-000000000101?fixture=ready&exercise=reject', requiredSelectors: ['main', 'h1', '[data-testid="customer-reject"]'], interaction: 'customer-reject' },
   { path: '/loading', requiredSelectors: ['main', '[role="status"]', 'h1'] },
   { path: '/empty', requiredSelectors: ['main', '[role="status"]', 'h1'] },
   { path: '/error', requiredSelectors: ['main', '[role="alert"]', 'button'] },
@@ -94,6 +113,10 @@ try {
     })()`);
     if (scenario.path === '/__ui-harness') {
       inspection.interactions = await exerciseHarness(socket, context);
+    } else if (scenario.interaction === 'form') {
+      inspection.interactions = await exerciseBusinessForm(socket, context);
+    } else if (scenario.interaction === 'customer-reject') {
+      inspection.interactions = await exerciseCustomerReject(socket, context);
     }
     if (screenshotDirectory) {
       const screenshot = await socket.command('Page.captureScreenshot', { format: 'png' });
@@ -214,6 +237,38 @@ async function exerciseHarness(cdp, context) {
     };
   })()`));
   return interactions;
+}
+
+async function exerciseBusinessForm(cdp, context) {
+  await evaluate(cdp, `document.querySelector('form button[type="submit"]')?.click()`);
+  await waitForSelectors(cdp, ['[role="alert"]'], context);
+  return [await evaluate(cdp, `(() => {
+    const summary = document.querySelector('[role="alert"]');
+    const firstInvalid = document.querySelector('input[aria-invalid="true"], textarea[aria-invalid="true"]');
+    const describedBy = firstInvalid?.getAttribute('aria-describedby');
+    return {
+      pass: document.activeElement === summary
+        && firstInvalid !== null
+        && describedBy !== null
+        && document.getElementById(describedBy) !== null,
+      name: 'business form error focus and association',
+    };
+  })()` )];
+}
+
+async function exerciseCustomerReject(cdp, context) {
+  await evaluate(cdp, `document.querySelector('[data-testid="customer-reject"]')?.click()`);
+  await waitForSelectors(cdp, ['[role="dialog"]', '#customer-reject-reason'], context);
+  await evaluate(cdp, `document.querySelector('button[form="customer-command-form"]')?.click()`);
+  await waitForSelectors(cdp, ['#customer-reject-reason-error'], context);
+  return [await evaluate(cdp, `(() => {
+    const field = document.querySelector('#customer-reject-reason');
+    return {
+      pass: field?.getAttribute('aria-invalid') === 'true'
+        && field?.getAttribute('aria-describedby') === 'customer-reject-reason-error',
+      name: 'customer reject reason validation',
+    };
+  })()` )];
 }
 
 async function waitForRouteReady(cdp, scenario, pendingRequests) {

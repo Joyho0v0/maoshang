@@ -20,10 +20,12 @@ export type FixtureScenario = 'ready' | 'empty' | 'empty-group' | 'forbidden' | 
 
 export interface FixtureDomainApiOptions {
   readonly scenario?: FixtureScenario;
+  readonly actorUserId?: string;
 }
 
 const ORG_ID = '00000000-0000-4000-8000-000000000001';
 const OWNER_ID = '00000000-0000-4000-8000-000000000002';
+const APPROVER_ID = '00000000-0000-4000-8000-000000000003';
 const CUSTOMER_ID = '00000000-0000-4000-8000-000000000101';
 const CUSTOMER_REJECTED_ID = '00000000-0000-4000-8000-000000000102';
 const PRODUCT_ID = '00000000-0000-4000-8000-000000000201';
@@ -33,8 +35,16 @@ const ORDER_ID = '00000000-0000-4000-8000-000000000401';
 const now = '2026-10-30T08:00:00.000Z';
 const later = '2026-10-30T10:00:00.000Z';
 
+function capabilitiesForActor(actorUserId: string): readonly string[] {
+  return actorUserId === APPROVER_ID
+    ? ['customer.read', 'customer.create', 'customer.update', 'customer.submitApproval', 'customer.approve', 'customer.reject', 'customer.reassign', 'order.read', 'order.create', 'order.update', 'order.transition', 'product.read', 'product.create', 'product.update', 'sku.read', 'sku.create', 'sku.update']
+    : ['customer.read', 'customer.create', 'customer.update', 'customer.submitApproval', 'customer.reassign', 'order.read', 'order.create', 'order.update', 'order.transition', 'product.read', 'product.create', 'product.update', 'sku.read', 'sku.create', 'sku.update'];
+}
+
 export function createFixtureDomainApi(options: FixtureDomainApiOptions = {}): DomainApi {
   let scenario = options.scenario ?? 'ready';
+  const actorUserId = options.actorUserId ?? APPROVER_ID;
+  const actorCapabilities = capabilitiesForActor(actorUserId);
   let customers: Customer[] = [
     {
       id: CUSTOMER_ID,
@@ -53,8 +63,8 @@ export function createFixtureDomainApi(options: FixtureDomainApiOptions = {}): D
         attemptNo: 1,
         canResubmit: false,
       },
-      capabilities: ['customer.read', 'customer.update', 'customer.submitApproval'],
-      allowedTransitions: ['SUBMIT_APPROVAL'],
+      capabilities: ['customer.read', 'customer.approve', 'customer.reject'],
+      allowedTransitions: ['APPROVE', 'REJECT'],
     },
     {
       id: CUSTOMER_REJECTED_ID,
@@ -126,7 +136,11 @@ export function createFixtureDomainApi(options: FixtureDomainApiOptions = {}): D
     get scopeNotice() {
       return scenario === 'empty-group' ? '当前身份未分配业务组：可见数据为 0。' : '数据仅来自当前身份获准的业务范围，未授权字段不会补齐。';
     },
+    get capabilities() {
+      return actorCapabilities;
+    },
     async listCustomers(options) {
+      if (isEmptyScope()) return page([], options);
       failIfNeeded();
       return page(filterByStatus(customers, options), options);
     },
@@ -136,22 +150,29 @@ export function createFixtureDomainApi(options: FixtureDomainApiOptions = {}): D
     },
     async createCustomer(input) {
       failIfNeeded(true);
+      requireCapability('customer.create');
       const customer = makeCustomer(input, customers.length + 1);
       customers = [customer, ...customers];
       return result(customer);
     },
-    async updateCustomer(id, input) {
+    async updateCustomer(id, input, etag) {
       failIfNeeded(true);
+      requireCapability('customer.update');
+      const current = findById(customers, id);
+      assertEtag(current, etag);
       customers = customers.map((customer) => customer.id === id ? updateCustomerRecord(customer, input) : customer);
       return result(findById(customers, id));
     },
-    async commandCustomer(id, input) {
+    async commandCustomer(id, input, etag) {
       failIfNeeded(true);
-      customers = customers.map((customer) => customer.id === id ? applyCustomerCommand(customer, input) : customer);
+      const current = findById(customers, id);
+      assertEtag(current, etag);
+      customers = customers.map((customer) => customer.id === id ? applyCustomerCommand(customer, input, actorUserId, actorCapabilities) : customer);
       return result(findById(customers, id));
     },
 
     async listProducts(options) {
+      if (isEmptyScope()) return page([], options);
       failIfNeeded();
       return page(filterByStatus(products, options), options);
     },
@@ -161,21 +182,25 @@ export function createFixtureDomainApi(options: FixtureDomainApiOptions = {}): D
     },
     async createProduct(input) {
       failIfNeeded(true);
+      requireCapability('product.create');
       const product: Product = { ...input, id: `00000000-0000-4000-8000-${String(500 + products.length).padStart(12, '0')}`, organizationId: ORG_ID, version: 1, createdAt: now, updatedAt: now, status: 'ACTIVE' };
       products.unshift(product);
       return result(product);
     },
-    async updateProduct(id, input) {
+    async updateProduct(id, input, etag) {
       failIfNeeded(true);
+      requireCapability('product.update');
       const index = products.findIndex((item) => item.id === id);
       if (index < 0) throw notFound(id);
       const current = products[index];
       if (!current) throw notFound(id);
+      assertEtag(current, etag);
       const next = updateProductRecord(current, input);
       products[index] = next;
       return result(next);
     },
     async listSkus(options) {
+      if (isEmptyScope()) return page([], options);
       failIfNeeded();
       return page(filterByStatus(skus, options), options);
     },
@@ -185,22 +210,26 @@ export function createFixtureDomainApi(options: FixtureDomainApiOptions = {}): D
     },
     async createSku(input) {
       failIfNeeded(true);
+      requireCapability('sku.create');
       const sku: Sku = { ...input, id: `00000000-0000-4000-8000-${String(600 + skus.length).padStart(12, '0')}`, organizationId: ORG_ID, version: 1, createdAt: now, updatedAt: now, baseUnit: input.unit, trackingMode: 'NONE', lowStockThreshold: '0', status: 'ACTIVE' };
       skus.unshift(sku);
       return result(sku);
     },
-    async updateSku(id, input) {
+    async updateSku(id, input, etag) {
       failIfNeeded(true);
+      requireCapability('sku.update');
       const index = skus.findIndex((item) => item.id === id);
       if (index < 0) throw notFound(id);
       const current = skus[index];
       if (!current) throw notFound(id);
+      assertEtag(current, etag);
       const next = updateSkuRecord(current, input);
       skus[index] = next;
       return result(next);
     },
 
     async listOrders(options) {
+      if (isEmptyScope()) return page([], options);
       failIfNeeded();
       return page(filterByStatus(orders, options), options);
     },
@@ -210,26 +239,31 @@ export function createFixtureDomainApi(options: FixtureDomainApiOptions = {}): D
     },
     async createOrder(input) {
       failIfNeeded(true);
+      requireCapability('order.create');
       const order: Order = { ...input, id: `00000000-0000-4000-8000-${String(700 + orders.length).padStart(12, '0')}`, organizationId: ORG_ID, version: 1, createdAt: now, updatedAt: now, status: 'DRAFT', totalAmount: '0', allowedTransitions: ['CONFIRM', 'CANCEL'], history: [{ action: 'CREATED', at: now, status: 'DRAFT' }] };
       orders.unshift(order);
       return result(order);
     },
-    async updateOrder(id, input) {
+    async updateOrder(id, input, etag) {
       failIfNeeded(true);
+      requireCapability('order.update');
       const index = orders.findIndex((item) => item.id === id);
       if (index < 0) throw notFound(id);
       const current = orders[index];
       if (!current) throw notFound(id);
+      assertEtag(current, etag);
       const next = updateOrderRecord(current, input);
       orders[index] = next;
       return result(next);
     },
-    async transitionOrder(id, input) {
+    async transitionOrder(id, input, etag) {
       failIfNeeded(true);
+      requireCapability('order.transition');
       const index = orders.findIndex((item) => item.id === id);
       if (index < 0) throw notFound(id);
       const current = orders[index];
       if (!current) throw notFound(id);
+      assertEtag(current, etag);
       const allowed = current.allowedTransitions ?? [];
       if (!allowed.includes(input.action)) throw new DomainApiError({ problem: problem(409, 'ORDER_TRANSITION_NOT_ALLOWED', '订单当前阶段不允许此动作。') });
       const status = transitionStatus(input.action, current.status);
@@ -242,26 +276,65 @@ export function createFixtureDomainApi(options: FixtureDomainApiOptions = {}): D
   Object.defineProperty(api, 'setScenario', { value: (next: FixtureScenario) => { scenario = next; } });
   return api;
 
+  function isEmptyScope(): boolean {
+    return scenario === 'empty' || scenario === 'empty-group';
+  }
+
   function failIfNeeded(mutation = false): void {
-    if (scenario === 'empty' || scenario === 'empty-group') return;
+    if (scenario === 'empty' || scenario === 'empty-group') {
+      if (!mutation) throw notFound('scope');
+      throw new DomainApiError({ problem: problem(403, 'PERMISSION_DENIED', '当前身份未获准执行此操作。') });
+    }
     if (scenario === 'forbidden') throw new DomainApiError({ problem: problem(403, 'PERMISSION_DENIED', '当前身份没有访问此业务范围的权限。') });
     if (scenario === 'offline') throw new DomainApiError({ problem: problem(503, 'DEPENDENCY_UNAVAILABLE', '业务服务暂时不可用。') });
     if (scenario === 'error') throw new DomainApiError({ problem: problem(500, 'INTERNAL_ERROR', '业务服务返回了无法处理的错误。') });
     if (mutation && scenario === 'conflict') throw new DomainApiError({ problem: problem(409, 'VERSION_CONFLICT', '内容已被其他人更新，请刷新后重做。') });
     if (mutation && scenario === 'precondition') throw new DomainApiError({ problem: problem(428, 'PRECONDITION_REQUIRED', '此操作需要最新版本标识，请先刷新。') });
   }
+
+  function requireCapability(capability: string): void {
+    if (!actorCapabilities.includes(capability)) {
+      throw new DomainApiError({ problem: problem(403, 'CAPABILITY_REQUIRED', '当前身份不能执行此操作。') });
+    }
+  }
 }
 
 function page<T>(items: readonly T[], options: ListOptions | undefined): ResourcePage<T> {
-  return { data: items, page: { nextCursor: options?.cursor ? null : 'fixture-next', hasNext: !options?.cursor } };
+  const start = options?.cursor === 'fixture-next' ? 1 : 0;
+  const data = items.slice(start);
+  return { data, page: { nextCursor: start === 0 && data.length > 1 ? 'fixture-next' : null, hasNext: start === 0 && data.length > 1 } };
 }
 
 function filterByStatus<T extends { status: string }>(items: readonly T[], options: ListOptions | undefined): readonly T[] {
-  return options?.status ? items.filter((item) => item.status === options.status) : items;
+  const filtered = options?.status ? items.filter((item) => item.status === options.status) : [...items];
+  const sort = options?.sort;
+  if (!sort) return filtered;
+  const clauses = sort.split(',').map((clause) => ({
+    descending: clause.startsWith('-'),
+    key: clause.startsWith('-') ? clause.slice(1) : clause,
+  }));
+  const sorted = [...filtered];
+  sorted.sort((left: T, right: T) => {
+    for (const clause of clauses) {
+      const leftValue = String((left as Record<string, unknown>)[clause.key] ?? '');
+      const rightValue = String((right as Record<string, unknown>)[clause.key] ?? '');
+      if (leftValue === rightValue) continue;
+      const direction = leftValue < rightValue ? -1 : 1;
+      return clause.descending ? -direction : direction;
+    }
+    return 0;
+  });
+  return sorted;
 }
 
 function result<T>(data: T): ResourceResult<T> {
-  return { data, etag: `"v${(data as { version?: number }).version ?? 1}"`, requestId: '00000000-0000-4000-8000-000000000999' };
+  return { kind: 'resource', data, etag: `"v${(data as { version?: number }).version ?? 1}"`, requestId: '00000000-0000-4000-8000-000000000999' };
+}
+
+function assertEtag(resource: { version?: number }, etag: string): void {
+  if (!etag) throw new DomainApiError({ problem: problem(428, 'PRECONDITION_REQUIRED', '此操作需要最新版本标识，请先刷新。') });
+  const expected = `"v${resource.version ?? 1}"`;
+  if (etag !== expected) throw new DomainApiError({ problem: problem(409, 'VERSION_CONFLICT', '内容已被其他人更新，请刷新后重做。') });
 }
 
 function findById<T extends { id: string }>(items: readonly T[], id: string): T {
@@ -293,7 +366,28 @@ function makeCustomer(input: CustomerCreateInput, attemptNo: number): Customer {
   };
 }
 
-function applyCustomerCommand(customer: Customer, input: CustomerCommandInput): Customer {
+function applyCustomerCommand(customer: Customer, input: CustomerCommandInput, actorUserId: string, actorCapabilities: readonly string[]): Customer {
+  const requiredCapability: Record<CustomerCommandInput['action'], string> = {
+    SUBMIT_APPROVAL: 'customer.submitApproval',
+    APPROVE: 'customer.approve',
+    REJECT: 'customer.reject',
+    REASSIGN: 'customer.reassign',
+  };
+  if (!customer.allowedTransitions?.includes(input.action)) {
+    throw new DomainApiError({ problem: problem(409, 'CUSTOMER_TRANSITION_NOT_ALLOWED', '客户当前状态不允许此动作。') });
+  }
+  if (!actorCapabilities.includes(requiredCapability[input.action]) || !customer.capabilities?.includes(requiredCapability[input.action])) {
+    throw new DomainApiError({ problem: problem(403, 'CAPABILITY_REQUIRED', '当前身份不能执行此客户动作。') });
+  }
+  if ((input.action === 'APPROVE' || input.action === 'REJECT') && customer.ownerUserId === actorUserId) {
+    throw new DomainApiError({ problem: problem(403, 'SELF_APPROVAL_NOT_ALLOWED', '提交者不能审批自己的客户。') });
+  }
+  if (input.action === 'REJECT' && !input.reason?.trim()) {
+    throw new DomainApiError({ problem: problem(422, 'REASON_REQUIRED', '驳回必须填写原因。') });
+  }
+  if (input.action === 'REASSIGN' && (!input.assigneeUserId || input.assigneeUserId === customer.ownerUserId)) {
+    throw new DomainApiError({ problem: problem(422, 'ASSIGNEE_REQUIRED', '交接必须选择不同的负责人。') });
+  }
   if (input.action === 'REASSIGN') {
     return { ...customer, ...(input.assigneeUserId ? { ownerUserId: input.assigneeUserId } : {}), version: customer.version + 1, updatedAt: later };
   }

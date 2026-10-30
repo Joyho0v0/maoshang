@@ -4,7 +4,16 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 const distDirectory = resolve(process.argv[2] ?? 'dist');
-const forbiddenMarkers = ['UiHarnessPage', '/__ui-harness', '共享组件检查台'];
+const forbiddenMarkers = [
+  'UiHarnessPage',
+  '/__ui-harness',
+  '共享组件检查台',
+  '00000000-0000-4000-8000-000000000002',
+  '00000000-0000-4000-8000-000000000101',
+  '00000000-0000-4000-8000-000000000201',
+  '00000000-0000-4000-8000-000000000301',
+  'SO-NEW',
+];
 
 async function listFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });

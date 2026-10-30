@@ -83,6 +83,10 @@ export interface HttpResponse<T> {
   headers: Record<string, string>;
 }
 
+export interface CommandExecutionResponse<T> extends HttpResponse<T> {
+  commandId: string;
+}
+
 export type PendingCommandState =
   | 'submitting'
   | 'querying-status'

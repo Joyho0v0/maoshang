@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 
 import DataTable from '../ui/DataTable.vue';
 import MoneyText from '../ui/MoneyText.vue';
 import PageState from '../ui/PageState.vue';
-import type { Order } from '../core/domain-api';
 import { asDecimalString } from '../core/formatters';
-import { displayStatus, listState, pageStateMessage, problemRequestId, queryFromRoute, routeStatus, useDomainApi } from './domain-page-helpers';
+import { canUsePageCapability, displayStatus, listState, pageStateMessage, problemRequestId, queryFromRoute, routeStatus, useDomainApi } from './domain-page-helpers';
 
 const route = useRoute();
 const router = useRouter();
@@ -16,6 +15,7 @@ const api = useDomainApi();
 const status = computed(() => routeStatus(route.query['filter[status]']));
 const sort = computed(() => typeof route.query.sort === 'string' ? route.query.sort : undefined);
 const cursor = computed(() => typeof route.query.cursor === 'string' ? route.query.cursor : undefined);
+const cursorHistory = ref<Array<string | undefined>>([]);
 const options = computed(() => ({ status: status.value, sort: sort.value, cursor: cursor.value }));
 const ordersQuery = useQuery({
   queryKey: computed(() => ['orders', options.value]),
@@ -42,8 +42,24 @@ function updateStatus(event: globalThis.Event): void {
   void router.replace({ path: '/orders', query: queryFromRoute(value || undefined, sort.value, undefined) });
 }
 
-function hasTransition(order: Order, transition: string): boolean {
-  return order.allowedTransitions?.includes(transition) ?? false;
+function updateSort(event: globalThis.Event): void {
+  const value = (event.target as globalThis.HTMLSelectElement).value;
+  cursorHistory.value = [];
+  void router.replace({ path: '/orders', query: queryFromRoute(status.value, value || undefined, undefined) });
+}
+
+function nextPage(): void {
+  const nextCursor = ordersQuery.data.value?.page.nextCursor;
+  if (nextCursor) {
+    cursorHistory.value.push(cursor.value);
+    void router.replace({ path: '/orders', query: queryFromRoute(status.value, sort.value, nextCursor) });
+  }
+}
+
+function previousPage(): void {
+  const previous = cursorHistory.value.pop();
+  if (cursor.value !== undefined && previous !== undefined) void router.replace({ path: '/orders', query: queryFromRoute(status.value, sort.value, previous) });
+  else if (cursor.value !== undefined) void router.replace({ path: '/orders', query: queryFromRoute(status.value, sort.value, undefined) });
 }
 </script>
 
@@ -58,6 +74,7 @@ function hasTransition(order: Order, transition: string): boolean {
         <p>订单明细保留创建时的商品快照、价格和汇率；阶段按钮完全由服务端返回的 allowedTransitions 驱动。</p>
       </div>
       <RouterLink
+        v-if="canUsePageCapability(api, 'order.create')"
         class="button"
         to="/orders/new"
       >
@@ -99,6 +116,25 @@ function hasTransition(order: Order, transition: string): boolean {
           已取消
         </option>
       </select>
+      <label for="order-sort">排序</label>
+      <select
+        id="order-sort"
+        :value="sort ?? ''"
+        @change="updateSort"
+      >
+        <option value="">
+          默认排序
+        </option>
+        <option value="-updatedAt,-id">
+          最近更新
+        </option>
+        <option value="orderNo">
+          订单号升序
+        </option>
+        <option value="-orderNo">
+          订单号降序
+        </option>
+      </select>
     </section>
 
     <PageState
@@ -137,20 +173,28 @@ function hasTransition(order: Order, transition: string): boolean {
           <span v-else>未提供</span>
         </span>
       </template>
-      <template #actions="{ row }">
-        <RouterLink
-          v-if="hasTransition(row as Order, 'CONFIRM')"
-          class="button button--quiet button--compact"
-          data-testid="order-transition-CONFIRM"
-          :to="`/orders/${row.id}`"
-        >
-          确认订单
-        </RouterLink>
-        <span
-          v-else
-          class="muted-action"
-        >阶段由服务端控制</span>
-      </template>
     </DataTable>
+    <nav
+      v-if="state === 'ready'"
+      class="cursor-pager"
+      aria-label="订单列表分页"
+    >
+      <button
+        class="button button--quiet"
+        type="button"
+        :disabled="cursor === undefined || (cursorHistory.length === 0 && cursor !== 'fixture-next')"
+        @click="previousPage"
+      >
+        上一页
+      </button>
+      <button
+        class="button button--quiet"
+        type="button"
+        :disabled="!ordersQuery.data.value?.page.nextCursor"
+        @click="nextPage"
+      >
+        下一页
+      </button>
+    </nav>
   </div>
 </template>

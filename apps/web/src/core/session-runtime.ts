@@ -5,6 +5,7 @@ import type {
   ApiRequest,
   ContractAdapter,
   HttpResponse,
+  CommandExecutionResponse,
   LoginInput,
   PendingCommand,
   ProblemDetails,
@@ -91,6 +92,11 @@ export class PendingCommandStore {
 
   get(id: string): PendingCommand | undefined {
     const command = this.commands.get(id);
+    return command === undefined ? undefined : { ...command };
+  }
+
+  findByIdempotencyKey(idempotencyKey: string): PendingCommand | undefined {
+    const command = [...this.commands.values()].find((candidate) => candidate.idempotencyKey === idempotencyKey);
     return command === undefined ? undefined : { ...command };
   }
 
@@ -296,7 +302,7 @@ export class SessionRuntime {
     return response.data;
   }
 
-  async executeCommand(request: ApiRequest): Promise<HttpResponse<unknown>> {
+  async executeCommand(request: ApiRequest): Promise<CommandExecutionResponse<unknown>> {
     if (request.operationId === undefined) throw new Error('operationId is required for command execution.');
     const idempotencyKey = request.idempotencyKey ?? createIdempotencyKey();
     const command: PendingCommand = {
@@ -322,7 +328,7 @@ export class SessionRuntime {
         status: response.status === 202 ? 'in-flight' : 'succeeded',
         state: response.status === 202 ? 'querying-status' : 'succeeded',
       });
-      return response;
+      return { ...response, commandId: command.id };
     } catch (error) {
       if (this.state.epoch !== command.sessionEpoch) throw new SessionEpochChangedError();
       const problem = toProblem(error);
@@ -390,8 +396,7 @@ export class SessionRuntime {
         }
         const href = status.resource?.href ?? status.resultHref;
         if (href === null || href === undefined) {
-          this.pendingCommands.update(commandId, { status: 'succeeded', state: 'succeeded' });
-          return statusResponse;
+          throw new PendingCommandRecoveryError('The command succeeded without an authoritative resource reference.');
         }
         const authoritative = await this.request({ method: 'GET', href, requiresCsrf: false });
         this.pendingCommands.update(commandId, { status: 'succeeded', state: 'succeeded' });

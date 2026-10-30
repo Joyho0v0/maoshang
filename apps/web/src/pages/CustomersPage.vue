@@ -1,16 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
+import { useQuery } from '@tanstack/vue-query';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 
-import ConflictDialog from '../ui/ConflictDialog.vue';
 import DataTable from '../ui/DataTable.vue';
 import PageState from '../ui/PageState.vue';
-import type { Customer } from '../core/domain-api';
-import { isConflictError } from '../core/domain-api';
 import {
   displayStatus,
-  etagFor,
+  canUsePageCapability,
   listState,
   pageStateMessage,
   problemRequestId,
@@ -22,12 +19,10 @@ import {
 const route = useRoute();
 const router = useRouter();
 const api = useDomainApi();
-const queryClient = useQueryClient();
-const conflictOpen = ref(false);
-const conflictMessage = ref('');
 const status = computed(() => routeStatus(route.query['filter[status]']));
 const sort = computed(() => typeof route.query.sort === 'string' ? route.query.sort : undefined);
 const cursor = computed(() => typeof route.query.cursor === 'string' ? route.query.cursor : undefined);
+const cursorHistory = ref<Array<string | undefined>>([]);
 const queryOptions = computed(() => ({ status: status.value, sort: sort.value, cursor: cursor.value }));
 const customersQuery = useQuery({
   queryKey: computed(() => ['customers', queryOptions.value]),
@@ -41,20 +36,6 @@ const state = computed(() => listState(
 const stateCopy = computed(() => pageStateMessage(state.value));
 const rows = computed(() => (customersQuery.data.value?.data ?? []) as readonly Record<string, unknown>[]);
 const hasNext = computed(() => Boolean(customersQuery.data.value?.page.nextCursor));
-const commandMutation = useMutation({
-  mutationFn: async ({ customer, action }: { customer: Customer; action: 'SUBMIT_APPROVAL' | 'APPROVE' | 'REJECT' | 'REASSIGN' }) => api.commandCustomer(
-    customer.id,
-    { action },
-    etagFor(customer.version),
-  ),
-  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['customers'] }),
-  onError: (error) => {
-    if (isConflictError(error)) {
-      conflictMessage.value = '客户内容已变化，请刷新后重做。';
-      conflictOpen.value = true;
-    }
-  },
-});
 
 const columns = [
   { key: 'name', label: '客户名称' },
@@ -63,22 +44,29 @@ const columns = [
   { key: 'updatedAt', label: '最近更新' },
 ] as const;
 
-function hasTransition(customer: Customer, transition: string): boolean {
-  return customer.allowedTransitions?.includes(transition) ?? false;
-}
-
 function updateStatus(event: globalThis.Event): void {
   const value = (event.target as globalThis.HTMLSelectElement).value;
   void router.replace({ path: '/customers', query: queryFromRoute(value || undefined, sort.value, undefined) });
 }
 
+function updateSort(event: globalThis.Event): void {
+  const value = (event.target as globalThis.HTMLSelectElement).value;
+  cursorHistory.value = [];
+  void router.replace({ path: '/customers', query: queryFromRoute(status.value, value || undefined, undefined) });
+}
+
 function nextPage(): void {
   const nextCursor = customersQuery.data.value?.page.nextCursor;
-  if (nextCursor) void router.replace({ path: '/customers', query: queryFromRoute(status.value, sort.value, nextCursor) });
+  if (nextCursor) {
+    cursorHistory.value.push(cursor.value);
+    void router.replace({ path: '/customers', query: queryFromRoute(status.value, sort.value, nextCursor) });
+  }
 }
 
 function previousPage(): void {
-  void router.replace({ path: '/customers', query: queryFromRoute(status.value, sort.value, undefined) });
+  const previous = cursorHistory.value.pop();
+  if (cursor.value !== undefined && previous !== undefined) void router.replace({ path: '/customers', query: queryFromRoute(status.value, sort.value, previous) });
+  else if (cursor.value !== undefined) void router.replace({ path: '/customers', query: queryFromRoute(status.value, sort.value, undefined) });
 }
 
 function retry(): void {
@@ -97,6 +85,7 @@ function retry(): void {
         <p>把客户档案、审批职责和业务范围放在同一处；页面只展示服务端明确返回的字段。</p>
       </div>
       <RouterLink
+        v-if="canUsePageCapability(api, 'customer.create')"
         class="button"
         to="/customers/new"
       >
@@ -139,6 +128,25 @@ function retry(): void {
           已停用
         </option>
       </select>
+      <label for="customer-sort">排序</label>
+      <select
+        id="customer-sort"
+        :value="sort ?? ''"
+        @change="updateSort"
+      >
+        <option value="">
+          默认排序
+        </option>
+        <option value="-updatedAt,-id">
+          最近更新
+        </option>
+        <option value="name">
+          名称升序
+        </option>
+        <option value="-name">
+          名称降序
+        </option>
+      </select>
     </section>
 
     <PageState
@@ -171,23 +179,12 @@ function retry(): void {
         {{ row.ownerUserId ? String(row.ownerUserId) : '未提供' }}
       </template>
       <template #actions="{ row }">
-        <button
-          v-if="hasTransition(row as Customer, 'SUBMIT_APPROVAL')"
+        <RouterLink
           class="button button--quiet button--compact"
-          type="button"
-          data-testid="customer-submit-approval"
-          :disabled="commandMutation.isPending.value"
-          @click="commandMutation.mutate({ customer: row as Customer, action: 'SUBMIT_APPROVAL' })"
+          :to="`/customers/${row.id}`"
         >
-          提交审核
-        </button>
-        <span
-          v-else
-          class="muted-action"
-          aria-label="当前状态不能提交审核"
-        >
-          不可操作
-        </span>
+          查看详情并执行
+        </RouterLink>
       </template>
     </DataTable>
     <nav
@@ -198,7 +195,7 @@ function retry(): void {
       <button
         class="button button--quiet"
         type="button"
-        :disabled="!cursor"
+        :disabled="cursor === undefined || (cursorHistory.length === 0 && cursor !== 'fixture-next')"
         @click="previousPage"
       >
         上一页
@@ -212,12 +209,5 @@ function retry(): void {
         下一页
       </button>
     </nav>
-
-    <ConflictDialog
-      :open="conflictOpen"
-      :title="conflictMessage || '内容已更新'"
-      @close="conflictOpen = false"
-      @refresh="conflictOpen = false; void customersQuery.refetch()"
-    />
   </div>
 </template>

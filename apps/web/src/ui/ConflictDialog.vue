@@ -32,6 +32,12 @@ const emit = defineEmits<{ refresh: []; close: [] }>();
       当前版本：{{ props.currentVersion }}
     </p>
     <p
+      v-if="props.currentEtag"
+      class="conflict-dialog__version"
+    >
+      当前 ETag：{{ props.currentEtag }}
+    </p>
+    <p
       v-if="props.requestId"
       class="conflict-dialog__request-id"
     >

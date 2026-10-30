@@ -6,6 +6,8 @@ import {
   toDomainApiError,
   type DomainApi,
   type DomainPageState,
+  type DomainMutationResult,
+  type ResourceResult,
 } from '../core/domain-api';
 import { enumCodec, serializeUrlState } from '../core/url-state';
 
@@ -43,6 +45,14 @@ export function problemRequestId(error: unknown): string {
   return toDomainApiError(error).problem.requestId ?? '';
 }
 
+export function pendingRecoveryFeedback(error: unknown): { stable: boolean; message: string } {
+  const problem = toDomainApiError(error).problem;
+  const remainsUnknown = problem.retryable === true || problem.status === 408 || problem.status === 502 || problem.status === 503;
+  return remainsUnknown
+    ? { stable: false, message: '结果待确认，恢复暂未完成；请继续确认或刷新详情，不要重新创建业务意图。' }
+    : { stable: true, message: `操作已稳定失败：${problem.title}` };
+}
+
 export function pageStateMessage(state: DomainPageState): { heading: string; message: string } {
   switch (state) {
     case 'loading': return { heading: '正在同步', message: '正在读取冻结契约允许的业务数据。' };
@@ -63,6 +73,20 @@ export function queryFromRoute(status: string | undefined, sort: string | undefi
   return Object.fromEntries(params.entries());
 }
 
+export function isPendingMutation<T>(result: DomainMutationResult<T>): result is Extract<DomainMutationResult<T>, { kind: 'pending' }> {
+  return result.kind === 'pending';
+}
+
+export async function resolveMutation<T>(result: DomainMutationResult<T>): Promise<ResourceResult<T>> {
+  let current = result;
+  while (isPendingMutation(current)) current = await current.recover();
+  return current;
+}
+
+export function canUsePageCapability(api: DomainApi, capability: string): boolean {
+  return api.capabilities === undefined || api.capabilities.includes(capability);
+}
+
 export function displayStatus(status: string): string {
   return {
     DRAFT: '草稿',
@@ -78,8 +102,4 @@ export function displayStatus(status: string): string {
 
 export function readName(value: unknown): string {
   return typeof value === 'string' && value.length > 0 ? value : '未授权字段';
-}
-
-export function etagFor(version: number): string {
-  return `"v${version}"`;
 }
