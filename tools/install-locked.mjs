@@ -68,6 +68,29 @@ function requiredMirror(object, expected, name) {
   );
 }
 
+function validateDeclarations({ nodeVersion, packageJson, lockJson }) {
+  const packageManager = packageJson?.packageManager;
+  const npmVersion =
+    typeof packageManager === 'string' && packageManager.startsWith('npm@')
+      ? packageManager.slice('npm@'.length)
+      : '';
+  const valid =
+    isExactSemver(nodeVersion) &&
+    typeof packageManager === 'string' &&
+    packageManager === `npm@${npmVersion}` &&
+    isExactSemver(npmVersion) &&
+    packageJson?.engines?.node === `>=${nodeVersion}` &&
+    requiredMirror(packageJson?.devEngines?.runtime, nodeVersion, 'node') &&
+    requiredMirror(packageJson?.devEngines?.packageManager, npmVersion, 'npm') &&
+    lockJson?.lockfileVersion === 3;
+
+  return {
+    code: valid ? EXIT.OK : EXIT.DECLARATION,
+    nodeVersion,
+    npmVersion,
+  };
+}
+
 function loadDeclarations() {
   let packageJson;
   let lockJson;
@@ -83,26 +106,12 @@ function loadDeclarations() {
     return { ok: false, reason: 'repository declaration or lockfile unreadable' };
   }
 
-  const packageManager = packageJson.packageManager;
-  const npmVersion =
-    typeof packageManager === 'string' && packageManager.startsWith('npm@')
-      ? packageManager.slice('npm@'.length)
-      : '';
-  const valid =
-    isExactSemver(nodeVersion) &&
-    typeof packageManager === 'string' &&
-    packageManager === `npm@${npmVersion}` &&
-    isExactSemver(npmVersion) &&
-    packageJson.engines?.node === `>=${nodeVersion}` &&
-    requiredMirror(packageJson.devEngines?.runtime, nodeVersion, 'node') &&
-    requiredMirror(packageJson.devEngines?.packageManager, npmVersion, 'npm') &&
-    lockJson.lockfileVersion === 3;
-
-  if (!valid) {
+  const validation = validateDeclarations({ nodeVersion, packageJson, lockJson });
+  if (validation.code !== EXIT.OK) {
     return { ok: false, reason: 'repository declaration or lockfile drift' };
   }
 
-  return { ok: true, nodeVersion, npmVersion, lockDigest };
+  return { ok: true, nodeVersion: validation.nodeVersion, npmVersion: validation.npmVersion, lockDigest };
 }
 
 function nodeExitCode(actual, expected) {
@@ -114,6 +123,14 @@ function npmExitCode(actual, expected) {
     return EXIT.NPM_LAUNCHER;
   }
   return actual === expected ? EXIT.OK : EXIT.NPM_VERSION;
+}
+
+function toolchainExitCode(actualNode, actualNpm, expectedNode, expectedNpm) {
+  const nodeCode = nodeExitCode(actualNode, expectedNode);
+  if (nodeCode !== EXIT.OK) {
+    return nodeCode;
+  }
+  return npmExitCode(actualNpm, expectedNpm);
 }
 
 function forbiddenSecrets(environment) {
@@ -128,25 +145,77 @@ function forbiddenSecrets(environment) {
     .sort();
 }
 
+function declarationFixture() {
+  return {
+    nodeVersion: '22.22.3',
+    packageJson: {
+      packageManager: 'npm@11.6.2',
+      engines: { node: '>=22.22.3' },
+      devEngines: {
+        runtime: { name: 'node', version: '22.22.3', onFail: 'error' },
+        packageManager: { name: 'npm', version: '11.6.2', onFail: 'error' },
+      },
+    },
+    lockJson: { lockfileVersion: 3 },
+  };
+}
+
 function runSelfTest() {
   const cases = [
-    ['Node 18.20.8', nodeExitCode('18.20.8', '22.22.3'), EXIT.NODE],
-    ['Node 24.22.1', nodeExitCode('24.22.1', '22.22.3'), EXIT.NODE],
-    ['npm 10.8.2', npmExitCode('10.8.2', '11.6.2'), EXIT.NPM_VERSION],
-    ['Node/npm match', npmExitCode('11.6.2', '11.6.2'), EXIT.OK],
-    ['declaration drift', EXIT.DECLARATION, EXIT.DECLARATION],
-    ['secret environment', forbiddenSecrets({ DATABASE_URL: 'redacted' }).length > 0 ? EXIT.SECRET : EXIT.OK, EXIT.SECRET],
-    ['PG secret environment', forbiddenSecrets({ PGHOST: 'redacted' }).length > 0 ? EXIT.SECRET : EXIT.OK, EXIT.SECRET],
-    ['session secret environment', forbiddenSecrets({ SESSION_SECRET: 'redacted' }).length > 0 ? EXIT.SECRET : EXIT.OK, EXIT.SECRET],
+    ['Node 18.20.8', () => nodeExitCode('18.20.8', '22.22.3'), EXIT.NODE],
+    ['Node 24.22.1', () => nodeExitCode('24.22.1', '22.22.3'), EXIT.NODE],
+    ['npm 10.8.2', () => npmExitCode('10.8.2', '11.6.2'), EXIT.NPM_VERSION],
+    ['Node/npm match', () => toolchainExitCode('22.22.3', '11.6.2', '22.22.3', '11.6.2'), EXIT.OK],
+    ['complete declaration', () => validateDeclarations(declarationFixture()).code, EXIT.OK],
+    [
+      'engines.node drift',
+      () => {
+        const fixture = declarationFixture();
+        fixture.packageJson.engines.node = '>=22.22.2';
+        return validateDeclarations(fixture).code;
+      },
+      EXIT.DECLARATION,
+    ],
+    [
+      'runtime devEngines drift',
+      () => {
+        const fixture = declarationFixture();
+        fixture.packageJson.devEngines.runtime.version = '22.22.2';
+        return validateDeclarations(fixture).code;
+      },
+      EXIT.DECLARATION,
+    ],
+    [
+      'npm devEngines drift',
+      () => {
+        const fixture = declarationFixture();
+        fixture.packageJson.devEngines.packageManager.version = '11.6.1';
+        return validateDeclarations(fixture).code;
+      },
+      EXIT.DECLARATION,
+    ],
+    [
+      'packageManager drift',
+      () => {
+        const fixture = declarationFixture();
+        fixture.packageJson.packageManager = 'npm@11.6.1';
+        return validateDeclarations(fixture).code;
+      },
+      EXIT.DECLARATION,
+    ],
+    ['secret environment', () => forbiddenSecrets({ DATABASE_URL: 'redacted' }).length > 0 ? EXIT.SECRET : EXIT.OK, EXIT.SECRET],
+    ['PG secret environment', () => forbiddenSecrets({ PGHOST: 'redacted' }).length > 0 ? EXIT.SECRET : EXIT.OK, EXIT.SECRET],
+    ['session secret environment', () => forbiddenSecrets({ SESSION_SECRET: 'redacted' }).length > 0 ? EXIT.SECRET : EXIT.OK, EXIT.SECRET],
   ];
 
-  for (const [name, actual, expected] of cases) {
+  for (const [name, evaluate, expected] of cases) {
+    const actual = evaluate();
     if (actual !== expected) {
       return fail(EXIT.DECLARATION, `self-test case=${name}`);
     }
   }
 
-  statusLine('mode=self-test status=PASS cases=8');
+  statusLine(`mode=self-test status=PASS cases=${cases.length}`);
   return EXIT.OK;
 }
 
