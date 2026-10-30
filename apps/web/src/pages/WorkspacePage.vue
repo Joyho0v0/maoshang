@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import AppStateView from '../ui/AppStateView.vue';
+import PageState from '../ui/PageState.vue';
 </script>
 
 <template>
@@ -14,7 +14,7 @@ import AppStateView from '../ui/AppStateView.vue';
       </div>
       <span class="stage-badge">前端并行层</span>
     </section>
-    <AppStateView
+    <PageState
       state="empty"
       heading="还没有接入业务数据"
       message="真实契约冻结后，工作台会从同一个适配器读取客户、订单和待办。当前 fixture 只用于验证壳的状态表现。"

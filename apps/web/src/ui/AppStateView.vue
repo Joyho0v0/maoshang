@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-type State = 'loading' | 'error' | 'empty';
+type State = 'loading' | 'error' | 'empty' | 'forbidden' | 'offline';
 type HeadingLevel = 1 | 2 | 3;
 
 interface Props {
@@ -18,8 +18,16 @@ const props = withDefaults(defineProps<Props>(), {
 });
 const emit = defineEmits<{ action: [] }>();
 const headingTag = computed(() => `h${props.headingLevel}`);
-const liveRole = computed(() => props.state === 'error' ? 'alert' : 'status');
-const livePoliteness = computed(() => props.state === 'error' ? 'assertive' : 'polite');
+const isAlert = computed(() => ['error', 'forbidden', 'offline'].includes(props.state));
+const liveRole = computed(() => isAlert.value ? 'alert' : 'status');
+const livePoliteness = computed(() => isAlert.value ? 'assertive' : 'polite');
+const stateLabel = computed(() => ({
+  loading: '正在同步',
+  error: '需要处理',
+  empty: '等待下一步',
+  forbidden: '访问受限',
+  offline: '连接中断',
+}[props.state]));
 </script>
 
 <template>
@@ -35,7 +43,7 @@ const livePoliteness = computed(() => props.state === 'error' ? 'assertive' : 'p
     />
     <div>
       <p class="eyebrow">
-        {{ state === 'loading' ? '正在同步' : state === 'error' ? '需要处理' : '等待下一步' }}
+        {{ stateLabel }}
       </p>
       <component
         :is="headingTag"

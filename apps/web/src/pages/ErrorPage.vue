@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 
-import AppStateView from '../ui/AppStateView.vue';
+import PageState from '../ui/PageState.vue';
 
 const state = ref<'error' | 'loading'>('error');
 
@@ -12,7 +12,7 @@ function retry() {
 
 <template>
   <div class="page page--state">
-    <AppStateView
+    <PageState
       v-if="state === 'error'"
       state="error"
       heading="同步暂时没有完成"
@@ -21,7 +21,7 @@ function retry() {
       :heading-level="1"
       @action="retry"
     />
-    <AppStateView
+    <PageState
       v-else
       state="loading"
       heading="正在重新加载状态"

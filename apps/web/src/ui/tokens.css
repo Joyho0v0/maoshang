@@ -1,0 +1,22 @@
+:root {
+  --color-ink: #14243a;
+  --color-ink-muted: #64758b;
+  --color-navy: #10233f;
+  --color-navy-soft: #1c3658;
+  --color-paper: #f8fafb;
+  --color-canvas: #edf1f4;
+  --color-line: #dbe3ea;
+  --color-mint: #5ad0ac;
+  --color-amber: #e9a354;
+  --color-danger: #c95752;
+  --color-info: #4a8cc7;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --focus-ring: 3px solid var(--color-amber);
+  --radius-sm: 2px;
+  --shadow-dialog: 0 18px 60px rgb(16 35 63 / 22%);
+}

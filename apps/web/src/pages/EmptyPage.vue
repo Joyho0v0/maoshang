@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import AppStateView from '../ui/AppStateView.vue';
+import PageState from '../ui/PageState.vue';
 </script>
 
 <template>
   <div class="page page--state">
-    <AppStateView
+    <PageState
       state="empty"
       heading="待办列表是空的"
       message="新的审核或跟进事项出现后，会按客户当地时间显示在这里。"
