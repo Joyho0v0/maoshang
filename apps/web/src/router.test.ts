@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { createMemoryHistory } from 'vue-router';
 
 import { createAppRouter } from './router';
@@ -13,5 +16,15 @@ describe('application router', () => {
 
     await router.push('/loading');
     expect(router.currentRoute.value.name).toBe('loading');
+  });
+
+  it('guards the local UI harness route to dev and test builds', () => {
+    const webRoot = process.cwd().endsWith('/apps/web') ? process.cwd() : join(process.cwd(), 'apps/web');
+    const source = readFileSync(join(webRoot, 'src/router.ts'), 'utf8');
+
+    expect(source).toContain("import.meta.env.DEV || import.meta.env.MODE === 'test'");
+    expect(source).toContain("path: '/__ui-harness'");
+    const boundarySource = readFileSync(join(webRoot, 'scripts/verify-production-boundary.mjs'), 'utf8');
+    expect(boundarySource).toContain('UiHarnessPage');
   });
 });

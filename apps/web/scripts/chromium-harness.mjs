@@ -45,12 +45,17 @@ try {
 
   socket = await connect(target.webSocketDebuggerUrl);
   const errors = { console: [], page: [], network: [] };
+  const pendingRequests = new Set();
   socket.onEvent = (message) => {
     if (message.method === 'Runtime.consoleAPICalled' && ['error', 'assert'].includes(message.params.type)) {
       errors.console.push(message.params.type);
     }
     if (message.method === 'Runtime.exceptionThrown') errors.page.push(message.params.exceptionDetails?.text ?? 'exception');
     if (message.method === 'Network.loadingFailed') errors.network.push(message.params.errorText ?? 'network failure');
+    if (message.method === 'Network.requestWillBeSent') pendingRequests.add(message.params.requestId);
+    if (message.method === 'Network.loadingFinished' || message.method === 'Network.loadingFailed') {
+      pendingRequests.delete(message.params.requestId);
+    }
     if (message.method === 'Fetch.requestPaused') void handleRequest(socket, message.params);
   };
 
@@ -62,6 +67,7 @@ try {
 
   const results = [];
   for (const scenario of scenarios.flatMap((route) => viewports.map((viewport) => ({ ...route, ...viewport })))) {
+    const context = `${scenario.path}@${scenario.name}`;
     await socket.command('Emulation.setDeviceMetricsOverride', {
       width: scenario.width,
       height: 900,
@@ -69,10 +75,10 @@ try {
       mobile: false,
     });
     await socket.command('Emulation.setPageScaleFactor', { pageScaleFactor: scenario.zoom });
-    const loaded = socket.waitForEvent('Page.loadEventFired');
+    const loaded = socket.waitForEvent('Page.loadEventFired', context);
     await socket.command('Page.navigate', { url: `${baseUrl}${scenario.path}` });
     await loaded;
-    await delay(250);
+    await waitForRouteReady(socket, scenario, pendingRequests);
     const inspection = await evaluate(socket, `(() => {
       const required = ${JSON.stringify(scenario.requiredSelectors)};
       const missing = required.filter((selector) => document.querySelector(selector) === null);
@@ -84,7 +90,7 @@ try {
       };
     })()`);
     if (scenario.path === '/__ui-harness') {
-      inspection.interactions = await exerciseHarness(socket);
+      inspection.interactions = await exerciseHarness(socket, context);
     }
     if (screenshotDirectory) {
       const screenshot = await socket.command('Page.captureScreenshot', { format: 'png' });
@@ -156,28 +162,28 @@ async function handleRequest(cdp, params) {
   await cdp.command('Fetch.continueRequest', { requestId: params.requestId });
 }
 
-async function exerciseHarness(cdp) {
+async function exerciseHarness(cdp, context) {
   const interactions = [];
   await evaluate(cdp, `document.querySelector('[data-testid="open-dialog"]')?.click()`);
-  await delay(50);
+  await waitForSelectors(cdp, ['[role="dialog"]'], context);
   interactions.push(await evaluate(cdp, `(() => {
     const dialog = document.querySelector('[role="dialog"]');
     return { pass: dialog?.getAttribute('aria-labelledby') === dialog?.querySelector('h2')?.id
       && document.activeElement?.getAttribute('aria-label') === '关闭', name: 'dialog focus and labelledby' };
   })()`));
   await evaluate(cdp, `document.querySelector('[role="dialog"] button[aria-label="关闭"]')?.click()`);
-  await delay(50);
+  await waitForAbsent(cdp, '[role="dialog"]', context);
   await evaluate(cdp, `document.querySelector('[data-testid="open-drawer"]')?.click()`);
-  await delay(50);
+  await waitForSelectors(cdp, ['[role="dialog"]'], context);
   interactions.push(await evaluate(cdp, `(() => {
     const drawer = document.querySelector('[role="dialog"]');
     return { pass: drawer?.getAttribute('aria-labelledby') === drawer?.querySelector('h2')?.id
       && document.activeElement?.getAttribute('aria-label') === '关闭', name: 'drawer focus and labelledby' };
   })()`));
   await evaluate(cdp, `document.querySelector('[role="dialog"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
-  await delay(50);
+  await waitForAbsent(cdp, '[role="dialog"]', context);
   await evaluate(cdp, `document.querySelector('[data-testid="submit-form"]')?.click()`);
-  await delay(50);
+  await waitForSelectors(cdp, ['[role="alert"]', '#customer-name'], context);
   interactions.push(await evaluate(cdp, `(() => {
     const summary = document.querySelector('[role="alert"]');
     const field = document.querySelector('#customer-name');
@@ -186,7 +192,73 @@ async function exerciseHarness(cdp) {
       && field?.getAttribute('aria-describedby') === 'customer-name-error'
       && errorLink?.getAttribute('href') === '#customer-name', name: 'form error focus and association' };
   })()`));
+  interactions.push(await evaluate(cdp, `(() => {
+    const action = document.querySelector('[data-testid="capability-action"]');
+    const describedBy = action?.getAttribute('aria-describedby');
+    const reason = describedBy === null ? null : document.getElementById(describedBy);
+    const attempts = document.querySelector('[data-testid="capability-attempts"]');
+    const before = attempts?.textContent;
+    action?.focus();
+    action?.click();
+    return {
+      pass: action instanceof HTMLButtonElement
+        && action.disabled
+        && document.activeElement !== action
+        && action.closest('[inert]') === null
+        && reason?.textContent?.includes('当前身份不能编辑客户') === true
+        && attempts?.textContent === before,
+      name: 'capability disabled action and accessible reason',
+    };
+  })()`));
   return interactions;
+}
+
+async function waitForRouteReady(cdp, scenario, pendingRequests) {
+  const context = `${scenario.path}@${scenario.name}`;
+  const deadline = Date.now() + 10_000;
+  let lastMissing = [...scenario.requiredSelectors];
+  while (Date.now() < deadline) {
+    const state = await evaluate(cdp, `(() => {
+      const required = ${JSON.stringify(scenario.requiredSelectors)};
+      return {
+        readyState: document.readyState,
+        missing: required.filter((selector) => document.querySelector(selector) === null),
+      };
+    })()`);
+    lastMissing = state?.missing ?? lastMissing;
+    if (state?.readyState === 'complete' && lastMissing.length === 0 && pendingRequests.size === 0) {
+      const stable = await evaluate(cdp, `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve({
+        readyState: document.readyState,
+        missing: ${JSON.stringify(scenario.requiredSelectors)}.filter((selector) => document.querySelector(selector) === null),
+      }))))`);
+      if (stable?.readyState === 'complete' && stable.missing.length === 0 && pendingRequests.size === 0) return;
+      lastMissing = stable?.missing ?? lastMissing;
+    }
+    await delay(25);
+  }
+  throw new Error(`Route ready timeout for ${context}; missing selectors: ${lastMissing.join(', ') || 'none'}; pending requests: ${pendingRequests.size}`);
+}
+
+async function waitForSelectors(cdp, selectors, context) {
+  const deadline = Date.now() + 5_000;
+  let lastMissing = [...selectors];
+  while (Date.now() < deadline) {
+    const missing = await evaluate(cdp, `(() => ${JSON.stringify(selectors)}.filter((selector) => document.querySelector(selector) === null))()`);
+    lastMissing = missing ?? lastMissing;
+    if (lastMissing.length === 0) return;
+    await delay(25);
+  }
+  throw new Error(`Selector wait timeout for ${context}; missing selectors: ${lastMissing.join(', ')}`);
+}
+
+async function waitForAbsent(cdp, selector, context) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const present = await evaluate(cdp, `document.querySelector(${JSON.stringify(selector)}) !== null`);
+    if (!present) return;
+    await delay(25);
+  }
+  throw new Error(`Selector absence timeout for ${context}; selector still present: ${selector}`);
 }
 
 async function evaluate(cdp, expression) {
@@ -212,12 +284,17 @@ function connect(url) {
           ws.send(JSON.stringify({ id, method, params }));
         });
       },
-      waitForEvent(method) {
-        return new Promise((eventResolve) => {
+      waitForEvent(method, context) {
+        return new Promise((eventResolve, eventReject) => {
           const list = eventWaiters.get(method) ?? [];
-          list.push(eventResolve);
+          const waiter = { eventResolve, eventReject };
+          list.push(waiter);
           eventWaiters.set(method, list);
-          setTimeout(() => eventResolve(), 10_000);
+          waiter.timer = setTimeout(() => {
+            const current = eventWaiters.get(method) ?? [];
+            eventWaiters.set(method, current.filter((item) => item !== waiter));
+            eventReject(new Error(`Timed out waiting for ${method} (${context})`));
+          }, 10_000);
         });
       },
       close() { ws.close(); },
@@ -237,7 +314,10 @@ function connect(url) {
       const waiters = eventWaiters.get(message.method);
       if (waiters) {
         eventWaiters.delete(message.method);
-        for (const waiter of waiters) waiter(message);
+        for (const waiter of waiters) {
+          clearTimeout(waiter.timer);
+          waiter.eventResolve(message);
+        }
       }
       ws.onEvent?.(message);
     });

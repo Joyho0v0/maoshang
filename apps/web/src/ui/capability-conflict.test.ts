@@ -1,3 +1,4 @@
+import { h } from 'vue';
 import { mount } from '@vue/test-utils';
 
 import CapabilityGate from './CapabilityGate.vue';
@@ -30,11 +31,21 @@ describe('capability and conflict primitives', () => {
         display: 'disable',
         reason: '当前订单不能确认',
       },
-      slots: { default: '<button>确认订单</button>' },
+      slots: {
+        default: ({ disabled, reasonId }: { disabled: boolean; reasonId: string }) => h(
+          'button',
+          { disabled, 'aria-describedby': reasonId },
+          '确认订单',
+        ),
+      },
     });
 
-    expect(wrapper.get('[aria-disabled="true"]').text()).toContain('确认订单');
-    expect(wrapper.get('[aria-disabled="true"]').get('[role="note"]').text()).toContain('当前订单不能确认');
+    const action = wrapper.get('button');
+    const reasonId = action.attributes('aria-describedby');
+    expect((action.element as HTMLButtonElement).disabled).toBe(true);
+    expect(reasonId).toBeTruthy();
+    expect(wrapper.get(`#${reasonId}`).text()).toContain('当前订单不能确认');
+    expect(wrapper.get('[aria-disabled="true"]').attributes('inert')).toBeUndefined();
   });
 
   it('allows a server transition and never offers last-write-wins override', async () => {

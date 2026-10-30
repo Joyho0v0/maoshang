@@ -33,6 +33,8 @@ const browserRoutes = [
       '[data-testid="open-dialog"]',
       '[data-testid="open-drawer"]',
       '[data-testid="submit-form"]',
+      '[data-testid="capability-action"]',
+      '[data-testid="capability-attempts"]',
     ],
   },
 ] as const;

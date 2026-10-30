@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 
 import { canUseCapability } from '../core/capabilities';
+import { createUiId } from './focus-management';
 
 interface Props {
   capabilities: readonly string[];
@@ -28,6 +29,7 @@ const allowed = computed(() => canUseCapability({
   allowedTransitions: props.allowedTransitions,
   ...(props.transition.length > 0 ? { transition: props.transition } : {}),
 }));
+const reasonId = createUiId('capability-reason');
 </script>
 
 <template>
@@ -37,11 +39,15 @@ const allowed = computed(() => canUseCapability({
     class="capability-gate capability-gate--disabled"
     role="group"
     aria-disabled="true"
-    :aria-label="reason"
-    inert
+    :aria-describedby="reasonId"
   >
-    <slot />
+    <slot
+      :disabled="true"
+      :reason-id="reasonId"
+      :reason="reason"
+    />
     <span
+      :id="reasonId"
       class="capability-gate__reason"
       role="note"
     >

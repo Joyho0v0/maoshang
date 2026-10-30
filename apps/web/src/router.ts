@@ -2,6 +2,8 @@ import type { RouterHistory } from 'vue-router';
 import { createRouter } from 'vue-router';
 
 export function createAppRouter(history: RouterHistory) {
+  const includeUiHarness = import.meta.env.DEV || import.meta.env.MODE === 'test';
+
   return createRouter({
     history,
     routes: [
@@ -21,11 +23,11 @@ export function createAppRouter(history: RouterHistory) {
         name: 'error',
         component: () => import('./pages/ErrorPage.vue'),
       },
-      {
+      ...(includeUiHarness ? [{
         path: '/__ui-harness',
         name: 'ui-harness',
         component: () => import('./pages/UiHarnessPage.vue'),
-      },
+      }] : []),
       {
         path: '/empty',
         name: 'empty',

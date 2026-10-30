@@ -3,15 +3,21 @@ import { ref } from 'vue';
 
 import Dialog from '../ui/Dialog.vue';
 import Drawer from '../ui/Drawer.vue';
+import CapabilityGate from '../ui/CapabilityGate.vue';
 import FormErrorSummary from '../ui/FormErrorSummary.vue';
 import { formErrorId } from '../ui/form-error';
 
 const dialogOpen = ref(false);
 const drawerOpen = ref(false);
 const errors = ref<readonly { field: string; message: string }[]>([]);
+const capabilityAttempts = ref(0);
 
 function submitForm(): void {
   errors.value = [{ field: 'customer-name', message: '请输入客户名称' }];
+}
+
+function attemptCapabilityAction(): void {
+  capabilityAttempts.value += 1;
 }
 </script>
 
@@ -55,6 +61,31 @@ function submitForm(): void {
         提交表单
       </button>
     </div>
+
+    <CapabilityGate
+      v-slot="{ disabled, reasonId }"
+      :capabilities="[]"
+      capability="customer.update"
+      display="disable"
+      reason="当前身份不能编辑客户"
+    >
+      <button
+        class="button button--quiet"
+        type="button"
+        data-testid="capability-action"
+        :disabled="disabled"
+        :aria-describedby="reasonId"
+        @click="attemptCapabilityAction"
+      >
+        禁用的客户操作
+      </button>
+    </CapabilityGate>
+    <output
+      data-testid="capability-attempts"
+      aria-live="polite"
+    >
+      {{ capabilityAttempts }}
+    </output>
 
     <FormErrorSummary :errors="errors" />
     <form

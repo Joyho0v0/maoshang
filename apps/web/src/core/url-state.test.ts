@@ -1,6 +1,19 @@
 import { parseUrlState, serializeUrlState } from './url-state';
 
 describe('URL state privacy boundary', () => {
+  it('round-trips the frozen opaque cursor, multi-field sort, and UUIDv7 owner id contract', () => {
+    const sort = '-updatedAt,-id';
+    const cursor = 'x'.repeat(512);
+    const ownerId = '018f3c2e-7b1a-7abc-8def-0123456789ab';
+    const state = { sort, cursor, filter: { ownerId } };
+
+    const serialized = serializeUrlState(state);
+    expect(serialized.get('sort')).toBe(sort);
+    expect(serialized.get('cursor')).toBe(cursor);
+    expect(serialized.get('filter[ownerId]')).toBe(ownerId);
+    expect(parseUrlState(serialized)).toEqual(state);
+  });
+
   it('serializes only allowlisted non-sensitive filter state', () => {
     const query = serializeUrlState({
       tab: 'orders',
@@ -39,8 +52,8 @@ describe('URL state privacy boundary', () => {
   it.each([
     { state: { tab: 'person@example.test' }, key: 'tab' },
     { state: { sort: 'contact name' }, key: 'sort' },
-    { state: { cursor: 'cursor@example.test' }, key: 'cursor' },
-    { state: { cursor: 'x'.repeat(257) }, key: 'cursor' },
+    { state: { cursor: '' }, key: 'cursor' },
+    { state: { cursor: 'x'.repeat(513) }, key: 'cursor' },
     { state: { filter: { status: 'secret filename.pdf' } }, key: 'filter[status]' },
     { state: { filter: { type: 'contact@example.test' } }, key: 'filter[type]' },
     { state: { filter: { state: 'free text with spaces' } }, key: 'filter[state]' },
@@ -55,7 +68,7 @@ describe('URL state privacy boundary', () => {
     const state = parseUrlState(new URLSearchParams([
       ['tab', 'customer@example.test'],
       ['sort', 'free text'],
-      ['cursor', 'cursor@example.test'],
+      ['cursor', ''],
       ['filter[status]', 'secret filename.pdf'],
       ['filter[ownerId]', 'not-a-uuid'],
     ]));

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import {
   browserHarnessScenarios,
   stateHarnessCases,
@@ -24,5 +27,15 @@ describe('shared UI harness', () => {
     expect(new Set(browserHarnessScenarios.map((scenario) => scenario.path))).toEqual(
       new Set(['/workspace', '/loading', '/empty', '/error', '/__ui-harness']),
     );
+  });
+
+  it('uses bounded route readiness and rejects browser wait timeouts', () => {
+    const webRoot = process.cwd().endsWith('/apps/web') ? process.cwd() : join(process.cwd(), 'apps/web');
+    const source = readFileSync(join(webRoot, 'scripts/chromium-harness.mjs'), 'utf8');
+
+    expect(source).toContain('waitForRouteReady');
+    expect(source).toContain('waitForSelectors');
+    expect(source).toContain('eventReject(new Error');
+    expect(source).not.toContain('await delay(250)');
   });
 });
