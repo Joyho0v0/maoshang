@@ -68,11 +68,14 @@ describe('domain vertical-slice pages', () => {
 
     const sku = await mountPage(CatalogFormPage, '/catalog/skus/new');
     expect((sku.get('#catalog-product').element as HTMLInputElement).value).toBe('');
+    expect(sku.get('#catalog-product').element.tagName).toBe('SELECT');
 
     const order = await mountPage(OrderFormPage, '/orders/new');
     expect((order.get('#order-customer').element as HTMLInputElement).value).toBe('');
     expect((order.get('#order-sku').element as HTMLInputElement).value).toBe('');
     expect((order.get('#order-no').element as HTMLInputElement).value).toBe('');
+    expect(order.get('#order-customer').element.tagName).toBe('SELECT');
+    expect(order.get('#order-sku').element.tagName).toBe('SELECT');
   });
 
   it('collects reject reason before a customer command and associates form errors', async () => {

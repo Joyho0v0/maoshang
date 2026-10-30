@@ -26,6 +26,11 @@ const itemQuery = useQuery<ResourceResult<Product> | ResourceResult<Sku>>({
   queryFn: () => isSku.value ? api.getSku(id.value ?? '') : api.getProduct(id.value ?? ''),
   enabled: computed(() => isEdit.value),
 });
+const productsQuery = useQuery({
+  queryKey: ['catalog-form-products'],
+  queryFn: () => api.listProducts(),
+  enabled: computed(() => isSku.value && !isEdit.value),
+});
 const name = ref('');
 const code = ref('');
 const unit = ref('件');
@@ -174,16 +179,35 @@ function recoverPending(): void {
           :aria-describedby="errors.some((error) => error.field === 'catalog-code') ? formErrorId('catalog-code') : undefined"
         >
         <template v-if="isSku">
-          <label for="catalog-product">商品 UUID</label>
-          <input
+          <label for="catalog-product">商品</label>
+          <select
+            v-if="!isEdit"
             id="catalog-product"
             v-model="productId"
             name="productId"
             autocomplete="off"
-            :readonly="isEdit"
-            :aria-readonly="isEdit"
             :aria-invalid="errors.some((error) => error.field === 'catalog-product')"
             :aria-describedby="errors.some((error) => error.field === 'catalog-product') ? formErrorId('catalog-product') : undefined"
+          >
+            <option value="">
+              请选择已授权商品
+            </option>
+            <option
+              v-for="product in productsQuery.data.value?.data ?? []"
+              :key="product.id"
+              :value="product.id"
+            >
+              {{ product.name }}（{{ product.productCode }}）
+            </option>
+          </select>
+          <input
+            v-else
+            id="catalog-product"
+            :value="productId"
+            name="productId"
+            autocomplete="off"
+            readonly
+            aria-readonly="true"
           >
           <label for="catalog-price">价格（DecimalString）</label>
           <input

@@ -21,6 +21,16 @@ const queryClient = useQueryClient();
 const id = computed(() => routeString(route.params.id));
 const isEdit = computed(() => id.value !== undefined);
 const orderQuery = useQuery({ queryKey: computed(() => ['order', id.value]), queryFn: () => api.getOrder(id.value ?? ''), enabled: computed(() => isEdit.value) });
+const customersQuery = useQuery({
+  queryKey: ['order-form-customers'],
+  queryFn: () => api.listCustomers(),
+  enabled: computed(() => !isEdit.value),
+});
+const skusQuery = useQuery({
+  queryKey: ['order-form-skus'],
+  queryFn: () => api.listSkus(),
+  enabled: computed(() => !isEdit.value),
+});
 const customerId = ref('');
 const orderNo = ref('');
 const currency = ref('CNY');
@@ -161,8 +171,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
           :aria-describedby="errors.some((error) => error.field === 'order-no') ? formErrorId('order-no') : undefined"
         >
         <template v-if="!isEdit">
-          <label for="order-customer">客户 UUID</label>
-          <input
+          <label for="order-customer">客户</label>
+          <select
             id="order-customer"
             v-model="customerId"
             name="customerId"
@@ -170,8 +180,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
             :aria-invalid="errors.some((error) => error.field === 'order-customer')"
             :aria-describedby="errors.some((error) => error.field === 'order-customer') ? formErrorId('order-customer') : undefined"
           >
-          <label for="order-sku">SKU UUID</label>
-          <input
+            <option value="">
+              请选择已授权客户
+            </option>
+            <option
+              v-for="customer in customersQuery.data.value?.data ?? []"
+              :key="customer.id"
+              :value="customer.id"
+            >
+              {{ customer.name ?? customer.id }}
+            </option>
+          </select>
+          <label for="order-sku">SKU</label>
+          <select
             id="order-sku"
             v-model="skuId"
             name="skuId"
@@ -179,6 +200,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
             :aria-invalid="errors.some((error) => error.field === 'order-sku')"
             :aria-describedby="errors.some((error) => error.field === 'order-sku') ? formErrorId('order-sku') : undefined"
           >
+            <option value="">
+              请选择已授权 SKU
+            </option>
+            <option
+              v-for="sku in skusQuery.data.value?.data ?? []"
+              :key="sku.id"
+              :value="sku.id"
+            >
+              {{ sku.name }}（{{ sku.skuCode }}）
+            </option>
+          </select>
           <label for="order-quantity">数量（DecimalString）</label>
           <input
             id="order-quantity"
