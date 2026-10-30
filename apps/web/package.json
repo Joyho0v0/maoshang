@@ -3,8 +3,21 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "packageManager": "npm@11.6.2",
   "engines": {
-    "node": ">=24.0.0 <25.0.0"
+    "node": ">=22.22.3"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "22.22.3",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": "11.6.2",
+      "onFail": "error"
+    }
   },
   "scripts": {
     "dev": "vite",
@@ -27,7 +40,7 @@
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
-    "@types/node": "24.19.2",
+    "@types/node": "22.10.2",
     "@typescript-eslint/parser": "8.18.0",
     "@vitejs/plugin-vue": "5.2.1",
     "@vue/test-utils": "2.4.6",

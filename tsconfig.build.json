@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "rootDir": ".",
+    "outDir": "dist",
+    "noEmitOnError": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "resolveJsonModule": true,
+    "types": ["node"]
+  },
+  "include": ["apps/api/src/**/*.ts", "apps/worker/src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "apps/web", "tests"]
+}
