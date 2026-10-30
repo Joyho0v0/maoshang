@@ -3,7 +3,13 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**', 'app.js', 'packages/contracts/openapi/generated.ts'],
+    ignores: [
+      'dist/**',
+      'apps/web/dist/**',
+      'node_modules/**',
+      'app.js',
+      'packages/contracts/openapi/generated.ts',
+    ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
