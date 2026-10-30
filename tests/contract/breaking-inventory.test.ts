@@ -12,7 +12,7 @@ import {
 
 const liveInventoryPath = new URL('../../packages/contracts/openapi/breaking-inventory.json', import.meta.url);
 const liveDecisionsPath = new URL('../../packages/contracts/openapi/breaking-decisions.json', import.meta.url);
-const promotionRecordPath = new URL('../../packages/contracts/openapi/audit/baseline-promotions/2026-10-30-session-identity/promotion-record.json', import.meta.url);
+const promotionRecordPath = new URL('../../packages/contracts/openapi/audit/baseline-promotions/2026-10-31-files-complete-404/promotion-record.json', import.meta.url);
 const archiveDirectory = new URL('../../packages/contracts/openapi/audit/baseline-promotions/2026-10-30-session-identity/', import.meta.url);
 
 type SourceProvenance = {
@@ -94,7 +94,7 @@ type DecisionManifest = {
   decisions: Record<string, ManifestDecision>;
 };
 
-it('keeps the promoted required Session identity inventory and digests auditable', async () => {
+it('keeps the promoted completeUpload 404 inventory and digests auditable', async () => {
   const [inventoryRaw, decisionsRaw, recordRaw] = await Promise.all([
     readFile(liveInventoryPath),
     readFile(liveDecisionsPath),
@@ -115,10 +115,10 @@ it('keeps the promoted required Session identity inventory and digests auditable
   expect(inventoryRaw.toString('utf8')).toBe(JSON.stringify(persisted) + '\n');
   expect(inventoryRaw.subarray(-1)[0]).toBe(10);
   expect(persisted.formatVersion).toBe(3);
-  expect(persisted.baseline.digest).toBe('aa81c1b5d6de39a808e682fcd2c60cd387ae0719e5bd2ae0ea3ef1e1624bd29f');
+  expect(persisted.baseline.digest).toBe('a3e5168ac3346ac72d3d06aa9d67b4c52f893398c64ed80da71973e923be843c');
   expect(persisted.candidate.sha256).toBe(persisted.baseline.digest);
-  expect(persisted.candidate.generatedSha256).toBe('ea9e00ccb78daf8ec8121e2a4e6fe12859beceb20992c764dccc2d74d089944a');
-  expect(persisted.candidate.generatedClientSha256).toBe('d4b5144d568a460a1b0bae89772fd519eb95ef6747d3cb95fa04e6e810907044');
+  expect(persisted.candidate.generatedSha256).toBe('0cf5340ae26aecfd24d0f7a1ce433ccd2450c9c65f1183dd5b19ea9d910d4821');
+  expect(persisted.candidate.generatedClientSha256).toBe('b4a017cef65a11018f70321f624e3456708d55fdea638b9683a57fb610b5712c');
   expect(persisted.comparison.mode).toBe('content-identity');
   expect(persisted.comparison.comparatorExecuted).toBe(false);
   expect(persisted.comparison.bytesEqual).toBe(true);
@@ -139,7 +139,7 @@ it('keeps the promoted required Session identity inventory and digests auditable
   expect(candidateAndBaseline[0].equals(candidateAndBaseline[1])).toBe(true);
   expect(record.status).toBe('implemented-awaiting-independent-acceptance');
   expect(record.baselineTransition).toEqual(expect.objectContaining({
-    fromSha256: '149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984',
+    fromSha256: 'aa81c1b5d6de39a808e682fcd2c60cd387ae0719e5bd2ae0ea3ef1e1624bd29f',
     toSha256: persisted.candidate.sha256,
     candidateSha256: persisted.candidate.sha256,
   }));
