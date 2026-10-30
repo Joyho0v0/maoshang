@@ -15,6 +15,110 @@ const liveInventoryPath = new URL('../../packages/contracts/openapi/breaking-inv
 const liveDecisionsPath = new URL('../../packages/contracts/openapi/breaking-decisions.json', import.meta.url);
 const promotionRecordPath = new URL('../../packages/contracts/openapi/audit/baseline-promotions/2026-10-29-joint-contract-v1/promotion-record.json', import.meta.url);
 const archiveDirectory = new URL('../../packages/contracts/openapi/audit/baseline-promotions/2026-10-29-joint-contract-v1/', import.meta.url);
+
+type SourceProvenance = {
+  revision: string;
+  sourceSha256: string;
+};
+
+type CommandProvenance = SourceProvenance & {
+  command: string;
+};
+
+type InventoryEntry = {
+  id: string;
+  jsonPath: string;
+  reason: string;
+  ownership: { decisionOwner: string[] };
+  disposition: { status: string; action: string };
+  authorization: { requiredApprovers: string[] };
+  verification: {
+    evidence: string[];
+    affectedPaths: string[];
+    affectedPathGroupId: string;
+    comparatorIdentity: string;
+  };
+  oldValue: { sha256: string };
+  newValue: { sha256: string };
+};
+
+type InventoryDocument = {
+  formatVersion: number;
+  purpose: string;
+  baseline: { revision: string; digest: string; path: string };
+  candidate: {
+    revision: string;
+    sha256: string;
+    generatedSha256: string;
+    generatedClientSha256: string;
+    path: string;
+  };
+  comparator: CommandProvenance;
+  generator: CommandProvenance;
+  contentIdentity: SourceProvenance | null;
+  comparison: {
+    mode: string;
+    comparatorExecuted: boolean;
+    baseline: { sha256: string; byteLength: number };
+    candidate: { sha256: string; byteLength: number };
+    bytesEqual: boolean;
+    referenceClosure: { policy: string; result: string; violationKinds: string[] };
+    shortcutReason: string;
+  } | null;
+  count: number;
+  inventoryMethod: string;
+  promotionStatus: string;
+  affectedPathGroups: Record<string, string[]>;
+  valueStore: Record<string, unknown>;
+  entries: InventoryEntry[];
+};
+
+type LiveInventoryDocument = Omit<InventoryDocument, 'contentIdentity' | 'comparison'> & {
+  contentIdentity: SourceProvenance;
+  comparison: NonNullable<InventoryDocument['comparison']>;
+};
+
+type ManifestDecision = {
+  decision: 'accept-semantic-direction' | 'reject' | 'pending';
+  owner: string[];
+  evidence: string[];
+  promotionAuthorized: boolean;
+};
+
+type DecisionManifest = {
+  formatVersion: number;
+  baselineDigest: string;
+  candidateDigest: string;
+  comparatorRevision: string;
+  comparatorSourceSha256: string;
+  inventoryDigest: string;
+  decisions: Record<string, ManifestDecision>;
+};
+
+type DispositionDecision = {
+  disposition: string;
+  evidenceGroup: string;
+  exactComparatorIdentity: string;
+  explicitRationale: string | null;
+  inventoryId: string;
+  priorDisposition: string;
+  promotionAuthorized: boolean;
+};
+
+type DispositionPackage = {
+  packageType: string;
+  semanticDisposition: string;
+  status: string;
+  decisions: Record<string, DispositionDecision>;
+  evidenceGroups: Record<string, unknown>;
+  sourceDecisionCounts: {
+    'accept-semantic-direction': number;
+    reject: number;
+    pending: number;
+  };
+  gates: Record<string, string>;
+};
+
 const expectedPromotionRecord = {
   formatVersion: 1,
   recordType: 'openapi-baseline-promotion',
@@ -122,9 +226,9 @@ it('keeps canonical live zero-diff inventory, decisions, and promotion record au
     readFile(liveDecisionsPath),
     readFile(promotionRecordPath),
   ]);
-  const persisted = JSON.parse(inventoryRaw.toString('utf8')) as Record<string, any>;
-  const manifest = JSON.parse(decisionsRaw.toString('utf8')) as Record<string, any>;
-  const promotionRecord = JSON.parse(recordRaw.toString('utf8')) as Record<string, any>;
+  const persisted = JSON.parse(inventoryRaw.toString('utf8')) as LiveInventoryDocument;
+  const manifest = JSON.parse(decisionsRaw.toString('utf8')) as DecisionManifest;
+  const promotionRecord = JSON.parse(recordRaw.toString('utf8')) as typeof expectedPromotionRecord;
 
   expect(inventoryRaw.byteLength).toBe(2376);
   expect(createHash('sha256').update(inventoryRaw).digest('hex')).toBe('88282c07f858d7fb3fe25130ed9c2786774813ab6cf9e411b5f3da6f4387fa2c');
@@ -271,9 +375,9 @@ it('keeps immutable pre-promotion inventory, decisions, and disposition evidence
   const archiveInventoryRaw = await readFile(new URL('breaking-inventory.before.json', archiveDirectory));
   const archiveDecisionsRaw = await readFile(new URL('breaking-decisions.before.json', archiveDirectory));
   const dispositionRaw = await readFile(new URL('contract-disposition-package.json', archiveDirectory));
-  const archiveInventory = JSON.parse(archiveInventoryRaw.toString('utf8')) as Record<string, any>;
-  const archiveDecisions = JSON.parse(archiveDecisionsRaw.toString('utf8')) as Record<string, any>;
-  const disposition = JSON.parse(dispositionRaw.toString('utf8')) as Record<string, any>;
+  const archiveInventory = JSON.parse(archiveInventoryRaw.toString('utf8')) as InventoryDocument;
+  const archiveDecisions = JSON.parse(archiveDecisionsRaw.toString('utf8')) as DecisionManifest;
+  const disposition = JSON.parse(dispositionRaw.toString('utf8')) as DispositionPackage;
 
   const archiveBaselineDigest = createHash('sha256').update(archiveBaselineRaw).digest('hex');
   expect(archiveBaselineDigest).toBe('9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25');
@@ -286,15 +390,15 @@ it('keeps immutable pre-promotion inventory, decisions, and disposition evidence
   expect(archiveInventory.count).toBe(2015);
   expect(archiveInventory.baseline.digest).toBe('9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25');
   expect(archiveInventory.entries).toHaveLength(2015);
-  expect(new Set(archiveInventory.entries.map((entry: any) => entry.jsonPath)).size).toBe(2015);
-  expect(new Set(archiveInventory.entries.map((entry: any) => entry.verification.comparatorIdentity)).size).toBe(2015);
-  expect(archiveInventory.entries.map((entry: any) => entry.id)).toEqual(Array.from({ length: 2015 }, (_, index) => `BRK-${String(index + 1).padStart(3, '0')}`));
-  expect(archiveInventory.entries.some((entry: any) => entry.jsonPath.startsWith('root.paths./auth/sessions.post.responses.403'))).toBe(true);
-  expect(archiveInventory.entries.some((entry: any) => entry.jsonPath.startsWith('root.paths./users/{id}.get.responses.200.content.application/json.schema.href'))).toBe(true);
-  expect(archiveInventory.entries.some((entry: any) => entry.jsonPath.startsWith('root.paths./users/{id}.get.responses.404'))).toBe(true);
-  expect(archiveInventory.entries.some((entry: any) => entry.jsonPath.startsWith('root.paths./organizations/{id}/users.post.responses.202'))).toBe(true);
+  expect(new Set(archiveInventory.entries.map((entry: InventoryEntry) => entry.jsonPath)).size).toBe(2015);
+  expect(new Set(archiveInventory.entries.map((entry: InventoryEntry) => entry.verification.comparatorIdentity)).size).toBe(2015);
+  expect(archiveInventory.entries.map((entry: InventoryEntry) => entry.id)).toEqual(Array.from({ length: 2015 }, (_, index) => `BRK-${String(index + 1).padStart(3, '0')}`));
+  expect(archiveInventory.entries.some((entry: InventoryEntry) => entry.jsonPath.startsWith('root.paths./auth/sessions.post.responses.403'))).toBe(true);
+  expect(archiveInventory.entries.some((entry: InventoryEntry) => entry.jsonPath.startsWith('root.paths./users/{id}.get.responses.200.content.application/json.schema.href'))).toBe(true);
+  expect(archiveInventory.entries.some((entry: InventoryEntry) => entry.jsonPath.startsWith('root.paths./users/{id}.get.responses.404'))).toBe(true);
+  expect(archiveInventory.entries.some((entry: InventoryEntry) => entry.jsonPath.startsWith('root.paths./organizations/{id}/users.post.responses.202'))).toBe(true);
   expect(Object.keys(archiveInventory.affectedPathGroups).length).toBeGreaterThan(0);
-  expect(Object.values(archiveInventory.affectedPathGroups).some((paths: any) => paths.length > 1)).toBe(true);
+  expect(Object.values(archiveInventory.affectedPathGroups).some((paths: string[]) => paths.length > 1)).toBe(true);
   expect(Object.keys(archiveInventory.valueStore).length).toBeGreaterThan(0);
   for (const entry of archiveInventory.entries) {
     const oldValue = archiveInventory.valueStore[entry.oldValue.sha256];
@@ -329,12 +433,12 @@ it('keeps immutable pre-promotion inventory, decisions, and disposition evidence
   expect(archiveDecisions.inventoryDigest).toBe(createHash('sha256').update(archiveInventoryRaw).digest('hex'));
   const archivedDecisionKeys = Object.keys(archiveDecisions.decisions);
   expect(archivedDecisionKeys).toHaveLength(2015);
-  expect(Object.values(archiveDecisions.decisions).filter((decision: any) => decision.decision === 'accept-semantic-direction')).toHaveLength(2015);
-  expect(Object.values(archiveDecisions.decisions).filter((decision: any) => decision.decision === 'reject')).toHaveLength(0);
-  expect(Object.values(archiveDecisions.decisions).filter((decision: any) => decision.decision === 'pending')).toHaveLength(0);
-  expect(Object.values(archiveDecisions.decisions).filter((decision: any) => decision.promotionAuthorized === false)).toHaveLength(2015);
-  expect(Object.values(archiveDecisions.decisions).filter((decision: any) => decision.promotionAuthorized === true)).toHaveLength(0);
-  expect(Object.values(archiveDecisions.decisions).every((decision: any) => decision.owner.length > 0 && decision.evidence.length > 0)).toBe(true);
+  expect(Object.values(archiveDecisions.decisions).filter((decision: ManifestDecision) => decision.decision === 'accept-semantic-direction')).toHaveLength(2015);
+  expect(Object.values(archiveDecisions.decisions).filter((decision: ManifestDecision) => decision.decision === 'reject')).toHaveLength(0);
+  expect(Object.values(archiveDecisions.decisions).filter((decision: ManifestDecision) => decision.decision === 'pending')).toHaveLength(0);
+  expect(Object.values(archiveDecisions.decisions).filter((decision: ManifestDecision) => decision.promotionAuthorized === false)).toHaveLength(2015);
+  expect(Object.values(archiveDecisions.decisions).filter((decision: ManifestDecision) => decision.promotionAuthorized === true)).toHaveLength(0);
+  expect(Object.values(archiveDecisions.decisions).every((decision: ManifestDecision) => decision.owner.length > 0 && decision.evidence.length > 0)).toBe(true);
 
   expect(disposition.packageType).toBe('system-contract-disposition');
   expect(disposition.semanticDisposition).toContain('All 2015 exact comparator identities are accepted as the semantic direction');
@@ -343,9 +447,9 @@ it('keeps immutable pre-promotion inventory, decisions, and disposition evidence
   expect(Object.keys(disposition.evidenceGroups)).toHaveLength(3);
   expect(disposition.sourceDecisionCounts).toEqual({ 'accept-semantic-direction': 26, reject: 4, pending: 1985 });
   expect(disposition.gates.deployment).toBe('Closed.');
-  const inventoryIdentities = new Set(archiveInventory.entries.map((entry: any) => entry.verification.comparatorIdentity));
+  const inventoryIdentities = new Set(archiveInventory.entries.map((entry: InventoryEntry) => entry.verification.comparatorIdentity));
   const decisionIdentities = new Set(archivedDecisionKeys);
-  const packageDecisionEntries = Object.entries(disposition.decisions) as Array<[string, any]>;
+  const packageDecisionEntries = Object.entries(disposition.decisions) as Array<[string, DispositionDecision]>;
   const packageIdentities = new Set(packageDecisionEntries.map(([, decision]) => decision.exactComparatorIdentity));
   const packageKeys = new Set(packageDecisionEntries.map(([identity]) => identity));
   expect(decisionIdentities).toEqual(inventoryIdentities);
@@ -353,7 +457,7 @@ it('keeps immutable pre-promotion inventory, decisions, and disposition evidence
   expect(packageKeys).toEqual(inventoryIdentities);
   expect(packageKeys.size).toBe(2015);
   expect(new Set(packageDecisionEntries.map(([, decision]) => decision.inventoryId)).size).toBe(2015);
-  const entryById = new Map<string, any>(archiveInventory.entries.map((entry: any) => [entry.id, entry] as [string, any]));
+  const entryById = new Map<string, InventoryEntry>(archiveInventory.entries.map((entry: InventoryEntry) => [entry.id, entry]));
   expect(packageDecisionEntries.every(([identity, decision]) => {
     const entry = entryById.get(decision.inventoryId);
     return identity === decision.exactComparatorIdentity
@@ -368,9 +472,9 @@ it('keeps immutable pre-promotion inventory, decisions, and disposition evidence
 });
 
 it('keeps live zero-diff decisions in strict one-to-one lockstep with live inventory', async () => {
-  const persisted = JSON.parse((await readFile(liveInventoryPath)).toString('utf8')) as Record<string, any>;
-  const manifest = JSON.parse((await readFile(liveDecisionsPath)).toString('utf8')) as Record<string, any>;
-  const identities = persisted.entries.map((entry: any) => entry.verification?.comparatorIdentity).filter(Boolean);
+  const persisted = JSON.parse((await readFile(liveInventoryPath)).toString('utf8')) as LiveInventoryDocument;
+  const manifest = JSON.parse((await readFile(liveDecisionsPath)).toString('utf8')) as DecisionManifest;
+  const identities = persisted.entries.map((entry: InventoryEntry) => entry.verification.comparatorIdentity);
   expect(persisted.count).toBe(0);
   expect(persisted.entries).toEqual([]);
   expect(Object.keys(manifest.decisions)).toEqual(identities);
@@ -854,10 +958,6 @@ it('rejects external and non-string references without parsing them as identity 
   expect(nonString.decision).toBe('semantic-comparator');
   expect(nonString.referenceClosure).toMatchObject({ result: 'not-local', violationKinds: ['non-string-reference'] });
 });
-
-function latestRevision(path: string): string {
-  return execFileSync('git', ['log', '-1', '--format=%H', '--', path], { encoding: 'utf8' }).trim();
-}
 
 function gitSourceDigest(revision: string, path: string): string {
   return createHash('sha256').update(execFileSync('git', ['show', `${revision}:${path}`])).digest('hex');
