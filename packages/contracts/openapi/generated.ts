@@ -1595,11 +1595,12 @@ export interface components {
         };
         Session: {
             user: components["schemas"]["Resource"];
+            organizationId: components["schemas"]["Uuid"];
             capabilities: components["schemas"]["Capability"][];
             scopeSummary: components["schemas"]["JsonObject"];
             csrfToken: string;
-            authzVersion?: number;
-            sessionEpoch?: number;
+            authzVersion: number;
+            sessionEpoch: number;
         };
         CsrfToken: {
             csrfToken: string;

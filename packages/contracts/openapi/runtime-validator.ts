@@ -35,7 +35,9 @@ export function createContractValidator(document: Record<string, unknown>, optio
         validate = ajv.compile({ $ref: `#/components/schemas/${schemaName}` });
         validators.set(schemaName, validate);
       }
-      const valid = validate(value) && (schemaName === 'UploadIntent' || schemaName === 'DownloadIntent' ? validateIntentPayload(value, options.now, schemaName) : true);
+      const valid = validate(value)
+        && (schemaName === 'UploadIntent' || schemaName === 'DownloadIntent' ? validateIntentPayload(value, options.now, schemaName) : true)
+        && (schemaName === 'Session' ? validateSessionOrganizationIdentity(value) : true);
       errors = validate.errors;
       return valid;
     },
@@ -49,6 +51,22 @@ export function createContractValidator(document: Record<string, unknown>, optio
       return errors;
     },
   };
+}
+
+function validateSessionOrganizationIdentity(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.organizationId !== 'string') return false;
+  return allOrganizationIdentifiersMatch(value, value.organizationId, new WeakSet<object>());
+}
+
+function allOrganizationIdentifiersMatch(value: unknown, expected: string, seen: WeakSet<object>): boolean {
+  if (!isRecord(value)) return true;
+  if (seen.has(value)) return true;
+  seen.add(value);
+  for (const [key, nested] of Object.entries(value)) {
+    if (key === 'organizationId' && (typeof nested !== 'string' || nested !== expected)) return false;
+    if (!allOrganizationIdentifiersMatch(nested, expected, seen)) return false;
+  }
+  return true;
 }
 
 export function validateIntentPayload(value: unknown, now: () => Date = () => new Date(), intentKind?: 'UploadIntent' | 'DownloadIntent'): boolean {
