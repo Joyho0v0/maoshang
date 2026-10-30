@@ -73,4 +73,54 @@ describe('Postgres Files store invariants', () => {
     await expect(store.resolvePrimaryBusinessGroup(client as never, organizationId, userId, [groupId])).resolves.toBe(groupId);
     expect(values).toEqual([organizationId, userId, [groupId]]);
   });
+
+  it('explicitly projects upload intent expiry and status for completion and worker snapshots', async () => {
+    const queries: string[] = [];
+    const row = {
+      id: fileId,
+      organization_id: organizationId,
+      created_by: userId,
+      business_group_id: groupId,
+      object_key: 'private/object-key-with-enough-length',
+      original_name: 'receipt.pdf',
+      declared_content_type: 'application/pdf',
+      detected_content_type: null,
+      declared_size_bytes: 12,
+      actual_size_bytes: null,
+      declared_checksum: null,
+      actual_checksum: null,
+      status: FileState.PENDING_UPLOAD,
+      metadata: {},
+      version: 1,
+      created_at: new Date(),
+      updated_at: new Date(),
+      intent_expires_at: new Date(Date.now() + 60_000),
+      intent_status: 'ACTIVE' as const,
+    };
+    const client = {
+      query: async (text: string) => {
+        queries.push(text);
+        return { rows: [row], rowCount: 1 };
+      },
+    };
+    const pool = {
+      query: async (text: string) => {
+        queries.push(text);
+        return { rows: [row], rowCount: 1 };
+      },
+    } as unknown as Pool;
+    const store = new PostgresFilesStore(pool);
+
+    const completion = await store.findCompletionSnapshot(client as never, organizationId, fileId);
+    const worker = await store.findWorkerFile(organizationId, fileId);
+
+    expect(completion).toMatchObject({ intentStatus: 'ACTIVE', expiresAt: row.intent_expires_at });
+    expect(worker).toMatchObject({ intentStatus: 'ACTIVE', expiresAt: row.intent_expires_at });
+    expect(queries.filter((text) => text.includes('files.upload_intent'))).toHaveLength(2);
+    for (const text of queries) {
+      if (!text.includes('files.upload_intent')) continue;
+      expect(text).toMatch(/ui\.expires_at\s+AS\s+intent_expires_at/i);
+      expect(text).toMatch(/ui\.status\s+AS\s+intent_status/i);
+    }
+  });
 });

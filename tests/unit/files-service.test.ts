@@ -101,4 +101,40 @@ describe('Files service security and command boundaries', () => {
 
     await expect(service.createDownloadIntent(downloadPrincipal(), fileId, 'request-1')).rejects.toThrow();
   });
+
+  it('returns a declared state conflict when an upload-intent replay targets a file already advanced by completion', async () => {
+    const advanced = snapshot();
+    advanced.file.status = FileState.SCANNING;
+    const store = { findUploadIntentForReplay: async () => advanced } as unknown as PostgresFilesStore;
+    const service = new FilesService(store, {} as ObjectStorageAdapter);
+
+    await expect(service.replayUploadIntent(principal(), fileId, 'request-1', {
+      status: 201,
+      body: {},
+      resource: { type: 'FILE', id: fileId, version: 2, href: `/api/v1/files/${fileId}` },
+    })).rejects.toSatisfy((error: unknown) => error instanceof FileCommandFailureError && error.problem.status === 409 && error.problem.code === 'STATE_CONFLICT');
+  });
+
+  it.each([FileState.AVAILABLE, FileState.REJECTED, FileState.QUARANTINED])('returns a declared state conflict when replay targets %s', async (status) => {
+    const advanced = snapshot();
+    advanced.file.status = status;
+    const service = new FilesService({ findUploadIntentForReplay: async () => advanced } as unknown as PostgresFilesStore, {} as ObjectStorageAdapter);
+
+    await expect(service.replayUploadIntent(principal(), fileId, 'request-1', {
+      status: 201,
+      body: {},
+      resource: { type: 'FILE', id: fileId, version: 2, href: `/api/v1/files/${fileId}` },
+    })).rejects.toSatisfy((error: unknown) => error instanceof FileCommandFailureError && error.problem.status === 409 && error.problem.code === 'STATE_CONFLICT');
+  });
+
+  it('uses declared authorization failure when the principal can no longer create files', async () => {
+    const service = new FilesService({ findUploadIntentForReplay: async () => snapshot() } as unknown as PostgresFilesStore, {} as ObjectStorageAdapter);
+    const revoked = { ...principal(), permissions: new Set<string>() };
+
+    await expect(service.replayUploadIntent(revoked, fileId, 'request-1', {
+      status: 201,
+      body: {},
+      resource: { type: 'FILE', id: fileId, version: 1, href: `/api/v1/files/${fileId}` },
+    })).rejects.toSatisfy((error: unknown) => error instanceof FileCommandFailureError && error.problem.status === 403 && error.problem.code === 'PERMISSION_DENIED');
+  });
 });

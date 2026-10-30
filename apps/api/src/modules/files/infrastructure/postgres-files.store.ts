@@ -95,7 +95,7 @@ interface FileRow extends QueryResultRow {
 }
 
 interface IntentRow extends QueryResultRow {
-  expires_at: Date;
+  intent_expires_at: Date;
   intent_status: 'ACTIVE' | 'CONSUMED' | 'EXPIRED' | 'REJECTED';
 }
 
@@ -168,25 +168,25 @@ export class PostgresFilesStore {
 
   async findCompletionSnapshot(client: PoolClient, organizationId: string, fileId: string): Promise<CompletionSnapshot | undefined> {
     const result = await client.query<FileRow & IntentRow>(
-      `${fileSelect()}
+      `${fileSelect(', ui.expires_at AS intent_expires_at, ui.status AS intent_status')}
        JOIN files.upload_intent AS ui ON ui.organization_id = f.organization_id AND ui.file_id = f.id
        WHERE f.organization_id = $1 AND f.id = $2
        FOR UPDATE OF f, ui`,
       [organizationId, fileId],
     );
     const row = result.rows[0];
-    return row === undefined ? undefined : { file: mapFile(row), objectKey: row.object_key, expiresAt: row.expires_at, intentStatus: row.intent_status };
+    return row === undefined ? undefined : { file: mapFile(row), objectKey: row.object_key, expiresAt: row.intent_expires_at, intentStatus: row.intent_status };
   }
 
   async findWorkerFile(organizationId: string, fileId: string): Promise<WorkerFileSnapshot | undefined> {
     const result = await this.pool.query<FileRow & IntentRow>(
-      `${fileSelect()}
+      `${fileSelect(', ui.expires_at AS intent_expires_at, ui.status AS intent_status')}
        JOIN files.upload_intent AS ui ON ui.organization_id = f.organization_id AND ui.file_id = f.id
        WHERE f.organization_id = $1 AND f.id = $2`,
       [organizationId, fileId],
     );
     const row = result.rows[0];
-    return row === undefined ? undefined : { file: mapFile(row), objectKey: row.object_key, expiresAt: row.expires_at, intentStatus: row.intent_status };
+    return row === undefined ? undefined : { file: mapFile(row), objectKey: row.object_key, expiresAt: row.intent_expires_at, intentStatus: row.intent_status };
   }
 
   async findUploadIntentForReplay(organizationId: string, fileId: string): Promise<UploadIntentReplaySnapshot | undefined> {
@@ -405,11 +405,11 @@ export class PostgresFilesStore {
   }
 }
 
-function fileSelect(): string {
+function fileSelect(additionalColumns = ''): string {
   return `SELECT f.id, f.organization_id, f.created_by, f.business_group_id, f.object_key,
                  f.original_name, f.declared_content_type, f.detected_content_type,
                  f.declared_size_bytes, f.actual_size_bytes, f.declared_checksum,
-                 f.actual_checksum, f.status, f.metadata, f.version, f.created_at, f.updated_at
+                 f.actual_checksum, f.status, f.metadata, f.version, f.created_at, f.updated_at${additionalColumns}
             FROM files.file_object AS f`;
 }
 

@@ -161,13 +161,15 @@ export class FilesService {
   }
 
   async replayUploadIntent(principal: AuthorizationPrincipal, fileId: string, requestId: string, stored: CommandResult<unknown>): Promise<CommandResult<unknown>> {
-    this.assertActive(principal);
-    const resource = stored.resource;
-    if (resource?.type !== 'FILE' || resource.id !== fileId) throw new FileCommandFailureError(resourceNotFound(requestId));
-    const snapshot = await this.store.findUploadIntentForReplay(principal.organizationId, fileId);
-    if (snapshot === undefined || !canMutateFile(principal, snapshot.file) || snapshot.file.status !== FileState.PENDING_UPLOAD) {
-      throw new FileCommandFailureError(resourceNotFound(requestId));
+    if (principal.status !== 'ACTIVE' || !principal.permissions.has('file.create') || principal.scopes.get('FILE')?.resourceType !== 'FILE') {
+      throw new FileCommandFailureError(permissionDenied(requestId));
     }
+    const resource = stored.resource;
+    if (resource?.type !== 'FILE' || resource.id !== fileId) throw new FileCommandFailureError(fileConflict(requestId, fileId, 'UPLOAD_INTENT_UNAVAILABLE'));
+    const snapshot = await this.store.findUploadIntentForReplay(principal.organizationId, fileId);
+    if (snapshot === undefined) throw new FileCommandFailureError(fileConflict(requestId, fileId, 'UPLOAD_INTENT_UNAVAILABLE'));
+    if (!canMutateFile(principal, snapshot.file)) throw new FileCommandFailureError(permissionDenied(requestId));
+    if (snapshot.file.status !== FileState.PENDING_UPLOAD) throw new FileCommandFailureError(stateConflict(requestId, snapshot.file));
     const now = Date.now();
     if (snapshot.intentStatus !== 'ACTIVE' || snapshot.expiresAt.getTime() <= now) throw new FileCommandFailureError(fileConflict(requestId, fileId, 'UPLOAD_INTENT_EXPIRED'));
     const expiresAt = new Date(Math.min(snapshot.expiresAt.getTime(), now + UPLOAD_INTENT_TTL_MS));
