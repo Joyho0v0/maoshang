@@ -3,6 +3,7 @@ export interface OutboxEvent {
   topic: string;
   payload: Record<string, unknown>;
   claimToken?: Buffer;
+  source?: 'foundation' | 'identity';
 }
 
 export interface OutboxSource {

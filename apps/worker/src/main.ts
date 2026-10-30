@@ -3,10 +3,11 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import pg from 'pg';
 import { loadRuntimeConfig, type RuntimeConfig } from '../../api/src/config/runtime-config.js';
 import { PostgresOutboxSource } from './postgres-outbox-source.js';
+import { CombinedOutboxSource } from './combined-outbox-source.js';
 import { OutboxWorker, type EventPublisher } from './worker.js';
 
 export function buildWorker(config: RuntimeConfig, pool: pg.Pool = new pg.Pool({ connectionString: config.databaseUrl, max: 4 })): { worker: OutboxWorker; pool: pg.Pool } {
-  const source = new PostgresOutboxSource(pool);
+  const source = new CombinedOutboxSource(new PostgresOutboxSource(pool), new PostgresOutboxSource(pool, 'integration.identity_outbox_event'));
   const publisher: EventPublisher = {
     async publish(event) {
       process.stdout.write(JSON.stringify({ eventId: event.id, topic: event.topic }) + '\n');

@@ -7,6 +7,7 @@ import { AppModule } from './app.module.js';
 import { ProblemExceptionFilter } from './common/http/problem.filter.js';
 import { loadRuntimeConfig, type RuntimeConfig } from './config/runtime-config.js';
 import { RequestSafetyGuard } from './common/security/request-safety.guard.js';
+import { AuthenticationGuard } from './modules/identity/transport/authentication.guard.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse } from 'yaml';
@@ -23,7 +24,7 @@ export async function createApp(options: { config?: RuntimeConfig; env?: Record<
   await app.register(cookie as unknown as Parameters<typeof app.register>[0]);
   app.setGlobalPrefix('api/v1');
   app.useGlobalFilters(new ProblemExceptionFilter(contractValidator));
-  app.useGlobalGuards(app.get(RequestSafetyGuard));
+  app.useGlobalGuards(app.get(AuthenticationGuard), app.get(RequestSafetyGuard));
   app.useGlobalInterceptors(new ContractResponseValidationInterceptor(contractValidator), new IdempotencyExecutionInterceptor(app.get(IDEMPOTENCY_REPOSITORY), contractValidator));
   return app;
 }

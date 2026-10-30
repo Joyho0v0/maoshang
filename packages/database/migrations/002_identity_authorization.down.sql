@@ -1,0 +1,16 @@
+DROP TRIGGER IF EXISTS audit_event_immutable ON audit.audit_event;
+DROP FUNCTION IF EXISTS audit.reject_audit_mutation();
+DROP TABLE IF EXISTS audit.audit_event;
+DROP TABLE IF EXISTS integration.identity_outbox_event;
+DROP TABLE IF EXISTS iam.data_scope_group;
+DROP TABLE IF EXISTS iam.user_data_scope;
+DROP TABLE IF EXISTS iam.user_role_binding;
+DROP TABLE IF EXISTS iam.role_permission;
+DROP TABLE IF EXISTS iam.permission;
+DROP TABLE IF EXISTS iam.role;
+DROP TABLE IF EXISTS iam.session;
+DROP TABLE IF EXISTS org.position_history;
+DROP TABLE IF EXISTS org.membership;
+DROP TABLE IF EXISTS iam.user_account;
+DROP TABLE IF EXISTS org.business_group;
+DROP TABLE IF EXISTS org.organization;
