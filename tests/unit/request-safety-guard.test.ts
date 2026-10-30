@@ -66,7 +66,8 @@ describe('request safety guard operation coverage', () => {
     const csrf = new CsrfService();
     const sessionId = 'session-audit-failure';
     csrf.bootstrap(`session:${sessionId}`);
-    const guard = new RequestSafetyGuard(csrf, createContractValidator(document), { recordAuthenticationAudit: async () => { throw new Error('audit database unavailable'); } } as never);
+    const failures: Array<{ provider: string; outcome: string; requestId: string; reason: string }> = [];
+    const guard = new RequestSafetyGuard(csrf, createContractValidator(document), { recordAuthenticationAudit: async () => { throw new Error('audit database unavailable'); } } as never, (failure) => { failures.push(failure); });
 
     await expect(guard.canActivate(context({
       method: 'POST',
@@ -75,5 +76,6 @@ describe('request safety guard operation coverage', () => {
       params: {}, query: {}, headers: { 'x-csrf-token': 'wrong-token', 'idempotency-key': 'key-1' }, body: { name: 'Acme', ownerUserId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2' },
       user: { userId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' }, cookies: { session_id: sessionId },
     }))).rejects.toMatchObject({ code: 'CSRF_FAILED' });
+    expect(failures).toEqual([{ provider: 'REQUEST_SAFETY', outcome: 'DENIED', requestId: expect.any(String), reason: 'CSRF_FAILED' }]);
   });
 });

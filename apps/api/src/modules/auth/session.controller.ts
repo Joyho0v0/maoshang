@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Inject, Post, Req, Res } from '@nestjs/c
 import type { FastifyRequest } from 'fastify';
 import type { FastifyReply } from 'fastify';
 import { buildProblem, normalizeRequestId, ProblemError } from '../../common/http/problem.js';
-import { AuthenticationProviderUnavailableError, InvalidCredentialsError, LoginAttemptLimiter, SessionExpiredError, SessionService } from '../identity/application/session.service.js';
+import { AuthenticationProviderUnavailableError, InvalidCredentialsError, LoginAttemptLimiter, SessionExpiredError, SessionService, type LoginAttemptKeys } from '../identity/application/session.service.js';
 import type { SessionCredentials, SessionDocument } from '../identity/application/types.js';
 import type { RuntimeConfig } from '../../config/runtime-config.js';
 
@@ -16,15 +16,20 @@ export class SessionController {
 
   @Post('sessions')
   async createSession(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply, @Body() body: SessionCredentials): Promise<SessionDocument> {
-    const key = loginKey(request, body);
-    const allowance = this.loginLimiter.check(key);
+    const keys = loginKeys(request, body);
+    const allowance = await this.loginLimiter.check(keys);
     if (!allowance.allowed) {
       reply.header('retry-after', String(allowance.retryAfterSeconds));
       throw this.toProblem(new LoginRateLimitedError(allowance.retryAfterSeconds), request);
     }
     try {
       const created = await this.sessions.createSession(body, normalizeRequestId(request.headers['x-request-id']));
-      this.loginLimiter.recordSuccess(key);
+      try {
+        await this.loginLimiter.recordSuccess(keys.account);
+      } catch {
+        // Keep a valid authentication response independent from best-effort
+        // limiter cleanup; the IP bucket remains active for the window.
+      }
       reply
         .header('cache-control', 'no-store')
         .setCookie('session_id', created.sessionToken, {
@@ -35,7 +40,6 @@ export class SessionController {
         });
       return created.document;
     } catch (error) {
-      if (error instanceof InvalidCredentialsError) this.loginLimiter.recordFailure(key);
       throw this.toProblem(error, request);
     }
   }
@@ -77,7 +81,7 @@ export class LoginRateLimitedError extends Error {
   }
 }
 
-function loginKey(request: FastifyRequest, body: SessionCredentials): string {
+function loginKeys(request: FastifyRequest, body: SessionCredentials): LoginAttemptKeys {
   const username = typeof body.username === 'string' ? body.username.trim().toLowerCase() : '<anonymous>';
-  return `${request.ip}:${body.provider}:${username}`;
+  return { ip: `${body.provider}:${request.ip}`, account: `${body.provider}:${username}` };
 }

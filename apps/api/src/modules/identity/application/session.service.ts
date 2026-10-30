@@ -15,6 +15,7 @@ export interface AuthenticationProvider {
 export interface IdentityStore {
   findUserForProvider(provider: SessionCredentials['provider'], identity: ProviderIdentity): Promise<IdentityUser | undefined>;
   createSession(input: Omit<StoredSession, 'createdAt'>): Promise<StoredSession>;
+  createSessionWithAudit(input: Omit<StoredSession, 'createdAt'>, audit: AuthenticationAuditInput): Promise<StoredSession>;
   findSession(tokenHash: string): Promise<{ session: StoredSession; user: IdentityUser } | undefined>;
   revokeSession(tokenHash: string): Promise<void>;
   recordAuthenticationAudit?(input: AuthenticationAuditInput): Promise<void>;
@@ -28,6 +29,17 @@ export interface AuthenticationAuditInput {
   actorUserId?: string;
   reason: string;
 }
+
+export const SECURITY_AUDIT_FAILURE_REPORTER = 'SECURITY_AUDIT_FAILURE_REPORTER';
+
+export interface SecurityAuditFailure {
+  provider: AuthenticationAuditInput['provider'];
+  outcome: AuthenticationAuditInput['outcome'];
+  requestId: string;
+  reason: string;
+}
+
+export type SecurityAuditFailureReporter = (failure: SecurityAuditFailure) => void;
 
 export interface SessionCreation {
   document: SessionDocument;
@@ -66,46 +78,110 @@ const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 export interface LoginAttemptLimiterOptions {
   limit?: number;
   windowMs?: number;
+  maxKeys?: number;
   now?: () => number;
+  store?: LoginAttemptStore;
+}
+
+export interface LoginAttemptKeys {
+  ip: string;
+  account: string;
+}
+
+export interface LoginAttemptAllowance {
+  allowed: boolean;
+  retryAfterSeconds: number;
+}
+
+export interface LoginAttemptStore {
+  consume(keys: LoginAttemptKeys, limit: number, windowMs: number, now: number): Promise<LoginAttemptAllowance>;
+  clearAccount(accountKey: string): Promise<void>;
+}
+
+interface MemoryBucket {
+  attempts: number;
+  windowStartedAt: number;
+  lastSeenAt: number;
+}
+
+class MemoryLoginAttemptStore implements LoginAttemptStore {
+  private readonly buckets = new Map<string, MemoryBucket>();
+
+  constructor(private readonly maxKeys: number) {}
+
+  async consume(keys: LoginAttemptKeys, limit: number, windowMs: number, now: number): Promise<LoginAttemptAllowance> {
+    this.evictExpired(now, windowMs);
+    const bucketKeys = [`ip:${keys.ip}`, `account:${keys.account}`];
+    const buckets = bucketKeys.map((key) => this.touch(key, now, windowMs));
+    for (const bucket of buckets) bucket.attempts += 1;
+    this.evictOverflow();
+    const blocked = buckets.filter((bucket) => bucket.attempts > limit);
+    if (blocked.length === 0) return { allowed: true, retryAfterSeconds: 0 };
+    const retryAfterSeconds = Math.max(...blocked.map((bucket) => Math.max(1, Math.ceil((bucket.windowStartedAt + windowMs - now) / 1000))));
+    return { allowed: false, retryAfterSeconds };
+  }
+
+  async clearAccount(accountKey: string): Promise<void> {
+    this.buckets.delete(`account:${accountKey}`);
+  }
+
+  size(): number {
+    return this.buckets.size;
+  }
+
+  private touch(key: string, now: number, windowMs: number): MemoryBucket {
+    const existing = this.buckets.get(key);
+    if (existing !== undefined && existing.windowStartedAt + windowMs > now) {
+      existing.lastSeenAt = now;
+      return existing;
+    }
+    const bucket = { attempts: 0, windowStartedAt: now, lastSeenAt: now };
+    this.buckets.set(key, bucket);
+    return bucket;
+  }
+
+  private evictExpired(now: number, windowMs: number): void {
+    for (const [key, bucket] of this.buckets) {
+      if (bucket.windowStartedAt + windowMs <= now) this.buckets.delete(key);
+    }
+  }
+
+  private evictOverflow(): void {
+    while (this.buckets.size > this.maxKeys) {
+      const oldest = [...this.buckets.entries()].sort((left, right) => left[1].lastSeenAt - right[1].lastSeenAt)[0];
+      if (oldest === undefined) return;
+      this.buckets.delete(oldest[0]);
+    }
+  }
 }
 
 export class LoginAttemptLimiter {
-  private readonly failures = new Map<string, number[]>();
   private readonly limit: number;
   private readonly windowMs: number;
   private readonly now: () => number;
+  private readonly store: LoginAttemptStore;
 
   constructor(options: LoginAttemptLimiterOptions = {}) {
     this.limit = options.limit ?? 5;
     this.windowMs = options.windowMs ?? 60_000;
     this.now = options.now ?? (() => Date.now());
+    this.store = options.store ?? new MemoryLoginAttemptStore(options.maxKeys ?? 10_000);
     if (!Number.isInteger(this.limit) || this.limit < 1) throw new Error('Login attempt limit must be positive.');
     if (!Number.isInteger(this.windowMs) || this.windowMs < 1) throw new Error('Login attempt window must be positive.');
+    if (options.maxKeys !== undefined && (!Number.isInteger(options.maxKeys) || options.maxKeys < 2)) throw new Error('Login attempt bucket capacity must be at least two.');
   }
 
-  check(key: string): { allowed: boolean; retryAfterSeconds: number } {
-    const timestamps = this.prune(key);
-    if (timestamps.length < this.limit) return { allowed: true, retryAfterSeconds: 0 };
-    const oldest = timestamps[0] ?? this.now();
-    return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((oldest + this.windowMs - this.now()) / 1000)) };
+  check(keys: LoginAttemptKeys): Promise<LoginAttemptAllowance> {
+    return this.store.consume(keys, this.limit, this.windowMs, this.now());
   }
 
-  recordFailure(key: string): void {
-    const timestamps = this.prune(key);
-    timestamps.push(this.now());
-    this.failures.set(key, timestamps);
+  recordSuccess(accountKey: string): Promise<void> {
+    return this.store.clearAccount(accountKey);
   }
 
-  recordSuccess(key: string): void {
-    this.failures.delete(key);
-  }
-
-  private prune(key: string): number[] {
-    const cutoff = this.now() - this.windowMs;
-    const retained = (this.failures.get(key) ?? []).filter((timestamp) => timestamp > cutoff);
-    if (retained.length === 0) this.failures.delete(key);
-    else this.failures.set(key, retained);
-    return retained;
+  size(): number {
+    const store = this.store as MemoryLoginAttemptStore;
+    return typeof store.size === 'function' ? store.size() : 0;
   }
 }
 
@@ -115,6 +191,7 @@ export class SessionService {
     private readonly provider: AuthenticationProvider,
     private readonly csrf: CsrfService,
     private readonly tokenFactory: () => string = () => randomBytes(32).toString('base64url'),
+    private readonly reportAuditFailure: SecurityAuditFailureReporter = () => undefined,
   ) {}
 
   async recordSecurityAudit(input: AuthenticationAuditInput): Promise<void> {
@@ -134,20 +211,20 @@ export class SessionService {
       throw new InvalidCredentialsError();
     }
     const account = await this.store.findUserForProvider(credentials.provider, identity);
-    if (account === undefined || account.status !== 'ACTIVE') {
+    if (account === undefined || account.status !== 'ACTIVE' || account.organizationStatus !== 'ACTIVE') {
       await this.recordAudit({
         provider: credentials.provider,
         outcome: 'DENIED',
         requestId,
         ...(account === undefined ? {} : { organizationId: account.organizationId, actorUserId: account.id }),
-        reason: account === undefined ? 'identity-not-mapped' : 'account-disabled',
+        reason: account === undefined ? 'identity-not-mapped' : account.status !== 'ACTIVE' ? 'account-disabled' : 'organization-disabled',
       });
       throw new InvalidCredentialsError();
     }
 
     const sessionToken = this.tokenFactory();
     const now = new Date();
-    await this.store.createSession({
+    await this.store.createSessionWithAudit({
       id: randomUUID(),
       tokenHash: hashToken(sessionToken),
       userId: account.id,
@@ -155,8 +232,7 @@ export class SessionService {
       authzVersion: account.authzVersion,
       sessionEpoch: account.sessionEpoch,
       expiresAt: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
-    });
-    await this.recordAudit({ provider: credentials.provider, outcome: 'SUCCEEDED', requestId, organizationId: account.organizationId, actorUserId: account.id, reason: 'login-succeeded' });
+    }, { provider: credentials.provider, outcome: 'SUCCEEDED', requestId, organizationId: account.organizationId, actorUserId: account.id, reason: 'login-succeeded' });
     return {
       document: this.toDocument(account, this.csrf.bootstrap(`session:${sessionToken}`).csrfToken),
       sessionToken,
@@ -174,6 +250,7 @@ export class SessionService {
     const { session, user } = found;
     if (
       user.status !== 'ACTIVE'
+      || user.organizationStatus !== 'ACTIVE'
       || session.userId !== user.id
       || session.organizationId !== user.organizationId
       || session.authzVersion !== user.authzVersion
@@ -191,9 +268,15 @@ export class SessionService {
       await this.store.recordAuthenticationAudit?.(input);
     } catch {
       // A failed audit sink must not replace the original authentication or
-      // safety decision with a database error. The sink remains append-only
-      // when available; operational alerting belongs at the infrastructure
-      // boundary rather than exposing storage details to clients.
+      // safety decision with a database error. Report only safe metadata to
+      // the infrastructure boundary; credentials, tokens and storage details
+      // never cross this callback.
+      try {
+        this.reportAuditFailure({ provider: input.provider, outcome: input.outcome, requestId: input.requestId, reason: input.reason });
+      } catch {
+        // Observability must remain best effort and must not alter the
+        // original security decision.
+      }
     }
   }
 

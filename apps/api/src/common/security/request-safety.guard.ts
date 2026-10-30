@@ -8,7 +8,7 @@ import { operations, type OperationId } from '../../../../../packages/contracts/
 import type { ContractValidator } from '../../../../../packages/contracts/openapi/runtime-validator.js';
 import { validateOperationRequest, type ClientCallInput } from '../../../../../packages/contracts/openapi/client.js';
 import type { AuthorizationPrincipal } from '../../modules/identity/domain/authz.js';
-import type { AuthenticationAuditInput } from '../../modules/identity/application/session.service.js';
+import { SECURITY_AUDIT_FAILURE_REPORTER, type AuthenticationAuditInput, type SecurityAuditFailureReporter } from '../../modules/identity/application/session.service.js';
 
 interface PrincipalRequest extends FastifyRequest {
   user?: AuthorizationPrincipal;
@@ -20,6 +20,7 @@ export class RequestSafetyGuard implements CanActivate {
     @Inject(CsrfService) private readonly csrf: CsrfService,
     @Inject('CONTRACT_VALIDATOR') private readonly validator: ContractValidator,
     @Optional() @Inject('IDENTITY_STORE') private readonly securityAudit?: { recordAuthenticationAudit?(input: AuthenticationAuditInput): Promise<void> },
+    @Optional() @Inject(SECURITY_AUDIT_FAILURE_REPORTER) private readonly reportAuditFailure: SecurityAuditFailureReporter = () => undefined,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -109,6 +110,11 @@ export class RequestSafetyGuard implements CanActivate {
       // Preserve the original safety problem and avoid leaking audit storage
       // details. The database-backed sink is still the authoritative path
       // whenever the security audit boundary is available.
+      try {
+        this.reportAuditFailure({ provider: 'REQUEST_SAFETY', outcome: 'DENIED', requestId: normalizeRequestId(request.headers['x-request-id']), reason });
+      } catch {
+        // Reporting remains best effort so the original safety decision wins.
+      }
     }
   }
 }

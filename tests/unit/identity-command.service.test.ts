@@ -20,6 +20,7 @@ function user(id: string, overrides: Partial<IdentityUser> = {}): IdentityUser {
   return {
     id,
     organizationId,
+    organizationStatus: 'ACTIVE',
     username: `${id}@example.test`,
     displayName: id,
     status: 'ACTIVE',
@@ -152,5 +153,13 @@ describe('identity command service', () => {
     await expect(service.createUser(principal(), organizationId, { username: 'new@example.test', role: 'UNKNOWN' }, '00000000-0000-4000-8000-000000000099')).rejects.toThrow(/role/i);
     await expect(service.updateDataScopeGrants(principal(), targetId, 1, [{ scope: 'CUSTOMER:ALL_ORG' }], '00000000-0000-4000-8000-000000000099')).rejects.toThrow(/grant|scope/i);
     expect(store.audits.filter((audit) => audit.outcome === 'DENIED')).toHaveLength(2);
+  });
+
+  it('records an unknown role denial under the role grant action', async () => {
+    const store = new FakeStore();
+    const service = new IdentityCommandService(store);
+
+    await expect(service.updateRoleBindings(principal(), targetId, 1, ['UNKNOWN'], '00000000-0000-4000-8000-000000000099')).rejects.toThrow(/role/i);
+    expect(store.audits).toMatchObject([{ action: 'identity.role.grant', outcome: 'DENIED', reason: 'unknown-role' }]);
   });
 });

@@ -206,7 +206,8 @@ CREATE TABLE IF NOT EXISTS iam.user_role_binding (
 CREATE UNIQUE INDEX IF NOT EXISTS user_role_binding_active_idx ON iam.user_role_binding (organization_id, user_id, role_id) WHERE valid_to IS NULL;
 CREATE INDEX IF NOT EXISTS user_role_binding_user_idx ON iam.user_role_binding (organization_id, user_id, valid_from DESC, id);
 CREATE INDEX IF NOT EXISTS user_role_binding_granted_by_idx ON iam.user_role_binding (organization_id, granted_by, created_at DESC, id);
-CREATE INDEX IF NOT EXISTS user_role_binding_role_idx ON iam.user_role_binding (organization_id, role_id, user_id, id);
+DROP INDEX IF EXISTS iam.user_role_binding_role_idx;
+CREATE INDEX user_role_binding_role_idx ON iam.user_role_binding (role_id, organization_id, user_id, id);
 
 CREATE OR REPLACE FUNCTION iam.assert_role_binding_organization() RETURNS trigger
 LANGUAGE plpgsql
@@ -286,6 +287,7 @@ CREATE TABLE IF NOT EXISTS audit.authentication_event (
   FOREIGN KEY (organization_id, actor_user_id) REFERENCES iam.user_account (organization_id, id) ON DELETE RESTRICT
 );
 CREATE INDEX IF NOT EXISTS authentication_event_time_idx ON audit.authentication_event (organization_id, created_at DESC, id);
+CREATE INDEX IF NOT EXISTS authentication_event_actor_idx ON audit.authentication_event (organization_id, actor_user_id, created_at DESC, id);
 CREATE OR REPLACE FUNCTION audit.reject_authentication_mutation() RETURNS trigger
 LANGUAGE plpgsql
 AS $$
@@ -321,6 +323,14 @@ CREATE TABLE IF NOT EXISTS integration.identity_outbox_event (
 );
 CREATE INDEX IF NOT EXISTS identity_outbox_pending_idx ON integration.identity_outbox_event (status, available_at, id);
 CREATE INDEX IF NOT EXISTS identity_outbox_organization_idx ON integration.identity_outbox_event (organization_id, id);
+
+CREATE TABLE IF NOT EXISTS integration.login_attempt_bucket (
+  bucket_key text PRIMARY KEY,
+  window_started_at timestamptz NOT NULL,
+  attempts integer NOT NULL CHECK (attempts >= 0),
+  last_seen_at timestamptz NOT NULL
+);
+CREATE INDEX IF NOT EXISTS login_attempt_bucket_last_seen_idx ON integration.login_attempt_bucket (last_seen_at, bucket_key);
 
 CREATE OR REPLACE FUNCTION audit.reject_audit_mutation() RETURNS trigger
 LANGUAGE plpgsql

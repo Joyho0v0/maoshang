@@ -13,7 +13,7 @@ import type { PostgresIdentityStore } from '../../api/src/modules/identity/infra
 import type { OutboxEvent } from './worker.js';
 
 type DisableCommandStore = Pick<PostgresIdentityStore, 'disableUser'>;
-type DisableCommandRepository = Pick<PostgresIdempotencyRepository, 'withTransaction' | 'complete' | 'fail'>;
+type DisableCommandRepository = Pick<PostgresIdempotencyRepository, 'withTransaction' | 'complete' | 'fail'> & Partial<Pick<PostgresIdempotencyRepository, 'checkCommandOwner'>>;
 
 export class IdentityCommandProcessor {
   constructor(private readonly store: DisableCommandStore, private readonly repository: DisableCommandRepository) {}
@@ -22,6 +22,10 @@ export class IdentityCommandProcessor {
     if (event.topic !== 'identity.command.disable_user') return;
     const command = parseDisableCommand(event.payload);
     await this.repository.withTransaction(async (client) => {
+      if (this.repository.checkCommandOwner !== undefined) {
+        const ownerState = await this.repository.checkCommandOwner(client, command.commandId, command.operationId, command.ownerToken);
+        if (ownerState !== 'OWNED') return;
+      }
       await client.query('SAVEPOINT identity_command');
       try {
         const disabled = await this.store.disableUser({ ...command.mutation, client });

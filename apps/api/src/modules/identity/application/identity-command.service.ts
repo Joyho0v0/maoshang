@@ -156,7 +156,7 @@ export class IdentityCommandService {
     const resourceId = randomUUID();
     try {
       await this.assertCanManageOrganization(principal, 'identity.user.create', organizationId, resourceId, requestId);
-      await this.assertKnownRole(principal, input.role, resourceId, requestId);
+      await this.assertKnownRole(principal, 'identity.user.create', input.role, resourceId, requestId);
       await this.assertRolePermissions(principal, [input.role], resourceId, requestId);
       const user = await this.store.createUser({
         id: resourceId,
@@ -179,7 +179,7 @@ export class IdentityCommandService {
     const target = await this.requireTarget(principal, targetUserId, 'identity.role.grant', requestId);
     await this.assertExpectedVersion(target, expectedVersion, principal, 'identity.role.grant', requestId);
     if (roles.length === 0 || new Set(roles).size !== roles.length) return this.reject(principal, 'identity.role.grant', targetUserId, requestId, 'role-bindings-invalid');
-    for (const role of roles) await this.assertKnownRole(principal, role, targetUserId, requestId);
+    for (const role of roles) await this.assertKnownRole(principal, 'identity.role.grant', role, targetUserId, requestId);
     await this.assertRolePermissions(principal, roles, targetUserId, requestId);
     return this.store.replaceRoleBindings({
       organizationId: principal.organizationId,
@@ -299,8 +299,8 @@ export class IdentityCommandService {
     throw new IdentityVersionConflictError(target.version);
   }
 
-  private async assertKnownRole(principal: AuthorizationPrincipal, role: string, resourceId: string, requestId: string): Promise<void> {
-    if (role !== 'SUPER_ADMIN' && role !== 'GROUP_LEADER' && role !== 'SALES') await this.reject(principal, 'identity.user.create', resourceId, requestId, 'unknown-role');
+  private async assertKnownRole(principal: AuthorizationPrincipal, action: string, role: string, resourceId: string, requestId: string): Promise<void> {
+    if (role !== 'SUPER_ADMIN' && role !== 'GROUP_LEADER' && role !== 'SALES') await this.reject(principal, action, resourceId, requestId, 'unknown-role');
   }
 
   private async recordDenied(principal: AuthorizationPrincipal, action: string, resourceId: string, requestId: string, reason: string, outcome: AuditEventInput['outcome'] = 'DENIED'): Promise<void> {

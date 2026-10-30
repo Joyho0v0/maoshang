@@ -17,6 +17,7 @@ export interface ProviderIdentity {
 export interface IdentityUser {
   id: string;
   organizationId: string;
+  organizationStatus: 'ACTIVE' | 'DISABLED';
   username: string;
   displayName: string;
   status: 'ACTIVE' | 'DISABLED';

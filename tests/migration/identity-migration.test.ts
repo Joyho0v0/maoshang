@@ -21,7 +21,8 @@ describe('Identity and authorization migration', () => {
     expect(sql).toMatch(/CREATE TRIGGER .*audit.*immutable/i);
     expect(sql).toMatch(/UNIQUE INDEX .*provider_subject_global/i);
     expect(sql).toMatch(/position_history.*from_group/i);
-    expect(sql).toMatch(/user_role_binding.*role/i);
+    expect(sql).toMatch(/user_role_binding_role_idx\s+ON\s+iam\.user_role_binding\s*\(role_id,\s*organization_id/i);
+    expect(sql).toMatch(/authentication_event_actor_idx\s+ON\s+audit\.authentication_event\s*\(organization_id,\s*actor_user_id/i);
     expect(sql).toMatch(/role.*organization.*binding/i);
     expect(down).toMatch(/allow_identity_down/i);
     expect(sql).toMatch(/SUPER_ADMIN/i);
@@ -56,6 +57,13 @@ describe('Identity and authorization migration', () => {
       ]);
       const roles = await client.query<{ code: string }>('SELECT code FROM iam.role WHERE organization_id IS NULL ORDER BY code');
       expect(roles.rows.map((row) => row.code)).toEqual(['GROUP_LEADER', 'SALES', 'SUPER_ADMIN']);
+      const indexes = await client.query<{ indexname: string; indexdef: string }>(
+        "SELECT indexname, indexdef FROM pg_indexes WHERE (schemaname, indexname) IN (('iam', 'user_role_binding_role_idx'), ('audit', 'authentication_event_actor_idx')) ORDER BY indexname",
+      );
+      expect(indexes.rows).toEqual([
+        expect.objectContaining({ indexname: 'authentication_event_actor_idx', indexdef: expect.stringMatching(/\(organization_id, actor_user_id, created_at DESC, id\)/i) }),
+        expect.objectContaining({ indexname: 'user_role_binding_role_idx', indexdef: expect.stringMatching(/\(role_id, organization_id, user_id, id\)/i) }),
+      ]);
       await client.query("SET LOCAL app.allow_identity_down = 'true'");
       await client.query(down);
       const remaining = await client.query<{ table_name: string }>(

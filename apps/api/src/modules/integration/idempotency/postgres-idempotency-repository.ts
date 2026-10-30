@@ -93,6 +93,8 @@ export interface PostgresClaim extends InternalCommandStatus {
   claimRole: 'OWNER' | 'OBSERVER' | 'TERMINAL';
 }
 
+export type CommandOwnerState = 'OWNED' | 'TERMINAL' | 'STALE';
+
 export const IDEMPOTENCY_REPOSITORY = 'IDEMPOTENCY_REPOSITORY';
 
 interface StoredIdempotencyRow extends QueryResultRow {
@@ -203,6 +205,27 @@ export class PostgresIdempotencyRepository {
   async fail(client: PoolClient, commandId: string, ownerToken: Buffer, problem: ProblemDocument): Promise<void> {
     const updated = await client.query(IDEMPOTENCY_FAIL_SQL, [commandId, ownerToken, problem.status, JSON.stringify(problem)]);
     if (updated.rowCount !== 1) throw new Error('Idempotency failure completion lost ownership.');
+  }
+
+  /**
+   * Fences an asynchronous command before its business mutation. The row lock
+   * is held by the caller's transaction, so a duplicate event cannot apply a
+   * second mutation after the first event reaches a terminal state. A stale
+   * event is acknowledged by the worker without touching business data.
+   */
+  async checkCommandOwner(client: PoolClient, commandId: string, operationId: string, ownerToken: Buffer): Promise<CommandOwnerState> {
+    const result = await client.query<{ operation_id: string; state: 'IN_PROGRESS' | 'SUCCEEDED' | 'FAILED'; owner_token: Buffer; lease_expired: boolean }>(
+      `SELECT operation_id, state, owner_token, lease_expires_at <= clock_timestamp() AS lease_expired
+         FROM integration.idempotency_record
+        WHERE id = $1
+        FOR UPDATE`,
+      [commandId],
+    );
+    const row = result.rows[0];
+    if (row === undefined) throw new Error('Identity command idempotency record is missing.');
+    if (row.state !== 'IN_PROGRESS') return 'TERMINAL';
+    if (row.operation_id !== operationId || !row.owner_token.equals(ownerToken) || row.lease_expired) return 'STALE';
+    return 'OWNED';
   }
 
   async releaseForRecovery(client: PoolClient, commandId: string, ownerToken: Buffer, code: string): Promise<void> {

@@ -18,6 +18,7 @@ DROP FUNCTION IF EXISTS core.sync_identity_organization();
 DROP TRIGGER IF EXISTS authentication_event_immutable ON audit.authentication_event;
 DROP FUNCTION IF EXISTS audit.reject_authentication_mutation();
 DROP TABLE IF EXISTS audit.authentication_event;
+DROP TABLE IF EXISTS integration.login_attempt_bucket;
 DROP TRIGGER IF EXISTS audit_event_immutable ON audit.audit_event;
 DROP FUNCTION IF EXISTS audit.reject_audit_mutation();
 DROP TABLE IF EXISTS audit.audit_event;

@@ -27,6 +27,7 @@ import type {
 interface UserRow extends QueryResultRow {
   id: string;
   organization_id: string;
+  organization_status: 'ACTIVE' | 'DISABLED';
   username_normalized: string;
   display_name: string;
   status: 'ACTIVE' | 'DISABLED';
@@ -76,10 +77,11 @@ export class PostgresIdentityStore implements IdentityStore, IdentityMutationSto
   async findUserForProvider(provider: SessionProvider, identity: ProviderIdentity): Promise<IdentityUser | undefined> {
     return this.withClient(async (client) => {
       const result = await client.query<UserRow>(
-        `SELECT u.id, u.organization_id, u.username_normalized, u.display_name, u.status,
+        `SELECT u.id, u.organization_id, o.status AS organization_status, u.username_normalized, u.display_name, u.status,
                 u.version, u.authz_version, u.session_epoch, m.business_group_id AS primary_business_group_id,
                 u.created_at, u.updated_at
            FROM iam.user_account AS u
+           JOIN org.organization AS o ON o.id = u.organization_id
            LEFT JOIN LATERAL (
              SELECT business_group_id
                FROM org.membership
@@ -101,7 +103,19 @@ export class PostgresIdentityStore implements IdentityStore, IdentityMutationSto
 
   async createSession(input: Omit<StoredSession, 'createdAt'>): Promise<StoredSession> {
     const tokenHash = decodeHash(input.tokenHash);
-    return this.withClient(async (client) => {
+    return this.withClient((client) => this.insertSession(client, input, tokenHash));
+  }
+
+  async createSessionWithAudit(input: Omit<StoredSession, 'createdAt'>, audit: AuthenticationAuditInput): Promise<StoredSession> {
+    const tokenHash = decodeHash(input.tokenHash);
+    return this.withTransaction(async (client) => {
+      const session = await this.insertSession(client, input, tokenHash);
+      await this.appendAuthenticationAudit(client, audit);
+      return session;
+    });
+  }
+
+  private async insertSession(client: PoolClient, input: Omit<StoredSession, 'createdAt'>, tokenHash: Buffer): Promise<StoredSession> {
       const result = await client.query<{
         id: string;
         organization_id: string;
@@ -131,7 +145,6 @@ export class PostgresIdentityStore implements IdentityStore, IdentityMutationSto
         expiresAt: row.expires_at.toISOString(),
         createdAt: row.created_at.toISOString(),
       };
-    });
   }
 
   async findSession(tokenHash: string): Promise<{ session: StoredSession; user: IdentityUser } | undefined> {
@@ -143,17 +156,18 @@ export class PostgresIdentityStore implements IdentityStore, IdentityMutationSto
                 s.authz_version AS session_authz_version,
                 s.session_epoch AS session_epoch_value, s.expires_at,
                 s.created_at AS session_created_at,
-                u.id, u.organization_id, u.username_normalized, u.display_name,
+                u.id, u.organization_id, o.status AS organization_status, u.username_normalized, u.display_name,
                 u.status, u.version, u.authz_version, u.session_epoch,
                 u.created_at, u.updated_at
            FROM iam.session AS s
            JOIN iam.user_account AS u
              ON u.organization_id = s.organization_id AND u.id = s.user_id
+           JOIN org.organization AS o ON o.id = s.organization_id
           WHERE s.token_hash = $1
             AND s.revoked_at IS NULL
           ORDER BY s.id
           LIMIT 1
-          FOR UPDATE OF s, u`,
+          FOR UPDATE OF s, u, o`,
         [decodedHash],
       );
       const row = result.rows[0];
@@ -193,31 +207,36 @@ export class PostgresIdentityStore implements IdentityStore, IdentityMutationSto
 
   async recordAuthenticationAudit(input: AuthenticationAuditInput): Promise<void> {
     await this.withTransaction(async (client) => {
-      const eventId = randomUUID();
-      await client.query(
-        `INSERT INTO audit.authentication_event
-          (id, organization_id, actor_user_id, provider, outcome, reason, request_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [eventId, input.organizationId ?? null, input.actorUserId ?? null, input.provider, input.outcome, input.reason, input.requestId],
-      );
-      if (input.organizationId !== undefined) {
-        await client.query(
-          `INSERT INTO integration.identity_outbox_event
-            (id, organization_id, aggregate_type, aggregate_id, event_type, payload)
-           VALUES ($1, $2, 'AUTHENTICATION', $3, $4, $5::jsonb)`,
-          [randomUUID(), input.organizationId, input.actorUserId ?? eventId, `auth.${input.outcome.toLowerCase()}`, JSON.stringify({ authenticationEventId: eventId, provider: input.provider, outcome: input.outcome, reason: input.reason, requestId: input.requestId })],
-        );
-      }
+      await this.appendAuthenticationAudit(client, input);
     });
+  }
+
+  private async appendAuthenticationAudit(client: PoolClient, input: AuthenticationAuditInput): Promise<void> {
+    const eventId = randomUUID();
+    await client.query(
+      `INSERT INTO audit.authentication_event
+        (id, organization_id, actor_user_id, provider, outcome, reason, request_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [eventId, input.organizationId ?? null, input.actorUserId ?? null, input.provider, input.outcome, input.reason, input.requestId],
+    );
+    if (input.organizationId !== undefined) {
+      await client.query(
+        `INSERT INTO integration.identity_outbox_event
+          (id, organization_id, aggregate_type, aggregate_id, event_type, payload)
+         VALUES ($1, $2, 'AUTHENTICATION', $3, $4, $5::jsonb)`,
+        [randomUUID(), input.organizationId, input.actorUserId ?? eventId, `auth.${input.outcome.toLowerCase()}`, JSON.stringify({ authenticationEventId: eventId, provider: input.provider, outcome: input.outcome, reason: input.reason, requestId: input.requestId })],
+      );
+    }
   }
 
   async findUserById(id: string): Promise<IdentityUser | undefined> {
     return this.withClient(async (client) => {
       const result = await client.query<UserRow>(
-        `SELECT u.id, u.organization_id, u.username_normalized, u.display_name, u.status,
+        `SELECT u.id, u.organization_id, o.status AS organization_status, u.username_normalized, u.display_name, u.status,
                 u.version, u.authz_version, u.session_epoch, m.business_group_id AS primary_business_group_id,
                 u.created_at, u.updated_at
            FROM iam.user_account AS u
+           JOIN org.organization AS o ON o.id = u.organization_id
            LEFT JOIN LATERAL (
              SELECT business_group_id
                FROM org.membership
@@ -493,6 +512,7 @@ export class PostgresIdentityStore implements IdentityStore, IdentityMutationSto
     return {
       id: row.id,
       organizationId: row.organization_id,
+      organizationStatus: row.organization_status,
       username: row.username_normalized,
       displayName: row.display_name,
       status: row.status,
@@ -510,10 +530,11 @@ export class PostgresIdentityStore implements IdentityStore, IdentityMutationSto
 
   private async loadUserById(client: PoolClient, organizationId: string, userId: string): Promise<IdentityUser> {
     const result = await client.query<UserRow>(
-      `SELECT u.id, u.organization_id, u.username_normalized, u.display_name, u.status,
+      `SELECT u.id, u.organization_id, o.status AS organization_status, u.username_normalized, u.display_name, u.status,
               u.version, u.authz_version, u.session_epoch, m.business_group_id AS primary_business_group_id,
               u.created_at, u.updated_at
          FROM iam.user_account AS u
+         JOIN org.organization AS o ON o.id = u.organization_id
          LEFT JOIN LATERAL (
            SELECT business_group_id
              FROM org.membership
