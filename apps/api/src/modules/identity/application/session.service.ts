@@ -60,6 +60,15 @@ export class InvalidCredentialsError extends Error {
   }
 }
 
+export type SessionIssuanceRejectionReason = 'identity-not-mapped' | 'organization-disabled' | 'account-disabled' | 'session-snapshot-mismatch';
+
+export class SessionIssuanceRejectedError extends Error {
+  constructor(readonly reason: SessionIssuanceRejectionReason) {
+    super('The authoritative identity changed before the session could be issued.');
+    this.name = 'SessionIssuanceRejectedError';
+  }
+}
+
 export class AuthenticationProviderUnavailableError extends Error {
   constructor() {
     super('The configured authentication provider is unavailable.');
@@ -224,15 +233,21 @@ export class SessionService {
 
     const sessionToken = this.tokenFactory();
     const now = new Date();
-    await this.store.createSessionWithAudit({
-      id: randomUUID(),
-      tokenHash: hashToken(sessionToken),
-      userId: account.id,
-      organizationId: account.organizationId,
-      authzVersion: account.authzVersion,
-      sessionEpoch: account.sessionEpoch,
-      expiresAt: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
-    }, { provider: credentials.provider, outcome: 'SUCCEEDED', requestId, organizationId: account.organizationId, actorUserId: account.id, reason: 'login-succeeded' });
+    try {
+      await this.store.createSessionWithAudit({
+        id: randomUUID(),
+        tokenHash: hashToken(sessionToken),
+        userId: account.id,
+        organizationId: account.organizationId,
+        authzVersion: account.authzVersion,
+        sessionEpoch: account.sessionEpoch,
+        expiresAt: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
+      }, { provider: credentials.provider, outcome: 'SUCCEEDED', requestId, organizationId: account.organizationId, actorUserId: account.id, reason: 'login-succeeded' });
+    } catch (error) {
+      if (!(error instanceof SessionIssuanceRejectedError)) throw error;
+      await this.recordAudit({ provider: credentials.provider, outcome: 'DENIED', requestId, organizationId: account.organizationId, actorUserId: account.id, reason: error.reason });
+      throw new InvalidCredentialsError();
+    }
     return {
       document: this.toDocument(account, this.csrf.bootstrap(`session:${sessionToken}`).csrfToken),
       sessionToken,

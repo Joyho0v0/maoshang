@@ -224,7 +224,18 @@ export class PostgresIdempotencyRepository {
     const row = result.rows[0];
     if (row === undefined) throw new Error('Identity command idempotency record is missing.');
     if (row.state !== 'IN_PROGRESS') return 'TERMINAL';
-    if (row.operation_id !== operationId || !row.owner_token.equals(ownerToken) || row.lease_expired) return 'STALE';
+    if (row.operation_id !== operationId || !row.owner_token.equals(ownerToken)) return 'STALE';
+    if (row.lease_expired) {
+      const renewed = await client.query(
+        `UPDATE integration.idempotency_record
+            SET lease_expires_at = clock_timestamp() + ($4::double precision * interval '1 millisecond')
+          WHERE id = $1 AND operation_id = $2 AND owner_token = $3
+            AND state = 'IN_PROGRESS' AND lease_expires_at <= clock_timestamp()
+          RETURNING id`,
+        [commandId, operationId, ownerToken, this.options.leaseDurationMs],
+      );
+      if (renewed.rowCount !== 1) return 'STALE';
+    }
     return 'OWNED';
   }
 

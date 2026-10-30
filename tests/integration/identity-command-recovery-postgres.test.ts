@@ -75,6 +75,18 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL identity command recovery
       await expect(failedWorker.runOnce(1)).resolves.toBe(1);
       await expect(pool.query('SELECT state, http_status, problem_body->>\'code\' AS code FROM integration.idempotency_record WHERE id = $1', [failedCommand.commandId])).resolves.toMatchObject({ rows: [{ state: 'FAILED', http_status: 409, code: 'VERSION_CONFLICT' }] });
       await expect(pool.query('SELECT status, version::int FROM iam.user_account WHERE id = $1', [failed.targetId])).resolves.toMatchObject({ rows: [{ status: 'ACTIVE', version: 1 }] });
+
+      const expiredOwner = await fixture(pool, 'expired-owner');
+      const expiredCommand = await command(repository, expiredOwner, 1, 'expired-owner-key');
+      const expiredEventId = await insertEvent(pool, expiredOwner, disablePayload(expiredOwner, expiredCommand.ownerToken, expiredCommand.commandId, 1));
+      await pool.query("UPDATE integration.idempotency_record SET lease_expires_at = now() - interval '1 second' WHERE id = $1", [expiredCommand.commandId]);
+      const expiredSource = new PostgresOutboxSource(pool, 'integration.identity_outbox_event');
+      const expiredWorker = new OutboxWorker(expiredSource, { publish: (event) => processor.process(event) });
+      await expect(expiredWorker.runOnce(100)).resolves.toBe(1);
+      await expect(pool.query('SELECT status, version::int FROM iam.user_account WHERE id = $1', [expiredOwner.targetId])).resolves.toMatchObject({ rows: [{ status: 'DISABLED', version: 2 }] });
+      await expect(pool.query('SELECT state FROM integration.idempotency_record WHERE id = $1', [expiredCommand.commandId])).resolves.toMatchObject({ rows: [{ state: 'SUCCEEDED' }] });
+      await expect(pool.query('SELECT status FROM integration.identity_outbox_event WHERE id = $1', [expiredEventId])).resolves.toMatchObject({ rows: [{ status: 'PUBLISHED' }] });
+      await expect(pool.query("SELECT count(*)::int AS count FROM audit.audit_event WHERE resource_id = $1 AND action = 'identity.user.disable'", [expiredOwner.targetId])).resolves.toMatchObject({ rows: [{ count: 1 }] });
     } finally {
       if (transactionOpen) await client.query('ROLLBACK').catch(() => undefined);
       await client.query('BEGIN');

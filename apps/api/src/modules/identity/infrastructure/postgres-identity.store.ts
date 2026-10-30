@@ -14,7 +14,7 @@ import {
   type IdentityMutationStore,
   type RoleBindingMutation,
 } from '../application/identity-command.service.js';
-import type { AuthenticationAuditInput, IdentityStore } from '../application/session.service.js';
+import { SessionIssuanceRejectedError, type AuthenticationAuditInput, type IdentityStore } from '../application/session.service.js';
 import type { DataScopeGrant } from '../domain/authz.js';
 import type { AuthorizationPrincipal } from '../domain/authz.js';
 import type {
@@ -109,6 +109,27 @@ export class PostgresIdentityStore implements IdentityStore, IdentityMutationSto
   async createSessionWithAudit(input: Omit<StoredSession, 'createdAt'>, audit: AuthenticationAuditInput): Promise<StoredSession> {
     const tokenHash = decodeHash(input.tokenHash);
     return this.withTransaction(async (client) => {
+      const organization = await client.query<{ status: 'ACTIVE' | 'DISABLED' }>(
+        'SELECT status FROM org.organization WHERE id = $1 FOR UPDATE',
+        [input.organizationId],
+      );
+      const organizationStatus = organization.rows[0]?.status;
+      if (organizationStatus === undefined) throw new SessionIssuanceRejectedError('identity-not-mapped');
+      if (organizationStatus !== 'ACTIVE') throw new SessionIssuanceRejectedError('organization-disabled');
+
+      const account = await client.query<{ organization_id: string; status: 'ACTIVE' | 'DISABLED'; authz_version: number | string; session_epoch: number | string }>(
+        `SELECT organization_id, status, authz_version, session_epoch
+           FROM iam.user_account
+          WHERE organization_id = $1 AND id = $2
+          FOR UPDATE`,
+        [input.organizationId, input.userId],
+      );
+      const accountRow = account.rows[0];
+      if (accountRow === undefined) throw new SessionIssuanceRejectedError('identity-not-mapped');
+      if (accountRow.status !== 'ACTIVE') throw new SessionIssuanceRejectedError('account-disabled');
+      if (toPositiveInteger(accountRow.authz_version) !== input.authzVersion || toPositiveInteger(accountRow.session_epoch) !== input.sessionEpoch) {
+        throw new SessionIssuanceRejectedError('session-snapshot-mismatch');
+      }
       const session = await this.insertSession(client, input, tokenHash);
       await this.appendAuthenticationAudit(client, audit);
       return session;
