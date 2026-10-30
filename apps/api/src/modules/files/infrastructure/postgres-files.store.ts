@@ -62,6 +62,8 @@ export interface WorkerFileSnapshot {
   intentStatus: 'ACTIVE' | 'CONSUMED' | 'EXPIRED' | 'REJECTED';
 }
 
+export type UploadIntentReplaySnapshot = WorkerFileSnapshot;
+
 export interface FileAuditInput {
   organizationId: string;
   actorUserId?: string;
@@ -187,6 +189,10 @@ export class PostgresFilesStore {
     return row === undefined ? undefined : { file: mapFile(row), objectKey: row.object_key, expiresAt: row.expires_at, intentStatus: row.intent_status };
   }
 
+  async findUploadIntentForReplay(organizationId: string, fileId: string): Promise<UploadIntentReplaySnapshot | undefined> {
+    return this.findWorkerFile(organizationId, fileId);
+  }
+
   async markUploadIntentExpired(client: PoolClient, organizationId: string, fileId: string, eventId: string): Promise<void> {
     const expired = await client.query(
       `UPDATE files.upload_intent
@@ -210,6 +216,7 @@ export class PostgresFilesStore {
              WHERE ui.organization_id = fo.organization_id
                AND ui.file_id = fo.id
                AND ui.status = 'ACTIVE'
+               AND ui.expires_at > clock_timestamp()
           )
        RETURNING id, organization_id, created_by, business_group_id, object_key,
                  original_name, declared_content_type, detected_content_type,
@@ -242,7 +249,7 @@ export class PostgresFilesStore {
       [organizationId, fileId],
     );
     await this.appendAudit(client, { organizationId, actorUserId: row.created_by, action: 'file.scan.started', resourceId: fileId, outcome: 'SUCCEEDED', requestId: eventId });
-    await this.appendOutbox(client, organizationId, fileId, 'file.scan.requested', { fileId, scanEventId: eventId });
+    await this.appendOutbox(client, organizationId, fileId, 'file.scan.requested', { organizationId, fileId, scanEventId: eventId });
     return mapFile(row);
   }
 
@@ -271,6 +278,35 @@ export class PostgresFilesStore {
     );
     await this.appendAudit(client, { organizationId, actorUserId: row.created_by, action: 'file.rejected', resourceId: fileId, outcome: 'FAILED', reason, requestId: eventId });
     await this.appendOutbox(client, organizationId, fileId, 'file.rejected', { fileId, reason });
+    return mapFile(row);
+  }
+
+  async markQuarantined(client: PoolClient, organizationId: string, fileId: string, eventId: string, stage: 'PENDING_UPLOAD' | 'SCANNING', reason: string): Promise<FileRecord | undefined> {
+    const updated = await client.query<FileRow>(
+      `UPDATE files.file_object
+          SET status = 'QUARANTINED', rejection_reason = $3, version = version + 1, updated_at = clock_timestamp()
+        WHERE organization_id = $1 AND id = $2 AND status = $4
+       RETURNING id, organization_id, created_by, business_group_id, object_key,
+                 original_name, declared_content_type, detected_content_type,
+                 declared_size_bytes, actual_size_bytes, declared_checksum,
+                 actual_checksum, status, metadata, version, created_at, updated_at`,
+      [organizationId, fileId, reason, stage],
+    );
+    const row = updated.rows[0];
+    if (row === undefined) return undefined;
+    await client.query(
+      `UPDATE files.upload_intent SET status = 'REJECTED', consumed_at = clock_timestamp()
+        WHERE organization_id = $1 AND file_id = $2 AND status = 'ACTIVE'`,
+      [organizationId, fileId],
+    );
+    await client.query(
+      `INSERT INTO files.scan_result (id, organization_id, file_id, event_id, engine, engine_version, result, details)
+       VALUES ($1, $2, $3, $4, 'files-worker', '1', 'ERROR', $5::jsonb)
+       ON CONFLICT (file_id, event_id) DO NOTHING`,
+      [randomUUID(), organizationId, fileId, eventId, JSON.stringify({ reason })],
+    );
+    await this.appendAudit(client, { organizationId, actorUserId: row.created_by, action: 'file.quarantined', resourceId: fileId, outcome: 'FAILED', reason, requestId: eventId });
+    await this.appendOutbox(client, organizationId, fileId, 'file.quarantined', { organizationId, fileId, reason });
     return mapFile(row);
   }
 
@@ -338,12 +374,14 @@ export class PostgresFilesStore {
     }
   }
 
-  async resolvePrimaryBusinessGroup(client: PoolClient, organizationId: string, userId: string): Promise<string | undefined> {
+  async resolvePrimaryBusinessGroup(client: PoolClient, organizationId: string, userId: string, allowedGroupIds: readonly string[] = []): Promise<string | undefined> {
+    if (allowedGroupIds.length === 0) return undefined;
     const result = await client.query<{ business_group_id: string }>(
       `SELECT business_group_id FROM org.membership
         WHERE organization_id = $1 AND user_id = $2 AND status = 'ACTIVE' AND valid_to IS NULL
+          AND business_group_id = ANY($3::uuid[])
         ORDER BY is_primary DESC, id LIMIT 1`,
-      [organizationId, userId],
+      [organizationId, userId, allowedGroupIds],
     );
     return result.rows[0]?.business_group_id;
   }

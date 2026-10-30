@@ -13,6 +13,8 @@ export interface IdempotencyCommand<T> {
 export interface CommandResult<T = unknown> {
   status: number;
   body: T;
+  /** Optional safe projection persisted for replay; never exposed as the response body. */
+  persistedBody?: unknown;
   resultHref?: string;
   resource?: ResourceReference;
   responseHeaders?: Record<string, string>;

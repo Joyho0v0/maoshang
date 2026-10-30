@@ -4,7 +4,7 @@ import { requireIdempotencyTransaction } from '../../../common/security/idempote
 import { buildProblem, normalizeRequestId, ProblemError } from '../../../common/http/problem.js';
 import { formatEtag } from '../../../common/http/etag.js';
 import type { AuthenticatedRequest } from '../../identity/transport/authentication.guard.js';
-import { FilesService, problemForFileError, type FileCommandRequest, type FileCreateRequest } from '../application/files.service.js';
+import { FilesService, problemForFileError, toApiFile, type FileCommandRequest, type FileCreateRequest } from '../application/files.service.js';
 
 @Controller('files')
 export class FilesController {
@@ -68,23 +68,6 @@ export class FilesController {
   private problem(status: number, code: 'AUTHENTICATION_REQUIRED' | 'INTERNAL_ERROR', title: string, request: FastifyRequest): ProblemError {
     return new ProblemError(buildProblem({ status, code, title, requestId: normalizeRequestId(request.headers['x-request-id']), retryable: false }));
   }
-}
-
-function toApiFile(file: { id: string; organizationId: string; version: number; createdAt: string; updatedAt: string; fileName: string; contentType: string; sizeBytes: number; checksum?: string; status: string; metadata: Record<string, unknown> }, href: string): Record<string, unknown> {
-  return {
-    id: file.id,
-    organizationId: file.organizationId,
-    version: file.version,
-    createdAt: file.createdAt,
-    updatedAt: file.updatedAt,
-    fileName: file.fileName,
-    contentType: file.contentType,
-    sizeBytes: file.sizeBytes,
-    ...(file.checksum === undefined ? {} : { checksum: file.checksum }),
-    status: file.status,
-    metadata: file.metadata,
-    href,
-  };
 }
 
 function headerString(value: string | string[] | undefined): string | undefined {

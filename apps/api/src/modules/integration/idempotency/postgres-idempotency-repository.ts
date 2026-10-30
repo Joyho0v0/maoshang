@@ -198,7 +198,7 @@ export class PostgresIdempotencyRepository {
   async complete(client: PoolClient, commandId: string, ownerToken: Buffer, result: CommandResult<unknown>): Promise<void> {
     const resource = requireResourceReference(result);
     const responseHeaders = normalizeResponseHeaders(result.responseHeaders);
-    const updated = await client.query(IDEMPOTENCY_COMPLETE_SQL, [commandId, ownerToken, result.status, JSON.stringify(result.body), responseHeaders === undefined ? null : JSON.stringify(responseHeaders), resource?.type ?? null, resource?.id ?? null, resource?.version ?? null, resource?.href ?? result.resultHref ?? extractHref(result.body)]);
+    const updated = await client.query(IDEMPOTENCY_COMPLETE_SQL, [commandId, ownerToken, result.status, JSON.stringify(result.persistedBody ?? result.body), responseHeaders === undefined ? null : JSON.stringify(responseHeaders), resource?.type ?? null, resource?.id ?? null, resource?.version ?? null, resource?.href ?? result.resultHref ?? extractHref(result.body)]);
     if (updated.rowCount !== 1) throw new IdempotencyOwnershipLostError();
   }
 
@@ -243,7 +243,7 @@ export class PostgresIdempotencyRepository {
     await client.query('UPDATE integration.idempotency_record SET lease_expires_at = clock_timestamp(), last_internal_error_code = $3 WHERE id = $1 AND owner_token = $2 AND state = \'IN_PROGRESS\'', [commandId, ownerToken, code]);
   }
 
-  async execute<T>(input: PostgresIdempotencyInput, work: (client: PoolClient, claim: PostgresClaim) => Promise<CommandResult<T>>): Promise<CommandResult<T> | InternalCommandStatus> {
+  async execute<T>(input: PostgresIdempotencyInput, work: (client: PoolClient, claim: PostgresClaim) => Promise<CommandResult<T>>, replay?: (stored: CommandResult<unknown>) => Promise<CommandResult<T> | undefined>): Promise<CommandResult<T> | InternalCommandStatus> {
     // Claim/observe/replay is deliberately a short transaction. Keeping the row
     // lock while the owner calls application code would make every observer wait
     // for the business transaction instead of receiving 202 immediately.
@@ -252,11 +252,11 @@ export class PostgresIdempotencyRepository {
       claim = await this.withTransaction((client) => this.claim(client, input));
     } catch (error) {
       if (!isPostgresTimeoutError(error)) throw error;
-      return this.readCurrentOutcome<T>(input);
+      return this.readCurrentOutcome<T>(input, replay);
     }
     if (claim.state === 'SUCCEEDED') {
       const stored = await this.withTransaction((client) => this.readById(client, claim.commandId));
-      return replayStoredResult<T>(stored);
+      return this.replayStored<T>(stored, replay);
     }
     if (claim.state === 'FAILED') throw new CommandFailureError(claim.problem ?? storedFailure());
     if (claim.claimRole !== 'OWNER') return claim;
@@ -298,7 +298,7 @@ export class PostgresIdempotencyRepository {
       });
     } catch (error) {
       if (!isPostgresTimeoutError(error)) throw error;
-      return this.readCurrentOutcome<T>(input);
+      return this.readCurrentOutcome<T>(input, replay);
     }
     if (outcome.kind === 'result') return outcome.value;
     throw outcome.error;
@@ -328,7 +328,7 @@ export class PostgresIdempotencyRepository {
     return row;
   }
 
-  private async readCurrentOutcome<T>(input: PostgresIdempotencyInput): Promise<CommandResult<T> | InternalCommandStatus> {
+  private async readCurrentOutcome<T>(input: PostgresIdempotencyInput, replay?: (stored: CommandResult<unknown>) => Promise<CommandResult<T> | undefined>): Promise<CommandResult<T> | InternalCommandStatus> {
     const row = await this.withTransaction(async (client) => {
       const result = await client.query<StoredIdempotencyRow>(IDEMPOTENCY_READ_SQL, [
         input.organizationId,
@@ -341,9 +341,15 @@ export class PostgresIdempotencyRepository {
       return current;
     });
     const status = toStatus(row);
-    if (status.state === 'SUCCEEDED') return replayStoredResult<T>(row);
+    if (status.state === 'SUCCEEDED') return this.replayStored<T>(row, replay);
     if (status.state === 'FAILED') throw new CommandFailureError(status.problem ?? storedFailure());
     return status;
+  }
+
+  private async replayStored<T>(row: StoredIdempotencyRow, replay?: (stored: CommandResult<unknown>) => Promise<CommandResult<T> | undefined>): Promise<CommandResult<T>> {
+    const stored = replayStoredResult<unknown>(row);
+    const reconstructed = await replay?.(stored);
+    return reconstructed === undefined ? stored as CommandResult<T> : { ...reconstructed, replayed: true };
   }
 
   private async fenceOwner(client: PoolClient, claim: PostgresClaim): Promise<PostgresClaim> {

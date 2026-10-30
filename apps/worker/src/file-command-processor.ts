@@ -1,7 +1,7 @@
 import { buildProblem } from '../../api/src/common/http/problem.js';
-import { FileDependencyUnavailableError, FileIntegrityError, validateUploadedObject } from '../../api/src/modules/files/domain/files.js';
-import { FileCommandFailureError } from '../../api/src/modules/files/application/files.service.js';
-import type { PostgresFilesStore, FileRecord } from '../../api/src/modules/files/infrastructure/postgres-files.store.js';
+import { FileDependencyUnavailableError, FileIntegrityError, FileObjectNotFoundError, validateUploadedObject } from '../../api/src/modules/files/domain/files.js';
+import { FileCommandFailureError, toApiFile } from '../../api/src/modules/files/application/files.service.js';
+import type { PostgresFilesStore } from '../../api/src/modules/files/infrastructure/postgres-files.store.js';
 import type { ObjectStorageAdapter, ScanAdapter } from '../../api/src/modules/files/infrastructure/file-adapters.js';
 import type { PostgresIdempotencyRepository } from '../../api/src/modules/integration/idempotency/postgres-idempotency-repository.js';
 import type { CommandResult } from '../../api/src/modules/integration/idempotency/in-memory-idempotency-store.js';
@@ -26,9 +26,12 @@ export class FileCommandProcessor {
   }
 
   private async processCompletion(event: OutboxEvent): Promise<void> {
-    const command = parseCompletion(event.payload);
+    const command = parseCompletion(event.payload, event.organizationId, event.attempts);
     const snapshot = await this.store.findWorkerFile(command.organizationId, command.fileId);
-    if (snapshot === undefined) throw new Error('File completion target is missing.');
+    if (snapshot === undefined) {
+      await this.finishMissingCompletion(command);
+      return;
+    }
     if (snapshot.file.status !== 'PENDING_UPLOAD') {
       await this.finishStateConflict(command, snapshot.file.status);
       return;
@@ -37,8 +40,24 @@ export class FileCommandProcessor {
       await this.finishExpiredCompletion(command);
       return;
     }
-    const object = await this.objectStorage.headObject(snapshot.objectKey);
-    if (object === undefined) throw new FileDependencyUnavailableError();
+    let object: Awaited<ReturnType<ObjectStorageAdapter['headObject']>>;
+    try {
+      object = await this.objectStorage.headObject(snapshot.objectKey);
+    } catch (error) {
+      if (error instanceof FileObjectNotFoundError) {
+        await this.finishObjectNotFound(command);
+        return;
+      }
+      if (command.attempts >= 5) {
+        await this.finishQuarantinedCompletion(command, error instanceof Error ? error.name : 'HEAD_UNAVAILABLE');
+        return;
+      }
+      throw new FileDependencyUnavailableError();
+    }
+    if (object === undefined) {
+      await this.finishObjectNotFound(command);
+      return;
+    }
     try {
       validateUploadedObject({
         declaredSizeBytes: snapshot.file.sizeBytes,
@@ -60,12 +79,18 @@ export class FileCommandProcessor {
       await client.query('SAVEPOINT file_complete');
       try {
         const uploaded = await this.store.markUploaded(client, command.organizationId, command.fileId, object, command.eventId);
-        if (uploaded === undefined) throw new Error('File completion state changed before worker commit.');
+        if (uploaded === undefined) {
+          await this.store.markUploadIntentExpired(client, command.organizationId, command.fileId, command.eventId);
+          const problem = buildProblem({ status: 409, code: 'STATE_CONFLICT', title: 'File state conflict', requestId: command.requestId, retryable: false, meta: { resourceType: 'FILE', resourceId: command.fileId, currentState: 'UPLOAD_INTENT_EXPIRED' } });
+          await this.repository.fail(client, command.commandId, command.ownerToken, problem);
+          await client.query('RELEASE SAVEPOINT file_complete');
+          return;
+        }
         const file = await this.store.markScanning(client, command.organizationId, command.fileId, command.eventId);
         if (file === undefined) throw new Error('File upload state changed before scan enqueue.');
         const result: CommandResult<Record<string, unknown>> = {
           status: 200,
-          body: toApiFile(file),
+          body: toApiFile(file, `/api/v1/files/${file.id}`),
           resource: { type: 'FILE', id: file.id, version: file.version, href: `/api/v1/files/${file.id}` },
         };
         await this.repository.complete(client, command.commandId, command.ownerToken, result);
@@ -95,6 +120,46 @@ export class FileCommandProcessor {
       } catch (failure) {
         await client.query('ROLLBACK TO SAVEPOINT file_reject');
         throw failure;
+      }
+    });
+  }
+
+  private async finishMissingCompletion(command: ParsedCompletion): Promise<void> {
+    await this.repository.withTransaction(async (client) => {
+      const ownerState = await this.repository.checkCommandOwner(client, command.commandId, command.operationId, command.ownerToken);
+      if (ownerState !== 'OWNED') return;
+      await this.repository.fail(client, command.commandId, command.ownerToken, buildProblem({ status: 404, code: 'RESOURCE_NOT_FOUND', title: 'Resource not found', requestId: command.requestId, retryable: false }));
+    });
+  }
+
+  private async finishObjectNotFound(command: ParsedCompletion): Promise<void> {
+    await this.repository.withTransaction(async (client) => {
+      const ownerState = await this.repository.checkCommandOwner(client, command.commandId, command.operationId, command.ownerToken);
+      if (ownerState !== 'OWNED') return;
+      await client.query('SAVEPOINT file_object_missing');
+      try {
+        await this.store.markIntegrityRejected(client, command.organizationId, command.fileId, command.eventId, 'object-not-found');
+        await this.repository.fail(client, command.commandId, command.ownerToken, buildProblem({ status: 409, code: 'BUSINESS_RULE_VIOLATION', title: 'Uploaded object was not found', requestId: command.requestId, retryable: false }));
+        await client.query('RELEASE SAVEPOINT file_object_missing');
+      } catch (error) {
+        await client.query('ROLLBACK TO SAVEPOINT file_object_missing');
+        throw error;
+      }
+    });
+  }
+
+  private async finishQuarantinedCompletion(command: ParsedCompletion, reason: string): Promise<void> {
+    await this.repository.withTransaction(async (client) => {
+      const ownerState = await this.repository.checkCommandOwner(client, command.commandId, command.operationId, command.ownerToken);
+      if (ownerState !== 'OWNED') return;
+      await client.query('SAVEPOINT file_quarantine');
+      try {
+        await this.store.markQuarantined(client, command.organizationId, command.fileId, command.eventId, 'PENDING_UPLOAD', reason);
+        await this.repository.fail(client, command.commandId, command.ownerToken, buildProblem({ status: 503, code: 'DEPENDENCY_UNAVAILABLE', title: 'File dependency unavailable', requestId: command.requestId, retryable: true }));
+        await client.query('RELEASE SAVEPOINT file_quarantine');
+      } catch (error) {
+        await client.query('ROLLBACK TO SAVEPOINT file_quarantine');
+        throw error;
       }
     });
   }
@@ -140,10 +205,19 @@ export class FileCommandProcessor {
   }
 
   private async processScan(event: OutboxEvent): Promise<void> {
-    const command = parseScan(event.payload);
+    const command = parseScan(event.payload, event.organizationId);
     const snapshot = await this.store.findWorkerFile(command.organizationId, command.fileId);
     if (snapshot === undefined || snapshot.file.status !== 'SCANNING') return;
-    const result = await this.scanner.scan({ objectKey: snapshot.objectKey, contentType: snapshot.file.contentType, sizeBytes: snapshot.file.sizeBytes });
+    let result;
+    try {
+      result = await this.scanner.scan({ objectKey: snapshot.objectKey, contentType: snapshot.file.contentType, sizeBytes: snapshot.file.sizeBytes });
+    } catch (error) {
+      if ((event.attempts ?? 1) < 5) throw new FileDependencyUnavailableError();
+      await this.repository.withTransaction(async (client) => {
+        await this.store.markQuarantined(client, command.organizationId, command.fileId, command.scanEventId, 'SCANNING', error instanceof Error ? error.name : 'SCAN_UNAVAILABLE');
+      });
+      return;
+    }
     await this.repository.withTransaction(async (client) => {
       await this.store.applyScanResult(client, {
         organizationId: command.organizationId,
@@ -165,6 +239,7 @@ interface ParsedCompletion {
   operationId: string;
   ownerToken: Buffer;
   requestId: string;
+  attempts: number;
 }
 
 interface ParsedScan {
@@ -173,33 +248,20 @@ interface ParsedScan {
   scanEventId: string;
 }
 
-function parseCompletion(payload: Record<string, unknown>): ParsedCompletion {
+function parseCompletion(payload: Record<string, unknown>, eventOrganizationId?: string, eventAttempts?: number): ParsedCompletion {
   if (!isRecord(payload) || !isString(payload.eventId) || !isString(payload.fileId) || !isString(payload.organizationId) || !isString(payload.commandId) || !isString(payload.operationId) || !isString(payload.ownerToken) || !isString(payload.requestId)) throw new Error('Invalid file completion payload.');
+  if (eventOrganizationId !== undefined && payload.organizationId !== eventOrganizationId) throw new Error('File completion organization does not match its outbox envelope.');
   const ownerToken = Buffer.from(payload.ownerToken, 'base64');
   if (ownerToken.length < 16) throw new Error('Invalid file completion owner token.');
-  return { eventId: payload.eventId, fileId: payload.fileId, organizationId: payload.organizationId, commandId: payload.commandId, operationId: payload.operationId, ownerToken, requestId: payload.requestId };
+  return { eventId: payload.eventId, fileId: payload.fileId, organizationId: payload.organizationId, commandId: payload.commandId, operationId: payload.operationId, ownerToken, requestId: payload.requestId, attempts: eventAttempts ?? 1 };
 }
 
-function parseScan(payload: Record<string, unknown>): ParsedScan {
-  if (!isRecord(payload) || !isString(payload.fileId) || !isString(payload.organizationId) || !isString(payload.scanEventId)) throw new Error('Invalid file scan payload.');
-  return { fileId: payload.fileId, organizationId: payload.organizationId, scanEventId: payload.scanEventId };
-}
-
-function toApiFile(file: FileRecord): Record<string, unknown> {
-  return {
-    id: file.id,
-    organizationId: file.organizationId,
-    version: file.version,
-    createdAt: file.createdAt,
-    updatedAt: file.updatedAt,
-    fileName: file.fileName,
-    contentType: file.contentType,
-    sizeBytes: file.sizeBytes,
-    ...(file.checksum === undefined ? {} : { checksum: file.checksum }),
-    status: file.status,
-    metadata: file.metadata,
-    href: `/api/v1/files/${file.id}`,
-  };
+function parseScan(payload: Record<string, unknown>, eventOrganizationId?: string): ParsedScan {
+  if (!isRecord(payload) || !isString(payload.fileId) || !isString(payload.scanEventId)) throw new Error('Invalid file scan payload.');
+  const organizationId = isString(payload.organizationId) ? payload.organizationId : eventOrganizationId;
+  if (!isString(organizationId)) throw new Error('Invalid file scan payload.');
+  if (eventOrganizationId !== undefined && organizationId !== eventOrganizationId) throw new Error('File scan organization does not match its outbox envelope.');
+  return { fileId: payload.fileId, organizationId, scanEventId: payload.scanEventId };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

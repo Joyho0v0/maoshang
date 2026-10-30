@@ -13,8 +13,10 @@ import { join } from 'node:path';
 import { parse } from 'yaml';
 import { createContractValidator } from '../../../packages/contracts/openapi/runtime-validator.js';
 import { ContractResponseValidationInterceptor } from './common/http/contract-response.interceptor.js';
+import { normalizeRequestId } from './common/http/problem.js';
 import { IdempotencyExecutionInterceptor } from './common/security/idempotency-execution.interceptor.js';
 import { IDEMPOTENCY_REPOSITORY } from './modules/integration/idempotency/postgres-idempotency-repository.js';
+import { FilesService } from './modules/files/application/files.service.js';
 import type { AuthenticationProvider } from './modules/identity/application/session.service.js';
 
 export async function createApp(options: { config?: RuntimeConfig; env?: Record<string, string | undefined>; authenticationProvider?: AuthenticationProvider } = {}): Promise<NestFastifyApplication> {
@@ -26,7 +28,16 @@ export async function createApp(options: { config?: RuntimeConfig; env?: Record<
   app.setGlobalPrefix('api/v1');
   app.useGlobalFilters(new ProblemExceptionFilter(contractValidator));
   app.useGlobalGuards(app.get(AuthenticationGuard), app.get(RequestSafetyGuard));
-  app.useGlobalInterceptors(new ContractResponseValidationInterceptor(contractValidator), new IdempotencyExecutionInterceptor(app.get(IDEMPOTENCY_REPOSITORY), contractValidator));
+  const files = app.get(FilesService);
+  app.useGlobalInterceptors(
+    new ContractResponseValidationInterceptor(contractValidator),
+    new IdempotencyExecutionInterceptor(app.get(IDEMPOTENCY_REPOSITORY), contractValidator, async (operationId, principal, request, stored) => {
+      if (operationId !== 'createUploadIntent') return undefined;
+      const fileId = stored.resource?.type === 'FILE' ? stored.resource.id : undefined;
+      if (fileId === undefined) return undefined;
+      return files.replayUploadIntent(principal, fileId, normalizeRequestId(request.headers['x-request-id']), stored);
+    }),
+  );
   return app;
 }
 

@@ -12,7 +12,7 @@ export class PostgresOutboxSource implements OutboxSource {
     try {
       await client.query('BEGIN');
       const claimToken = randomBytes(32);
-      const result = await client.query<{ id: string; topic: string; payload: Record<string, unknown> }>(
+      const result = await client.query<{ id: string; organization_id: string; topic: string; payload: Record<string, unknown>; attempts: number }>(
         `WITH candidates AS (
            SELECT id
            FROM ${this.table}
@@ -27,11 +27,11 @@ export class PostgresOutboxSource implements OutboxSource {
              claim_expires_at = now() + interval '30 seconds', attempts = event.attempts + 1
          FROM candidates
          WHERE event.id = candidates.id
-         RETURNING event.id, event.event_type AS topic, event.payload`,
+         RETURNING event.id, event.organization_id, event.event_type AS topic, event.payload, event.attempts`,
         [limit, claimToken],
       );
       await client.query('COMMIT');
-      return result.rows.map((row) => ({ ...row, claimToken, source: this.table === 'integration.outbox_event' ? 'foundation' as const : 'identity' as const }));
+      return result.rows.map((row) => ({ id: row.id, organizationId: row.organization_id, topic: row.topic, payload: row.payload, attempts: row.attempts, claimToken, source: this.table === 'integration.outbox_event' ? 'foundation' as const : 'identity' as const }));
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

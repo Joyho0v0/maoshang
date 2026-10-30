@@ -16,6 +16,8 @@ import {
   FileState,
   FileStateConflictError,
   isFileVisibleToPrincipal,
+  isAllowedFileLink,
+  matchesScope,
   buildServerObjectKey,
 } from '../domain/files.js';
 import type { DownloadTransfer, ObjectStorageAdapter, UploadTransfer } from '../infrastructure/file-adapters.js';
@@ -66,12 +68,12 @@ export class FilesService {
     } catch (error) {
       throw new FileCommandFailureError(uploadInputProblem(error, requestId));
     }
-    if (!principal.permissions.has('file.create') || principal.scopes.get('FILE') === undefined) throw new FileCommandFailureError(permissionDenied(requestId));
+    if (!principal.permissions.has('file.create') || principal.scopes.get('FILE')?.resourceType !== 'FILE') throw new FileCommandFailureError(permissionDenied(requestId));
 
     const fileId = randomUUID();
-    const scope = principal.scopes.get('FILE') as { scopeType: 'OWN' | 'GROUP_SET' | 'ALL_ORG'; groupIds: readonly string[] };
+    const scope = principal.scopes.get('FILE') as { resourceType: string; scopeType: 'OWN' | 'GROUP_SET' | 'ALL_ORG'; groupIds: readonly string[] };
     const businessGroupId = scope.scopeType === 'GROUP_SET'
-      ? await this.store.resolvePrimaryBusinessGroup(client, principal.organizationId, principal.userId)
+      ? await this.store.resolvePrimaryBusinessGroup(client, principal.organizationId, principal.userId, scope.groupIds)
       : undefined;
     if (scope.scopeType === 'GROUP_SET' && businessGroupId === undefined) throw new FileCommandFailureError(permissionDenied(requestId));
     const objectKey = buildServerObjectKey(principal.organizationId, fileId, randomBytes(24).toString('hex'));
@@ -107,7 +109,7 @@ export class FilesService {
 
   async completeUpload(principal: AuthorizationPrincipal, fileId: string, input: FileCommandRequest, expectedEtag: string | undefined, requestId: string, client: PoolClient, claim: PostgresClaim): Promise<CommandResult<Record<string, unknown>>> {
     if (principal.status !== 'ACTIVE') throw new FileCommandFailureError(permissionDenied(requestId));
-    if (!principal.permissions.has('file.create') || principal.scopes.get('FILE') === undefined) throw new FileCommandFailureError(permissionDenied(requestId));
+    if (!principal.permissions.has('file.create') || principal.scopes.get('FILE')?.resourceType !== 'FILE') throw new FileCommandFailureError(permissionDenied(requestId));
     try {
       assertCompleteAction(input.action);
     } catch (error) {
@@ -117,7 +119,7 @@ export class FilesService {
     const expectedVersion = parseEtag(expectedEtag);
     if (expectedVersion === undefined) throw new FileCommandFailureError(buildProblem({ status: 400, code: 'VALIDATION_FAILED', title: 'Validation failed', requestId, retryable: false, violations: [{ field: 'If-Match', code: 'INVALID', message: 'A valid file version ETag is required.' }] }));
     const snapshot = await this.store.findCompletionSnapshot(client, principal.organizationId, fileId);
-    if (snapshot === undefined || !canMutateFile(principal, snapshot.file)) throw new FileNotFoundError();
+    if (snapshot === undefined || !canMutateFile(principal, snapshot.file)) throw new FileCommandFailureError(resourceNotFound(requestId));
     if (snapshot.file.version !== expectedVersion) throw new FileCommandFailureError(versionConflict(requestId, snapshot.file));
     if (snapshot.file.status !== FileState.PENDING_UPLOAD) throw new FileCommandFailureError(stateConflict(requestId, snapshot.file));
     if (snapshot.intentStatus !== 'ACTIVE' || snapshot.expiresAt.getTime() <= Date.now()) throw new FileCommandFailureError(fileConflict(requestId, fileId, 'UPLOAD_INTENT_EXPIRED'));
@@ -158,6 +160,28 @@ export class FilesService {
     return { status: 202, body };
   }
 
+  async replayUploadIntent(principal: AuthorizationPrincipal, fileId: string, requestId: string, stored: CommandResult<unknown>): Promise<CommandResult<unknown>> {
+    this.assertActive(principal);
+    const resource = stored.resource;
+    if (resource?.type !== 'FILE' || resource.id !== fileId) throw new FileCommandFailureError(resourceNotFound(requestId));
+    const snapshot = await this.store.findUploadIntentForReplay(principal.organizationId, fileId);
+    if (snapshot === undefined || !canMutateFile(principal, snapshot.file) || snapshot.file.status !== FileState.PENDING_UPLOAD) {
+      throw new FileCommandFailureError(resourceNotFound(requestId));
+    }
+    const now = Date.now();
+    if (snapshot.intentStatus !== 'ACTIVE' || snapshot.expiresAt.getTime() <= now) throw new FileCommandFailureError(fileConflict(requestId, fileId, 'UPLOAD_INTENT_EXPIRED'));
+    const expiresAt = new Date(Math.min(snapshot.expiresAt.getTime(), now + UPLOAD_INTENT_TTL_MS));
+    const transfer = await this.objectStorage.createUploadTransfer({ objectKey: snapshot.objectKey, contentType: snapshot.file.contentType, sizeBytes: snapshot.file.sizeBytes, expiresAt });
+    const href = `/api/v1/files/${fileId}`;
+    return {
+      status: 201,
+      body: { file: toApiFile(snapshot.file, href), href, transfer },
+      resource: { type: 'FILE', id: fileId, version: snapshot.file.version, href },
+      resultHref: href,
+      responseHeaders: { location: href, 'content-location': href, etag: formatEtag(snapshot.file.version), 'cache-control': 'no-store' },
+    };
+  }
+
   async createDownloadIntent(principal: AuthorizationPrincipal, fileId: string, requestId: string): Promise<{ file: FileRecord; href: string; transfer: DownloadTransfer }> {
     this.assertActive(principal);
     const fileWithLinks = await this.store.findFileWithLinks(principal.organizationId, fileId);
@@ -172,11 +196,22 @@ export class FilesService {
 
   async linkAvailableFile(client: PoolClient, input: { principal: AuthorizationPrincipal; fileId: string; resourceType: string; resourceId: string; purpose: string; resourceOwnerId?: string; resourceBusinessGroupId?: string }): Promise<void> {
     this.assertActive(input.principal);
-    if (!input.principal.permissions.has('file.create') || input.principal.scopes.get('FILE') === undefined) throw new FileAuthorizationDeniedError();
+    const normalizedResourceType = input.resourceType.trim().toUpperCase();
+    if (!input.principal.permissions.has('file.create')
+      || input.principal.scopes.get('FILE')?.resourceType !== 'FILE'
+      || !input.principal.permissions.has(`${normalizedResourceType.toLowerCase()}.read`)
+      || !isAllowedFileLink(normalizedResourceType, input.purpose)) throw new FileAuthorizationDeniedError();
+    const file = await this.store.findFile(input.principal.organizationId, input.fileId);
+    const fileScope = input.principal.scopes.get('FILE');
+    const resourceType = normalizedResourceType;
+    const resourceScope = input.principal.scopes.get(resourceType);
+    if (file === undefined || fileScope === undefined || resourceScope === undefined
+      || !canMutateFile(input.principal, file)
+      || !matchesScope(resourceScope, input.principal.userId, input.resourceOwnerId, input.resourceBusinessGroupId)) throw new FileAuthorizationDeniedError();
     await this.store.linkFile(client, {
       organizationId: input.principal.organizationId,
       fileId: input.fileId,
-      resourceType: input.resourceType,
+      resourceType,
       resourceId: input.resourceId,
       purpose: input.purpose,
       linkedBy: input.principal.userId,
@@ -232,7 +267,7 @@ function sanitizeMetadata(value: Record<string, unknown> | undefined): Record<st
 
 function canMutateFile(principal: AuthorizationPrincipal, file: FileRecord): boolean {
   const scope = principal.scopes.get('FILE');
-  if (scope === undefined || file.organizationId !== principal.organizationId) return false;
+  if (scope === undefined || scope.resourceType !== 'FILE' || file.organizationId !== principal.organizationId) return false;
   if (scope.scopeType === 'ALL_ORG') return true;
   if (scope.scopeType === 'OWN') return file.createdBy === principal.userId;
   return file.businessGroupId !== undefined && scope.groupIds.includes(file.businessGroupId);
@@ -241,7 +276,7 @@ function canMutateFile(principal: AuthorizationPrincipal, file: FileRecord): boo
 function canReadFileMetadata(principal: AuthorizationPrincipal, file: FileRecord): boolean {
   if (!principal.permissions.has('file.read')) return false;
   const scope = principal.scopes.get('FILE');
-  if (scope === undefined || file.organizationId !== principal.organizationId) return false;
+  if (scope === undefined || scope.resourceType !== 'FILE' || file.organizationId !== principal.organizationId) return false;
   if (scope.scopeType === 'ALL_ORG') return true;
   if (scope.scopeType === 'OWN') return file.createdBy === principal.userId;
   return file.businessGroupId !== undefined && scope.groupIds.includes(file.businessGroupId);
@@ -250,17 +285,27 @@ function canReadFileMetadata(principal: AuthorizationPrincipal, file: FileRecord
 function hasAuthorizedLink(principal: AuthorizationPrincipal, file: FileWithLinks): boolean {
   const fileScope = principal.scopes.get('FILE');
   if (fileScope === undefined) return false;
-  return file.links.some((link) => isFileVisibleToPrincipal({
-    organizationId: file.organizationId,
-    createdBy: file.createdBy,
-    ...(file.businessGroupId === undefined ? {} : { businessGroupId: file.businessGroupId }),
-    linkedResourceType: link.resourceType,
-    ...(link.resourceOwnerId === undefined ? {} : { linkedResourceOwnerId: link.resourceOwnerId }),
-    ...(link.resourceBusinessGroupId === undefined ? {} : { linkedResourceGroupId: link.resourceBusinessGroupId }),
-    userId: principal.userId,
-    permissions: principal.permissions,
-    fileScope,
-  }));
+  return file.links.some((link) => {
+    const resourceScope = principal.scopes.get(link.resourceType.toUpperCase());
+    return isFileVisibleToPrincipal({
+      organizationId: file.organizationId,
+      principalOrganizationId: principal.organizationId,
+      createdBy: file.createdBy,
+      ...(file.businessGroupId === undefined ? {} : { businessGroupId: file.businessGroupId }),
+      linkedResourceType: link.resourceType,
+      linkedResourcePurpose: link.purpose,
+      ...(link.resourceOwnerId === undefined ? {} : { linkedResourceOwnerId: link.resourceOwnerId }),
+      ...(link.resourceBusinessGroupId === undefined ? {} : { linkedResourceGroupId: link.resourceBusinessGroupId }),
+      userId: principal.userId,
+      permissions: principal.permissions,
+      fileScope,
+      ...(resourceScope === undefined ? {} : { resourceScope }),
+    });
+  });
+}
+
+function resourceNotFound(requestId: string): ProblemDocument {
+  return buildProblem({ status: 404, code: 'RESOURCE_NOT_FOUND', title: 'Resource not found', requestId, retryable: false });
 }
 
 function versionConflict(requestId: string, file: FileRecord): ProblemDocument {
@@ -308,4 +353,21 @@ export function problemForFileError(error: unknown, requestId: string, fileId?: 
   if (error instanceof FileIntegrityError) return buildProblem({ status: 409, code: 'BUSINESS_RULE_VIOLATION', title: 'Uploaded file integrity check failed', requestId, retryable: false });
   if (error instanceof FilePolicyError) return uploadInputProblem(error, requestId);
   return undefined;
+}
+
+export function toApiFile(file: FileRecord, href: string): Record<string, unknown> {
+  return {
+    id: file.id,
+    organizationId: file.organizationId,
+    version: file.version,
+    createdAt: file.createdAt,
+    updatedAt: file.updatedAt,
+    fileName: file.fileName,
+    contentType: file.contentType,
+    sizeBytes: file.sizeBytes,
+    ...(file.checksum === undefined ? {} : { checksum: file.checksum }),
+    status: file.status,
+    metadata: file.metadata,
+    href,
+  };
 }

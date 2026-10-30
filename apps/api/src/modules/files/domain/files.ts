@@ -1,4 +1,4 @@
-import type { DataScopeType } from '../../identity/domain/authz.js';
+import type { DataScopeGrant, DataScopeType } from '../../identity/domain/authz.js';
 
 export const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 
@@ -56,6 +56,13 @@ export class FileDependencyUnavailableError extends Error {
   }
 }
 
+export class FileObjectNotFoundError extends Error {
+  constructor() {
+    super('The uploaded object was not found.');
+    this.name = 'FileObjectNotFoundError';
+  }
+}
+
 export class FileNotFoundError extends Error {
   constructor() {
     super('The file is not available.');
@@ -68,6 +75,26 @@ export class FileAuthorizationDeniedError extends Error {
     super('The file is not available to this principal.');
     this.name = 'FileAuthorizationDeniedError';
   }
+}
+
+const FILE_LINK_PURPOSES = new Set([
+  'ATTACHMENT',
+  'DOCUMENT',
+  'EVIDENCE',
+  'IMAGE',
+  'PROOF',
+]);
+
+export const FILE_LINK_RESOURCE_TYPES = new Set(['CUSTOMER', 'DOCUMENT', 'INVENTORY', 'ORDER', 'PAYMENT', 'TASK']);
+
+export function isAllowedFileLink(resourceType: string, purpose: string): boolean {
+  const normalizedType = resourceType.trim().toUpperCase();
+  const normalizedPurpose = purpose.trim().toUpperCase();
+  return FILE_LINK_RESOURCE_TYPES.has(normalizedType)
+    && (FILE_LINK_PURPOSES.has(normalizedPurpose)
+      || normalizedPurpose === `${normalizedType}_ATTACHMENT`
+      || normalizedPurpose === `${normalizedType}_EVIDENCE`
+      || normalizedPurpose === `${normalizedType}_PROOF`);
 }
 
 export function assertCompleteAction(action: string): void {
@@ -105,27 +132,37 @@ export function nextFileStateAfterScan(result: ScanResult): FileState.AVAILABLE 
 
 export interface FileVisibilityInput {
   organizationId: string;
+  principalOrganizationId: string;
   createdBy: string;
   businessGroupId?: string | null;
   linkedResourceType?: string | null;
+  linkedResourcePurpose?: string | null;
   linkedResourceOwnerId?: string | null;
   linkedResourceGroupId?: string | null;
   userId: string;
   permissions: ReadonlySet<string>;
   fileScope: { scopeType: DataScopeType; groupIds: readonly string[] };
+  resourceScope?: DataScopeGrant | null;
 }
 
 export function isFileVisibleToPrincipal(input: FileVisibilityInput): boolean {
-  if (input.organizationId.length === 0 || input.permissions.has('file.read') === false) return false;
-  if (input.linkedResourceType === undefined || input.linkedResourceType === null || input.linkedResourceType.length === 0) return false;
-  const linkedPermission = `${input.linkedResourceType.toLowerCase()}.read`;
-  if (input.linkedResourceType !== 'FILE' && input.permissions.has(linkedPermission) === false) return false;
-  if (input.fileScope.scopeType === 'ALL_ORG') return true;
-  if (input.fileScope.scopeType === 'OWN') return input.createdBy === input.userId;
-  return input.businessGroupId !== null
-    && input.businessGroupId !== undefined
-    && input.fileScope.groupIds.includes(input.businessGroupId)
-    && (input.linkedResourceGroupId === null || input.linkedResourceGroupId === undefined || input.fileScope.groupIds.includes(input.linkedResourceGroupId));
+  if (input.organizationId.length === 0
+    || input.organizationId !== input.principalOrganizationId
+    || input.permissions.has('file.read') === false) return false;
+  const resourceType = input.linkedResourceType?.trim().toUpperCase();
+  const purpose = input.linkedResourcePurpose;
+  if (resourceType === undefined || purpose === undefined || purpose === null || !isAllowedFileLink(resourceType, purpose)) return false;
+  const resourceGrant = input.resourceScope;
+  if (resourceGrant === undefined || resourceGrant === null || resourceGrant.resourceType !== resourceType) return false;
+  if (input.permissions.has(`${resourceType.toLowerCase()}.read`) === false) return false;
+  if (!matchesScope(input.fileScope, input.userId, input.createdBy, input.businessGroupId)) return false;
+  return matchesScope(resourceGrant, input.userId, input.linkedResourceOwnerId, input.linkedResourceGroupId);
+}
+
+export function matchesScope(scope: Pick<DataScopeGrant, 'scopeType' | 'groupIds'>, userId: string, ownerId?: string | null, groupId?: string | null): boolean {
+  if (scope.scopeType === 'ALL_ORG') return true;
+  if (scope.scopeType === 'OWN') return ownerId === userId;
+  return groupId !== undefined && groupId !== null && scope.groupIds.includes(groupId);
 }
 
 export function buildServerObjectKey(organizationId: string, fileId: string, nonce: string): string {

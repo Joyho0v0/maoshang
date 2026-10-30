@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS files.file_object (
   FOREIGN KEY (organization_id, created_by) REFERENCES iam.user_account (organization_id, id) ON DELETE RESTRICT,
   FOREIGN KEY (organization_id, business_group_id) REFERENCES org.business_group (organization_id, id) ON DELETE RESTRICT
 );
+CREATE UNIQUE INDEX IF NOT EXISTS file_object_organization_id_object_key_uq ON files.file_object (organization_id, id, object_key);
 CREATE INDEX IF NOT EXISTS file_object_organization_status_idx ON files.file_object (organization_id, status, updated_at DESC, id);
 CREATE INDEX IF NOT EXISTS file_object_created_by_idx ON files.file_object (organization_id, created_by, updated_at DESC, id);
 CREATE INDEX IF NOT EXISTS file_object_business_group_idx ON files.file_object (organization_id, business_group_id, updated_at DESC, id) WHERE business_group_id IS NOT NULL;
@@ -38,12 +39,13 @@ CREATE TABLE IF NOT EXISTS files.upload_intent (
   created_by uuid NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (organization_id, object_key),
-  FOREIGN KEY (organization_id, file_id) REFERENCES files.file_object (organization_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (organization_id, file_id, object_key) REFERENCES files.file_object (organization_id, id, object_key) ON DELETE RESTRICT,
   FOREIGN KEY (organization_id, created_by) REFERENCES iam.user_account (organization_id, id) ON DELETE RESTRICT,
   CHECK ((status = 'ACTIVE' AND consumed_at IS NULL) OR (status <> 'ACTIVE' AND consumed_at IS NOT NULL))
 );
 CREATE INDEX IF NOT EXISTS upload_intent_expiry_idx ON files.upload_intent (expires_at, file_id) WHERE status = 'ACTIVE';
 CREATE INDEX IF NOT EXISTS upload_intent_created_by_idx ON files.upload_intent (organization_id, created_by, created_at DESC, file_id);
+CREATE INDEX IF NOT EXISTS upload_intent_file_object_idx ON files.upload_intent (organization_id, file_id, object_key);
 
 CREATE TABLE IF NOT EXISTS files.file_link (
   id uuid PRIMARY KEY,
@@ -64,6 +66,9 @@ CREATE TABLE IF NOT EXISTS files.file_link (
 );
 CREATE INDEX IF NOT EXISTS file_link_resource_idx ON files.file_link (organization_id, resource_type, resource_id, file_id);
 CREATE INDEX IF NOT EXISTS file_link_file_idx ON files.file_link (organization_id, file_id, linked_at DESC, id);
+CREATE INDEX IF NOT EXISTS file_link_linked_by_idx ON files.file_link (organization_id, linked_by, id);
+CREATE INDEX IF NOT EXISTS file_link_resource_owner_idx ON files.file_link (organization_id, resource_owner_id, id);
+CREATE INDEX IF NOT EXISTS file_link_resource_group_idx ON files.file_link (organization_id, resource_business_group_id, id);
 
 CREATE TABLE IF NOT EXISTS files.scan_result (
   id uuid PRIMARY KEY,

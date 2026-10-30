@@ -12,11 +12,50 @@ describe('Files migration', () => {
     expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS files\.scan_result/i);
     expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS integration\.inbox_consumption/i);
     expect(sql).toMatch(/FOREIGN KEY \(organization_id, created_by\)/i);
+    expect(sql).toMatch(/FOREIGN KEY \(organization_id, file_id, object_key\) REFERENCES files\.file_object \(organization_id, id, object_key\)/i);
     expect(sql).toMatch(/UNIQUE \(organization_id, object_key\)/i);
     expect(sql).toMatch(/CHECK \(status IN \('PENDING_UPLOAD', 'UPLOADED', 'SCANNING', 'AVAILABLE', 'REJECTED', 'QUARANTINED'\)\)/i);
     expect(sql).toMatch(/CREATE INDEX .*file_link.*resource/i);
+    expect(sql).toMatch(/file_link_linked_by_idx/i);
+    expect(sql).toMatch(/file_link_resource_owner_idx/i);
+    expect(sql).toMatch(/file_link_resource_group_idx/i);
+    expect(sql).toMatch(/upload_intent_file_object_idx/i);
     expect(down).not.toMatch(/DROP SCHEMA/i);
     expect(down).not.toMatch(/CASCADE/i);
+  });
+
+  it.skipIf(process.env.DATABASE_URL === undefined)('proves every Files foreign key has a usable left-prefix child index', async () => {
+    const databaseUrl = process.env.DATABASE_URL;
+    if (databaseUrl === undefined) return;
+    const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
+    try {
+      const result = await pool.query<{ constraint_name: string }>(`
+        WITH files_fks AS (
+          SELECT con.oid, con.conrelid, con.conkey, con.conname
+            FROM pg_constraint AS con
+            JOIN pg_class AS rel ON rel.oid = con.conrelid
+            JOIN pg_namespace AS ns ON ns.oid = rel.relnamespace
+           WHERE con.contype = 'f' AND ns.nspname = 'files'
+        )
+        SELECT conname AS constraint_name
+          FROM files_fks AS fk
+         WHERE NOT EXISTS (
+           SELECT 1
+             FROM pg_index AS idx
+            WHERE idx.indrelid = fk.conrelid
+              AND idx.indisvalid
+              AND idx.indnkeyatts >= cardinality(fk.conkey)
+              AND NOT EXISTS (
+                SELECT 1
+                  FROM generate_subscripts(fk.conkey, 1) AS pos
+                 WHERE idx.indkey[pos] <> fk.conkey[pos]
+              )
+         )
+         ORDER BY conname`);
+      expect(result.rows).toEqual([]);
+    } finally {
+      await pool.end();
+    }
   });
 
   it.skipIf(process.env.DATABASE_URL === undefined)('rehearses files up/up and rollback without removing a later sentinel', async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   FileIntegrityError,
+  FileStateConflictError,
   FileState,
   assertCompleteAction,
   assertSupportedContentType,
@@ -17,7 +18,7 @@ describe('files domain', () => {
   it('accepts only the explicit complete command action', () => {
     expect(() => assertCompleteAction('COMPLETE')).not.toThrow();
     expect(() => assertCompleteAction('COMPLETE_UPLOAD')).not.toThrow();
-    expect(() => assertCompleteAction('DOWNLOAD')).toThrow(/complete/i);
+    expect(() => assertCompleteAction('DOWNLOAD')).toThrow(FileStateConflictError);
   });
 
   it('enforces the non-production file media allowlist and size policy', () => {
@@ -58,6 +59,7 @@ describe('files domain', () => {
       createdBy: ownerId,
       businessGroupId: groupId,
       linkedResourceType: 'ORDER',
+      linkedResourcePurpose: 'ORDER_ATTACHMENT',
       linkedResourceOwnerId: ownerId,
       linkedResourceGroupId: groupId,
     };
@@ -65,29 +67,58 @@ describe('files domain', () => {
       userId: ownerId,
       permissions: new Set(['file.read', 'order.read']),
       fileScope: { scopeType: 'OWN', groupIds: [] },
+      resourceScope: { resourceType: 'ORDER', scopeType: 'OWN', groupIds: [] },
       ...base,
       organizationId: orgId,
+      principalOrganizationId: orgId,
     })).toBe(true);
     expect(isFileVisibleToPrincipal({
       userId: '00000000-0000-4000-8000-000000000099',
       permissions: new Set(['file.read', 'order.read']),
       fileScope: { scopeType: 'GROUP_SET', groupIds: [groupId] },
+      resourceScope: { resourceType: 'ORDER', scopeType: 'GROUP_SET', groupIds: [groupId] },
       ...base,
       organizationId: orgId,
+      principalOrganizationId: orgId,
     })).toBe(true);
     expect(isFileVisibleToPrincipal({
       userId: ownerId,
       permissions: new Set(['file.read', 'order.read']),
       fileScope: { scopeType: 'ALL_ORG', groupIds: [] },
+      resourceScope: { resourceType: 'ORDER', scopeType: 'ALL_ORG', groupIds: [] },
       ...base,
       organizationId: '00000000-0000-4000-8000-000000000099',
+      principalOrganizationId: orgId,
     })).toBe(false);
     expect(isFileVisibleToPrincipal({
       userId: ownerId,
       permissions: new Set(['file.read']),
       fileScope: { scopeType: 'OWN', groupIds: [] },
+      resourceScope: { resourceType: 'ORDER', scopeType: 'OWN', groupIds: [] },
       ...base,
       organizationId: orgId,
+      principalOrganizationId: orgId,
+    })).toBe(false);
+
+    expect(isFileVisibleToPrincipal({
+      userId: '00000000-0000-4000-8000-000000000099',
+      permissions: new Set(['file.read', 'order.read']),
+      fileScope: { scopeType: 'ALL_ORG', groupIds: [] },
+      resourceScope: { resourceType: 'ORDER', scopeType: 'OWN', groupIds: [] },
+      ...base,
+      organizationId: orgId,
+      principalOrganizationId: orgId,
+    })).toBe(false);
+
+    expect(isFileVisibleToPrincipal({
+      userId: ownerId,
+      permissions: new Set(['file.read', 'order.read']),
+      fileScope: { scopeType: 'ALL_ORG', groupIds: [] },
+      resourceScope: { resourceType: 'ORDER', scopeType: 'GROUP_SET', groupIds: [groupId] },
+      ...base,
+      linkedResourceGroupId: '00000000-0000-4000-8000-000000000099',
+      organizationId: orgId,
+      principalOrganizationId: orgId,
     })).toBe(false);
   });
 });

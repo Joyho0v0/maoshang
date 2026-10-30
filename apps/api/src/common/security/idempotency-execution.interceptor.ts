@@ -17,9 +17,11 @@ interface PrincipalRequest extends FastifyRequest {
   user?: AuthorizationPrincipal;
 }
 
+export type IdempotencyReplayAdapter = (operationId: string, principal: AuthorizationPrincipal, request: PrincipalRequest, stored: CommandResult<unknown>) => Promise<CommandResult<unknown> | undefined>;
+
 @Injectable()
 export class IdempotencyExecutionInterceptor implements NestInterceptor {
-  constructor(private readonly repository: PostgresIdempotencyRepository, private readonly validator?: ContractValidator) {}
+  constructor(private readonly repository: PostgresIdempotencyRepository, private readonly validator?: ContractValidator, private readonly replayAdapter?: IdempotencyReplayAdapter) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<PrincipalRequest>();
@@ -42,6 +44,7 @@ export class IdempotencyExecutionInterceptor implements NestInterceptor {
         ...(headerString(request.headers['if-match']) === undefined ? {} : { ifMatch: headerString(request.headers['if-match']) as string }),
       }),
     };
+    const replayAdapter = this.replayAdapter;
 
     return from(this.repository.execute(input, async (client, claim) => {
       const previous = setIdempotencyTransaction(request, { client, claim });
@@ -67,6 +70,7 @@ export class IdempotencyExecutionInterceptor implements NestInterceptor {
         const result: CommandResult<unknown> = {
           status,
           body,
+          ...(match.definition.operationId === 'createUploadIntent' ? { persistedBody: {} } : {}),
           ...(resource === undefined ? {} : { resource }),
           ...(contentLocation === undefined ? {} : { resultHref: contentLocation }),
           responseHeaders: replayableResponseHeaders(response),
@@ -75,7 +79,7 @@ export class IdempotencyExecutionInterceptor implements NestInterceptor {
       } finally {
         restoreIdempotencyTransaction(request, previous);
       }
-    })).pipe(map((outcome) => {
+    }, replayAdapter === undefined ? undefined : (stored) => replayAdapter(match.definition.operationId, principal, request, stored))).pipe(map((outcome) => {
       const commandStatus = isCommandStatus(outcome)
         ? publicCommandStatus(outcome, match.operation)
         : isCommandResult(outcome) && outcome.status === 202 && isCommandStatus(outcome.body)

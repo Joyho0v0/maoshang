@@ -2,6 +2,8 @@ export interface OutboxEvent {
   id: string;
   topic: string;
   payload: Record<string, unknown>;
+  organizationId?: string;
+  attempts?: number;
   claimToken?: Buffer;
   source?: 'foundation' | 'identity';
 }
