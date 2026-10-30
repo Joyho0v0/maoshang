@@ -1,7 +1,7 @@
 # ADR: Evolve Joint Contract v1 baseline at b06da0b
 
 - Date: 2026-10-29
-- Status: proposed
+- Status: accepted
 
 ## Context
 
@@ -70,3 +70,13 @@ not retroactively authorize runtime promotion or production operations.
 this decision. Runtime promotion, live API implementation, deployment,
 shared/production migration, production secrets, and production readiness are
 separate gates owned by their respective reviewers and operators.
+
+## Acceptance evidence
+
+- 接受日期：`2026-10-30`
+- P2a revision：`9ba22dddd4ffd8e04cc99339398a9d445854a8ad`
+- 最终 P2b revision：`241db49ca0c6f44d8f486cdff3b96e91e2c37606`
+- 后端 Reviewer 评论：`01a18b61-86c6-75e3-99bc-41a5ef2601ba`
+- 前端 Reviewer 评论：`01a18b66-d9ab-7c15-9bd5-4506248ec950`
+- 独立 QA 评论：`01a18b6d-5add-7e6a-b403-ab6cbffc8341`
+- Leader completion 评论：`01a18b70-0b12-7b4d-aa77-a5a90f818078`
