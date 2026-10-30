@@ -267,6 +267,7 @@ it('keeps canonical live zero-diff inventory, decisions, and promotion record au
 });
 
 it('keeps immutable pre-promotion inventory, decisions, and disposition evidence complete', async () => {
+  const archiveBaselineRaw = await readFile(new URL('openapi.baseline.before.yaml', archiveDirectory));
   const archiveInventoryRaw = await readFile(new URL('breaking-inventory.before.json', archiveDirectory));
   const archiveDecisionsRaw = await readFile(new URL('breaking-decisions.before.json', archiveDirectory));
   const dispositionRaw = await readFile(new URL('contract-disposition-package.json', archiveDirectory));
@@ -274,6 +275,10 @@ it('keeps immutable pre-promotion inventory, decisions, and disposition evidence
   const archiveDecisions = JSON.parse(archiveDecisionsRaw.toString('utf8')) as Record<string, any>;
   const disposition = JSON.parse(dispositionRaw.toString('utf8')) as Record<string, any>;
 
+  const archiveBaselineDigest = createHash('sha256').update(archiveBaselineRaw).digest('hex');
+  expect(archiveBaselineDigest).toBe('9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25');
+  expect(archiveBaselineDigest).toBe(expectedPromotionRecord.archive.baseline.sha256);
+  expect(archiveBaselineDigest).toBe(archiveInventory.baseline.digest);
   expect(createHash('sha256').update(archiveInventoryRaw).digest('hex')).toBe('b89df569dad1b68675618c22696ff2177a7710cf0bd3913d9fd5cd06a5332735');
   expect(createHash('sha256').update(archiveDecisionsRaw).digest('hex')).toBe('80fce55403521eee5a4bc91be9fad6cc4a66f4651bf663ca1ec5d88675cd063b');
   expect(createHash('sha256').update(dispositionRaw).digest('hex')).toBe('0c82a27e2356fed17dd8c1881b6067b1d9abf8c4334417c6c5419ee00c71a948');
