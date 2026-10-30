@@ -59,9 +59,10 @@ function validateSessionOrganizationIdentity(value: unknown): boolean {
 }
 
 function allOrganizationIdentifiersMatch(value: unknown, expected: string, seen: WeakSet<object>): boolean {
-  if (!isRecord(value)) return true;
+  if (typeof value !== 'object' || value === null) return true;
   if (seen.has(value)) return true;
   seen.add(value);
+  if (Array.isArray(value)) return value.every((nested) => allOrganizationIdentifiersMatch(nested, expected, seen));
   for (const [key, nested] of Object.entries(value)) {
     if (key === 'organizationId' && (typeof nested !== 'string' || nested !== expected)) return false;
     if (!allOrganizationIdentifiersMatch(nested, expected, seen)) return false;

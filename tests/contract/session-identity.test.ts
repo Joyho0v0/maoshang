@@ -104,8 +104,62 @@ describe('required Session identity contract', () => {
     const conflicting = withSessionMutation((session) => {
       (session.user as Record<string, unknown>).organizationId = '7c0c4a64-17c7-4af0-ae10-0cc9a7d5e0f1';
     });
+    const nonString = withSessionMutation((session) => {
+      (session.user as Record<string, unknown>).organizationId = { value: sessionOrganizationId };
+    });
 
     expect(validator.validate('Session', consistent)).toBe(true);
     expect(validator.validate('Session', conflicting)).toBe(false);
+    expect(validator.validate('Session', nonString)).toBe(false);
+  });
+
+  it.each([
+    {
+      location: 'scopeSummary',
+      mutate: (session: Record<string, unknown>, organizationId: unknown) => {
+        (session.scopeSummary as Record<string, unknown>).organizations = [{ organizationId }];
+      },
+    },
+    {
+      location: 'user.data.lines',
+      mutate: (session: Record<string, unknown>, organizationId: unknown) => {
+        const user = session.user as Record<string, unknown>;
+        const data = user.data as Record<string, unknown>;
+        data.lines = [{ organizationId }];
+      },
+    },
+  ])('validates repeated organization identifiers in $location through both generated Session response paths', async ({ mutate }) => {
+    const documentValue = await document();
+    const operations = [
+      ['createSession', { headers: { 'X-CSRF-Token': 'csrf-token-value' }, body: { provider: 'LOCAL_PASSWORD' } }, 201],
+      ['getCurrentSession', {}, 200],
+    ] as const;
+    const conflictingOrganizationId = '7c0c4a64-17c7-4af0-ae10-0cc9a7d5e0f1';
+
+    for (const [operationId, input, status] of operations) {
+      const consistentValidator = createContractValidator(documentValue);
+      const consistent = withSessionMutation((session) => mutate(session, sessionOrganizationId));
+      const consistentClient = new GeneratedApiClient({
+        fetch: async () => response(consistent, status),
+        validator: consistentValidator,
+      });
+      await expect(consistentClient.call(operationId, input as never)).resolves.toMatchObject({ status });
+
+      const conflictingValidator = createContractValidator(documentValue);
+      const conflicting = withSessionMutation((session) => mutate(session, conflictingOrganizationId));
+      const conflictingClient = new GeneratedApiClient({
+        fetch: async () => response(conflicting, status),
+        validator: conflictingValidator,
+      });
+      await expect(conflictingClient.call(operationId, input as never)).rejects.toThrow(/Invalid Session response/);
+
+      const nonStringValidator = createContractValidator(documentValue);
+      const nonString = withSessionMutation((session) => mutate(session, { id: conflictingOrganizationId }));
+      const nonStringClient = new GeneratedApiClient({
+        fetch: async () => response(nonString, status),
+        validator: nonStringValidator,
+      });
+      await expect(nonStringClient.call(operationId, input as never)).rejects.toThrow(/Invalid Session response/);
+    }
   });
 });
