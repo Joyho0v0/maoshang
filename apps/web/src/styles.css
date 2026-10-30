@@ -92,6 +92,51 @@ h1 { margin: 0; color: var(--ink); font-size: clamp(2.1rem, 5vw, 4.5rem); letter
 .global-error p:not(.eyebrow) { color: var(--ink-muted); line-height: 1.65; }
 .page--state { max-width: 800px; padding-top: clamp(2rem, 8vw, 6rem); }
 
+.domain-page { max-width: 1160px; }
+.domain-page__intro { align-items: flex-end; margin-bottom: 2rem; }
+.domain-page__intro .button { margin-top: 0; white-space: nowrap; text-decoration: none; }
+.scope-notice { margin: 0 0 1rem; border-left: 3px solid var(--color-info); background: #f2f7fb; padding: 0.8rem 1rem; color: var(--ink-muted); line-height: 1.55; }
+.list-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1rem; }
+.list-toolbar label { color: var(--ink-muted); font-size: 0.86rem; font-weight: 750; }
+.list-toolbar select, .domain-form input, .domain-form textarea { min-height: 2.7rem; border: 1px solid #b7c8d6; background: var(--paper); color: var(--ink); padding: 0.55rem 0.7rem; }
+.list-toolbar select { min-width: 9.5rem; }
+.button--compact { margin-top: 0; padding: 0.48rem 0.7rem; font-size: 0.78rem; }
+.muted-action { color: var(--ink-muted); font-size: 0.8rem; }
+.back-link { display: inline-block; margin-bottom: 1.5rem; color: var(--navy); font-weight: 700; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+.segment-tabs { display: flex; gap: 0.35rem; border-bottom: 1px solid var(--line); margin: 0 0 1rem; }
+.segment-tabs button { border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--ink-muted); cursor: pointer; padding: 0.75rem 1rem; font-weight: 750; }
+.segment-tabs button.is-active { border-bottom-color: var(--mint); color: var(--navy); }
+.detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.detail-card, .command-panel { border: 1px solid var(--line); background: var(--paper); padding: clamp(1rem, 3vw, 1.5rem); }
+.detail-card h2, .command-panel h2 { margin: 0; color: var(--ink); font-size: 1.15rem; }
+.detail-card p { color: var(--ink-muted); line-height: 1.65; }
+.detail-card dl { display: grid; gap: 0.8rem; margin: 1rem 0 0; }
+.detail-card dl div { display: grid; grid-template-columns: minmax(6rem, 0.5fr) 1fr; gap: 1rem; border-bottom: 1px solid var(--line); padding-bottom: 0.65rem; }
+.detail-card dt { color: var(--ink-muted); font-size: 0.82rem; }
+.detail-card dd { margin: 0; overflow-wrap: anywhere; color: var(--ink); font-weight: 650; }
+.command-panel { margin: 1rem 0; }
+.muted-copy, .form-intro { color: var(--ink-muted); line-height: 1.65; }
+.command-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 1rem; }
+.command-actions .button { margin-top: 0; }
+.inline-error { border-left: 3px solid var(--danger); background: #fff7f6; padding: 0.7rem 0.85rem; color: #9e3e39; }
+.form-page { max-width: 760px; }
+.form-page h1 { margin-bottom: 0.9rem; }
+.domain-form { display: grid; gap: 0.5rem; margin-top: 1.5rem; border: 1px solid var(--line); background: var(--paper); padding: clamp(1rem, 3vw, 1.5rem); }
+.domain-form label { margin-top: 0.55rem; color: var(--ink); font-weight: 750; }
+.domain-form textarea { min-height: 7rem; resize: vertical; }
+.form-actions { display: flex; flex-wrap: wrap; gap: 0.65rem; margin-top: 0.8rem; }
+.form-actions .button { margin-top: 0; text-decoration: none; }
+.order-lines-card { margin-bottom: 1rem; }
+.order-total { margin: 1rem 0 0; color: var(--ink); font-weight: 800; }
+.history-list { margin: 1rem 0 0; padding-left: 1.25rem; color: var(--ink-muted); line-height: 1.8; }
+
+@media (max-width: 720px) {
+  .domain-page__intro { align-items: flex-start; }
+  .domain-page__intro .button { margin-top: 0.25rem; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .detail-card dl div { grid-template-columns: minmax(5.5rem, 0.7fr) 1fr; }
+}
+
 @media (max-width: 720px) {
   .app-shell { display: block; }
   .sidebar { width: auto; padding: 0.8rem 1rem; }
@@ -145,6 +190,7 @@ h1 { margin: 0; color: var(--ink); font-size: clamp(2.1rem, 5vw, 4.5rem); letter
 .toast--error { border-left-color: var(--danger); }
 
 .table-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--line); background: var(--paper); }
+.domain-page .table-scroll table { min-width: 42rem; }
 .table-state { border: 1px solid var(--line); background: var(--paper); padding: var(--space-6); color: var(--ink-muted); }
 .table-state--error { border-left: 4px solid var(--danger); }
 .table-state .button { margin-top: var(--space-2); }

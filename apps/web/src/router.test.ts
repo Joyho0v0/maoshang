@@ -18,6 +18,20 @@ describe('application router', () => {
     expect(router.currentRoute.value.name).toBe('loading');
   });
 
+  it('exposes the customers, catalog and orders vertical-slice routes', async () => {
+    const router = createAppRouter(createMemoryHistory());
+
+    await router.push('/customers');
+    await router.isReady();
+    expect(router.currentRoute.value.name).toBe('customers');
+
+    await router.push('/catalog');
+    expect(router.currentRoute.value.name).toBe('catalog');
+
+    await router.push('/orders');
+    expect(router.currentRoute.value.name).toBe('orders');
+  });
+
   it('guards the local UI harness route to dev and test builds', () => {
     const webRoot = process.cwd().endsWith('/apps/web') ? process.cwd() : join(process.cwd(), 'apps/web');
     const source = readFileSync(join(webRoot, 'src/router.ts'), 'utf8');

@@ -35,6 +35,13 @@ describe('URL state privacy boundary', () => {
     expect(window.history.length).toBe(1);
   });
 
+  it('keeps the catalog resource tab in the non-sensitive allowlist', () => {
+    const query = serializeUrlState({ tab: 'catalog-skus' });
+
+    expect(query.get('tab')).toBe('catalog-skus');
+    expect(parseUrlState(query)).toEqual({ tab: 'catalog-skus' });
+  });
+
   it('ignores unknown and sensitive query keys when reading state', () => {
     const state = parseUrlState(
       new URLSearchParams(

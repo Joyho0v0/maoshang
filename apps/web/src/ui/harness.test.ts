@@ -22,10 +22,10 @@ describe('shared UI harness', () => {
       { name: 'tablet', width: 720 },
       { name: 'zoom-200', width: 640 },
     ]);
-    expect(browserHarnessScenarios).toHaveLength(20);
+    expect(browserHarnessScenarios).toHaveLength(32);
     expect(browserHarnessScenarios.every((scenario) => scenario.requiredSelectors.length > 0)).toBe(true);
     expect(new Set(browserHarnessScenarios.map((scenario) => scenario.path))).toEqual(
-      new Set(['/workspace', '/loading', '/empty', '/error', '/__ui-harness']),
+      new Set(['/workspace', '/customers', '/catalog', '/orders', '/loading', '/empty', '/error', '/__ui-harness']),
     );
   });
 

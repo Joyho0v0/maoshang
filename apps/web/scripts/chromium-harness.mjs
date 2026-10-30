@@ -10,6 +10,9 @@ const screenshotDirectory = process.env.AUTOFLOW_HARNESS_SCREENSHOTS;
 const chromePath = process.env.CHROMIUM_PATH ?? '/usr/bin/google-chrome';
 const scenarios = [
   { path: '/workspace', requiredSelectors: ['main', 'h1', '.state-panel'] },
+  { path: '/customers', requiredSelectors: ['main', 'h1', 'table', '[data-testid="scope-notice"]'] },
+  { path: '/catalog', requiredSelectors: ['main', 'h1', 'table', '[data-testid="scope-notice"]'] },
+  { path: '/orders', requiredSelectors: ['main', 'h1', 'table', '[data-testid="scope-notice"]'] },
   { path: '/loading', requiredSelectors: ['main', '[role="status"]', 'h1'] },
   { path: '/empty', requiredSelectors: ['main', '[role="status"]', 'h1'] },
   { path: '/error', requiredSelectors: ['main', '[role="alert"]', 'button'] },

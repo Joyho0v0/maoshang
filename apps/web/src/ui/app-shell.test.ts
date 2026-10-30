@@ -23,7 +23,10 @@ describe('AppShell', () => {
 
     expect(wrapper.get('a.skip-link').text()).toContain('跳到主要内容');
     expect(wrapper.get('nav[aria-label="主导航"]')).toBeTruthy();
-    expect(wrapper.get('.nav-links').findAll('a')).toHaveLength(3);
+    expect(wrapper.get('.nav-links').findAll('a')).toHaveLength(6);
+    expect(wrapper.get('.nav-links').text()).toContain('客户');
+    expect(wrapper.get('.nav-links').text()).toContain('商品');
+    expect(wrapper.get('.nav-links').text()).toContain('订单');
     expect(wrapper.get('[data-testid="route-content"]').text()).toBe('工作台内容');
     expect(wrapper.get('main').attributes('id')).toBe('main-content');
     expect(wrapper.text()).toContain('契约接入准备中');

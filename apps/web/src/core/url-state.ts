@@ -111,6 +111,7 @@ const publicRouteCodec = createUrlStateCodec({
     tab: enumCodec([
       'workspace', 'customers', 'catalog', 'orders', 'files', 'payments',
       'inventory', 'documents', 'tasks', 'organization', 'audit', 'dashboard',
+      'catalog-products', 'catalog-skus',
     ]),
     sort: enumCodec([
       '-updatedAt,-id', 'updatedAt', '-updatedAt', 'id', '-id',

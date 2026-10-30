@@ -4,6 +4,8 @@ import { VueQueryPlugin } from '@tanstack/vue-query';
 import { createPinia } from 'pinia';
 
 import App from './App.vue';
+import { createFixtureDomainApi } from './core/domain-fixtures';
+import { createProductionDomainApi, DOMAIN_API_KEY } from './core/domain-api';
 import { createLazyGeneratedContractAdapter } from './core/lazy-adapter';
 import { SessionRuntime } from './core/session-runtime';
 import { useSessionStore } from './core/session-store';
@@ -18,6 +20,12 @@ app.config.errorHandler = () => {
   // GlobalErrorBoundary owns user-facing recovery. Do not send raw errors to logs.
 };
 app.provide('session-runtime', sessionRuntime);
+app.provide(
+  DOMAIN_API_KEY,
+  import.meta.env.MODE === 'production'
+    ? createProductionDomainApi(sessionRuntime)
+    : createFixtureDomainApi(),
+);
 app.use(pinia);
 app.use(VueQueryPlugin, { queryClient: sessionRuntime.queryClient });
 app.use(createAppRouter(createWebHistory()));

@@ -27,6 +27,15 @@ import { RouterLink, RouterView } from 'vue-router';
           <RouterLink to="/workspace">
             工作台
           </RouterLink>
+          <RouterLink to="/customers">
+            客户
+          </RouterLink>
+          <RouterLink to="/catalog">
+            商品目录
+          </RouterLink>
+          <RouterLink to="/orders">
+            订单
+          </RouterLink>
           <RouterLink to="/empty">
             待办中心
           </RouterLink>
