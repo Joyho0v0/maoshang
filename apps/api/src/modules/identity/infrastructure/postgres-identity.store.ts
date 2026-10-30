@@ -10,10 +10,11 @@ import {
   type CreateUserMutation,
   type DataScopeMutation,
   type DisableUserMutation,
+  type DisableCommandClaim,
   type IdentityMutationStore,
   type RoleBindingMutation,
 } from '../application/identity-command.service.js';
-import type { IdentityStore } from '../application/session.service.js';
+import type { AuthenticationAuditInput, IdentityStore } from '../application/session.service.js';
 import type { DataScopeGrant } from '../domain/authz.js';
 import type { AuthorizationPrincipal } from '../domain/authz.js';
 import type {
@@ -90,7 +91,7 @@ export class PostgresIdentityStore implements IdentityStore, IdentityMutationSto
           WHERE provider = $1
             AND provider_subject = $2
             AND ($3::text IS NULL OR lower(u.username_normalized) = lower($3))
-          LIMIT 1`,
+          ORDER BY u.id`,
         [provider, identity.subject, identity.username ?? null],
       );
       const row = result.rows[0];
@@ -135,7 +136,7 @@ export class PostgresIdentityStore implements IdentityStore, IdentityMutationSto
 
   async findSession(tokenHash: string): Promise<{ session: StoredSession; user: IdentityUser } | undefined> {
     const decodedHash = decodeHash(tokenHash);
-    return this.withClient(async (client) => {
+    return this.withTransaction(async (client) => {
       const result = await client.query<SessionRow>(
         `SELECT s.id AS session_id, s.organization_id AS session_organization_id,
                 s.user_id AS session_user_id, s.token_hash,
@@ -144,26 +145,29 @@ export class PostgresIdentityStore implements IdentityStore, IdentityMutationSto
                 s.created_at AS session_created_at,
                 u.id, u.organization_id, u.username_normalized, u.display_name,
                 u.status, u.version, u.authz_version, u.session_epoch,
-                m.business_group_id AS primary_business_group_id,
                 u.created_at, u.updated_at
            FROM iam.session AS s
            JOIN iam.user_account AS u
              ON u.organization_id = s.organization_id AND u.id = s.user_id
-           LEFT JOIN LATERAL (
-             SELECT business_group_id
-               FROM org.membership
-              WHERE organization_id = u.organization_id AND user_id = u.id
-                AND status = 'ACTIVE' AND valid_to IS NULL
-              ORDER BY is_primary DESC, id
-              LIMIT 1
-           ) AS m ON true
           WHERE s.token_hash = $1
             AND s.revoked_at IS NULL
-          LIMIT 1`,
+          ORDER BY s.id
+          LIMIT 1
+          FOR UPDATE OF s, u`,
         [decodedHash],
       );
       const row = result.rows[0];
       if (row === undefined) return undefined;
+      const primary = await client.query<{ business_group_id: string }>(
+        `SELECT business_group_id
+           FROM org.membership
+          WHERE organization_id = $1 AND user_id = $2
+            AND status = 'ACTIVE' AND valid_to IS NULL
+          ORDER BY is_primary DESC, id
+          LIMIT 1`,
+        [row.organization_id, row.id],
+      );
+      row.primary_business_group_id = primary.rows[0]?.business_group_id ?? null;
       const user = await this.loadUser(client, row);
       return {
         session: {
@@ -184,6 +188,26 @@ export class PostgresIdentityStore implements IdentityStore, IdentityMutationSto
   async revokeSession(tokenHash: string): Promise<void> {
     await this.withClient(async (client) => {
       await client.query('UPDATE iam.session SET revoked_at = clock_timestamp() WHERE token_hash = $1 AND revoked_at IS NULL', [decodeHash(tokenHash)]);
+    });
+  }
+
+  async recordAuthenticationAudit(input: AuthenticationAuditInput): Promise<void> {
+    await this.withTransaction(async (client) => {
+      const eventId = randomUUID();
+      await client.query(
+        `INSERT INTO audit.authentication_event
+          (id, organization_id, actor_user_id, provider, outcome, reason, request_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [eventId, input.organizationId ?? null, input.actorUserId ?? null, input.provider, input.outcome, input.reason, input.requestId],
+      );
+      if (input.organizationId !== undefined) {
+        await client.query(
+          `INSERT INTO integration.identity_outbox_event
+            (id, organization_id, aggregate_type, aggregate_id, event_type, payload)
+           VALUES ($1, $2, 'AUTHENTICATION', $3, $4, $5::jsonb)`,
+          [randomUUID(), input.organizationId, input.actorUserId ?? eventId, `auth.${input.outcome.toLowerCase()}`, JSON.stringify({ authenticationEventId: eventId, provider: input.provider, outcome: input.outcome, reason: input.reason, requestId: input.requestId })],
+        );
+      }
     });
   }
 
@@ -328,6 +352,36 @@ export class PostgresIdentityStore implements IdentityStore, IdentityMutationSto
       );
       await this.appendAudit(client, input.audit);
       return this.loadUserById(client, input.organizationId, input.targetUserId);
+    });
+  }
+
+  async enqueueDisableUser(input: DisableUserMutation & DisableCommandClaim): Promise<void> {
+    await this.withMutationTransaction(input.client, async (client) => {
+      await client.query(
+        `INSERT INTO integration.identity_outbox_event
+          (id, organization_id, aggregate_type, aggregate_id, event_type, payload)
+         VALUES ($1, $2, 'USER', $3, 'identity.command.disable_user', $4::jsonb)`,
+        [
+          randomUUID(),
+          input.organizationId,
+          input.targetUserId,
+          JSON.stringify({
+            commandId: input.commandId,
+            operationId: input.operationId,
+            ownerToken: input.ownerToken.toString('base64'),
+            startedAt: input.startedAt,
+            expiresAt: input.expiresAt,
+            retryAfterMs: input.retryAfterMs,
+            mutation: {
+              organizationId: input.organizationId,
+              targetUserId: input.targetUserId,
+              actorUserId: input.actorUserId,
+              expectedVersion: input.expectedVersion,
+              audit: input.audit,
+            },
+          }),
+        ],
+      );
     });
   }
 
@@ -503,25 +557,10 @@ export class PostgresIdentityStore implements IdentityStore, IdentityMutationSto
   }
 
   private async insertDefaultScopes(client: PoolClient, input: CreateUserMutation): Promise<void> {
-    const resources = ['USER', 'ORGANIZATION', 'CUSTOMER', 'ORDER', 'INVENTORY', 'FILE', 'DOCUMENT', 'TASK', 'AUDIT'];
-    const scopeType = input.role === 'SUPER_ADMIN' ? 'ALL_ORG' : 'GROUP_SET';
-    for (const resourceType of resources) {
-      const scopeId = randomUUID();
-      await client.query(
-        `INSERT INTO iam.user_data_scope (id, organization_id, user_id, resource_type, scope_type)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [scopeId, input.organizationId, input.id, resourceType, scopeType],
-      );
-      if (scopeType === 'GROUP_SET') {
-        for (const groupId of input.defaultGroupIds) {
-          await client.query(
-            `INSERT INTO iam.data_scope_group (scope_id, organization_id, group_id)
-             VALUES ($1, $2, $3)`,
-            [scopeId, input.organizationId, groupId],
-          );
-        }
-      }
-    }
+    // A role never implies a data grant. Scope grants are an explicit command
+    // and are checked against the actor's resource-specific containment first.
+    void client;
+    void input;
   }
 
   private async appendAudit(client: PoolClient, input: AuditEventInput): Promise<void> {

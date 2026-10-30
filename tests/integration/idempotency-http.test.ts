@@ -43,8 +43,8 @@ class ConcurrentCustomerModule {}
 
 class TestPrincipalGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<{ user?: { id: string; organizationId: string } }>();
-    request.user = { id: actorId, organizationId };
+    const request = context.switchToHttp().getRequest<{ user?: { userId: string; organizationId: string } }>();
+    request.user = { userId: actorId, organizationId };
     return true;
   }
 }
@@ -110,7 +110,7 @@ describe('HTTP idempotency execution boundary', () => {
       const requests = Array.from({ length: 20 }, () => app.getHttpAdapter().getInstance().inject(request));
       const responses = await Promise.all(requests);
 
-      expect(ConcurrentCustomerController.snapshot).toMatchObject({ route: '/api/v1/customers', method: 'POST', user: { id: actorId, organizationId } });
+      expect(ConcurrentCustomerController.snapshot).toMatchObject({ route: '/api/v1/customers', method: 'POST', user: { userId: actorId, organizationId } });
       expect(ConcurrentCustomerController.executions).toBe(1);
       expect(repository.calls).toBe(20);
       expect(responses.filter((candidate) => candidate.statusCode === 201)).toHaveLength(1);

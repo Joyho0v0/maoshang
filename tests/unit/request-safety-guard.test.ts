@@ -19,7 +19,7 @@ describe('request safety guard operation coverage', () => {
       params: { id: 'not-a-uuid' },
       query: { 'page[size]': 101 },
       headers: {},
-      user: { id: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
+      user: { userId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
     }))).rejects.toMatchObject({ status: 400, code: 'VALIDATION_FAILED' });
   });
 
@@ -36,8 +36,44 @@ describe('request safety guard operation coverage', () => {
       query: {},
       headers: { 'x-csrf-token': csrfToken, 'idempotency-key': 'key-1' },
       body: { name: 'Acme', ownerUserId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2' },
-      user: { id: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
+      user: { userId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
       cookies: { session_id: sessionId },
     }))).resolves.toBe(true);
+  });
+
+  it('records CSRF rejection through the security audit boundary without recording the token', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const audits: Array<Record<string, unknown>> = [];
+    const csrf = new CsrfService();
+    const sessionId = 'session-audit';
+    csrf.bootstrap(`session:${sessionId}`);
+    const guard = new RequestSafetyGuard(csrf, createContractValidator(document), { recordAuthenticationAudit: async (input: Record<string, unknown>) => { audits.push(input); } } as never);
+
+    await expect(guard.canActivate(context({
+      method: 'POST',
+      url: '/api/v1/customers',
+      routeOptions: { url: '/api/v1/customers' },
+      params: {}, query: {}, headers: { 'x-csrf-token': 'wrong-token', 'idempotency-key': 'key-1' }, body: { name: 'Acme', ownerUserId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2' },
+      user: { userId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' }, cookies: { session_id: sessionId },
+    }))).rejects.toMatchObject({ code: 'CSRF_FAILED' });
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({ outcome: 'DENIED', reason: 'CSRF_FAILED' });
+    expect(JSON.stringify(audits[0])).not.toContain('wrong-token');
+  });
+
+  it('preserves the CSRF rejection when the audit sink is unavailable', async () => {
+    const document = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const csrf = new CsrfService();
+    const sessionId = 'session-audit-failure';
+    csrf.bootstrap(`session:${sessionId}`);
+    const guard = new RequestSafetyGuard(csrf, createContractValidator(document), { recordAuthenticationAudit: async () => { throw new Error('audit database unavailable'); } } as never);
+
+    await expect(guard.canActivate(context({
+      method: 'POST',
+      url: '/api/v1/customers',
+      routeOptions: { url: '/api/v1/customers' },
+      params: {}, query: {}, headers: { 'x-csrf-token': 'wrong-token', 'idempotency-key': 'key-1' }, body: { name: 'Acme', ownerUserId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2' },
+      user: { userId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' }, cookies: { session_id: sessionId },
+    }))).rejects.toMatchObject({ code: 'CSRF_FAILED' });
   });
 });

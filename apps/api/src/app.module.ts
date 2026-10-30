@@ -11,7 +11,7 @@ import { RequestSafetyGuard } from './common/security/request-safety.guard.js';
 import { IDEMPOTENCY_REPOSITORY, PostgresIdempotencyRepository } from './modules/integration/idempotency/postgres-idempotency-repository.js';
 import type { ContractValidator } from '../../../packages/contracts/openapi/runtime-validator.js';
 import { AuthenticationGuard } from './modules/identity/transport/authentication.guard.js';
-import { DisabledAuthenticationProvider, SessionService, type AuthenticationProvider, type IdentityStore } from './modules/identity/application/session.service.js';
+import { DisabledAuthenticationProvider, LoginAttemptLimiter, SessionService, type AuthenticationProvider, type IdentityStore } from './modules/identity/application/session.service.js';
 import { PostgresIdentityStore } from './modules/identity/infrastructure/postgres-identity.store.js';
 import { IdentityCommandService, type IdentityAuditQueryStore, type IdentityMutationStore } from './modules/identity/application/identity-command.service.js';
 import { IdentityController } from './modules/identity/transport/identity.controller.js';
@@ -33,6 +33,7 @@ class DatabasePoolProvider implements OnModuleDestroy {
   controllers: [CsrfController, SessionController, CommandStatusController, IdentityController],
   providers: [
     CsrfService,
+    { provide: LoginAttemptLimiter, useFactory: () => new LoginAttemptLimiter() },
     { provide: InMemoryIdempotencyStore, useFactory: () => new InMemoryIdempotencyStore() },
     DatabasePoolProvider,
     { provide: 'IDENTITY_STORE', useFactory: (database: DatabasePoolProvider): IdentityStore & IdentityMutationStore & IdentityAuditQueryStore => new PostgresIdentityStore(database.pool), inject: [DatabasePoolProvider] },
@@ -51,12 +52,13 @@ class DatabasePoolProvider implements OnModuleDestroy {
   exports: [CsrfService, InMemoryIdempotencyStore, CommandStatusService, IDEMPOTENCY_REPOSITORY],
 })
 export class AppModule {
-  static register(config: RuntimeConfig, validator: ContractValidator): DynamicModule {
+  static register(config: RuntimeConfig, validator: ContractValidator, authenticationProvider?: AuthenticationProvider): DynamicModule {
     return {
       module: AppModule,
       providers: [
         { provide: 'RUNTIME_CONFIG', useValue: config },
         { provide: 'CONTRACT_VALIDATOR', useValue: validator },
+        ...(authenticationProvider === undefined ? [] : [{ provide: 'AUTHENTICATION_PROVIDER', useValue: authenticationProvider }]),
       ],
       exports: ['RUNTIME_CONFIG', 'CONTRACT_VALIDATOR'],
     };

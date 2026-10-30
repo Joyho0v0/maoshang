@@ -56,6 +56,7 @@ function principal(overrides: Partial<AuthorizationPrincipal> = {}): Authorizati
 class FakeStore implements IdentityMutationStore {
   target = user(targetId);
   readonly audits: AuditEventInput[] = [];
+  lastCreate: Parameters<IdentityMutationStore['createUser']>[0] | undefined;
   readonly rolePermissions = new Map<string, readonly string[]>([
     ['SALES', ['identity.user.read']],
     ['GROUP_LEADER', ['identity.user.read', 'identity.user.create', 'identity.user.disable']],
@@ -71,6 +72,7 @@ class FakeStore implements IdentityMutationStore {
   }
 
   async createUser(input: Parameters<IdentityMutationStore['createUser']>[0]): Promise<IdentityUser> {
+    this.lastCreate = input;
     this.target = user(input.id, { username: input.username, roles: [input.role] });
     return this.target;
   }
@@ -128,5 +130,27 @@ describe('identity command service', () => {
     const service = new IdentityCommandService(store);
     await expect(service.disableUser(principal(), '00000000-0000-4000-8000-000000000099', 1, '00000000-0000-4000-8000-000000000099')).rejects.toBeInstanceOf(IdentityUserNotFoundError);
     expect(store.audits).toMatchObject([{ action: 'identity.user.disable', outcome: 'DENIED' }]);
+  });
+
+  it('does not copy USER scope groups into unrelated resources when creating a user', async () => {
+    const store = new FakeStore();
+    const created = await new IdentityCommandService(store).createUser(
+      principal(),
+      organizationId,
+      { username: 'new@example.test', role: 'SALES' },
+      '00000000-0000-4000-8000-000000000099',
+    );
+
+    expect(created).toBeDefined();
+    expect(store.lastCreate?.defaultGroupIds).toEqual([]);
+  });
+
+  it('audits malformed role and scope denials before returning the validation error', async () => {
+    const store = new FakeStore();
+    const service = new IdentityCommandService(store);
+
+    await expect(service.createUser(principal(), organizationId, { username: 'new@example.test', role: 'UNKNOWN' }, '00000000-0000-4000-8000-000000000099')).rejects.toThrow(/role/i);
+    await expect(service.updateDataScopeGrants(principal(), targetId, 1, [{ scope: 'CUSTOMER:ALL_ORG' }], '00000000-0000-4000-8000-000000000099')).rejects.toThrow(/grant|scope/i);
+    expect(store.audits.filter((audit) => audit.outcome === 'DENIED')).toHaveLength(2);
   });
 });

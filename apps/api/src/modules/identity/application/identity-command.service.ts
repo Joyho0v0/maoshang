@@ -96,7 +96,17 @@ export interface IdentityMutationStore {
   replaceRoleBindings(input: RoleBindingMutation): Promise<IdentityUser>;
   replaceDataScopeGrants(input: DataScopeMutation): Promise<IdentityUser>;
   disableUser(input: DisableUserMutation): Promise<IdentityUser>;
+  enqueueDisableUser?(input: DisableUserMutation & DisableCommandClaim): Promise<void>;
   recordAudit(input: AuditEventInput): Promise<void>;
+}
+
+export interface DisableCommandClaim {
+  commandId: string;
+  operationId: string;
+  ownerToken: Buffer;
+  startedAt: string;
+  expiresAt: string;
+  retryAfterMs: number;
 }
 
 export interface IdentityAuditQueryStore {
@@ -146,7 +156,7 @@ export class IdentityCommandService {
     const resourceId = randomUUID();
     try {
       await this.assertCanManageOrganization(principal, 'identity.user.create', organizationId, resourceId, requestId);
-      this.assertKnownRole(input.role);
+      await this.assertKnownRole(principal, input.role, resourceId, requestId);
       await this.assertRolePermissions(principal, [input.role], resourceId, requestId);
       const user = await this.store.createUser({
         id: resourceId,
@@ -154,7 +164,7 @@ export class IdentityCommandService {
         username: normalizeUsername(input.username),
         role: input.role,
         actorUserId: principal.userId,
-        defaultGroupIds: principal.scopes.get('USER')?.scopeType === 'GROUP_SET' ? principal.scopes.get('USER')?.groupIds ?? [] : [],
+        defaultGroupIds: [],
         audit: this.audit(principal, 'identity.user.create', resourceId, requestId, 'SUCCEEDED', undefined, { role: input.role }),
         ...(client === undefined ? {} : { client }),
       });
@@ -168,8 +178,8 @@ export class IdentityCommandService {
   async updateRoleBindings(principal: AuthorizationPrincipal, targetUserId: string, expectedVersion: number, roles: readonly string[], requestId: string, client?: PoolClient): Promise<IdentityUser> {
     const target = await this.requireTarget(principal, targetUserId, 'identity.role.grant', requestId);
     await this.assertExpectedVersion(target, expectedVersion, principal, 'identity.role.grant', requestId);
-    if (roles.length === 0 || new Set(roles).size !== roles.length) throw new AuthorizationDeniedError('role-bindings-invalid');
-    for (const role of roles) this.assertKnownRole(role);
+    if (roles.length === 0 || new Set(roles).size !== roles.length) return this.reject(principal, 'identity.role.grant', targetUserId, requestId, 'role-bindings-invalid');
+    for (const role of roles) await this.assertKnownRole(principal, role, targetUserId, requestId);
     await this.assertRolePermissions(principal, roles, targetUserId, requestId);
     return this.store.replaceRoleBindings({
       organizationId: principal.organizationId,
@@ -185,9 +195,22 @@ export class IdentityCommandService {
   async updateDataScopeGrants(principal: AuthorizationPrincipal, targetUserId: string, expectedVersion: number, rawGrants: readonly { scope: string }[], requestId: string, client?: PoolClient): Promise<IdentityUser> {
     const target = await this.requireTarget(principal, targetUserId, 'identity.scope.grant', requestId);
     await this.assertExpectedVersion(target, expectedVersion, principal, 'identity.scope.grant', requestId);
-    const grants = rawGrants.map((grant) => parseScopeGrant(grant.scope));
-    if (new Set(grants.map((grant) => grant.resourceType)).size !== grants.length) throw new AuthorizationDeniedError('duplicate-resource-scope');
-    for (const grant of grants) assertCanGrant(principal, 'identity.scope.grant', grant);
+    let grants: DataScopeGrant[];
+    try {
+      grants = rawGrants.map((grant) => parseScopeGrant(grant.scope));
+    } catch (error) {
+      if (error instanceof AuthorizationDeniedError) return this.reject(principal, 'identity.scope.grant', targetUserId, requestId, error.reason);
+      throw error;
+    }
+    if (new Set(grants.map((grant) => grant.resourceType)).size !== grants.length) return this.reject(principal, 'identity.scope.grant', targetUserId, requestId, 'duplicate-resource-scope');
+    for (const grant of grants) {
+      try {
+        assertCanGrant(principal, 'identity.scope.grant', grant);
+      } catch (error) {
+        if (error instanceof AuthorizationDeniedError) return this.reject(principal, 'identity.scope.grant', targetUserId, requestId, error.reason);
+        throw error;
+      }
+    }
     return this.store.replaceDataScopeGrants({
       organizationId: principal.organizationId,
       targetUserId,
@@ -200,17 +223,27 @@ export class IdentityCommandService {
   }
 
   async disableUser(principal: AuthorizationPrincipal, targetUserId: string, expectedVersion: number, requestId: string, client?: PoolClient): Promise<IdentityUser> {
+    const mutation = await this.prepareDisableUser(principal, targetUserId, expectedVersion, requestId);
+    return this.store.disableUser({ ...mutation, ...(client === undefined ? {} : { client }) });
+  }
+
+  async prepareDisableUser(principal: AuthorizationPrincipal, targetUserId: string, expectedVersion: number, requestId: string): Promise<DisableUserMutation> {
     const target = await this.requireTarget(principal, targetUserId, 'identity.user.disable', requestId);
     await this.assertExpectedVersion(target, expectedVersion, principal, 'identity.user.disable', requestId);
-    if (target.status === 'DISABLED') throw new AuthorizationDeniedError('already-disabled');
-    return this.store.disableUser({
+    if (target.status === 'DISABLED') return this.reject(principal, 'identity.user.disable', targetUserId, requestId, 'already-disabled');
+    return {
       organizationId: principal.organizationId,
       targetUserId,
       actorUserId: principal.userId,
       expectedVersion,
       audit: this.audit(principal, 'identity.user.disable', targetUserId, requestId, 'SUCCEEDED', { status: target.status }, { status: 'DISABLED' }),
-      ...(client === undefined ? {} : { client }),
-    });
+    };
+  }
+
+  async queueDisableUser(principal: AuthorizationPrincipal, targetUserId: string, expectedVersion: number, requestId: string, claim: DisableCommandClaim, client?: PoolClient): Promise<void> {
+    if (this.store.enqueueDisableUser === undefined) throw new Error('Identity command queue is not configured.');
+    const mutation = await this.prepareDisableUser(principal, targetUserId, expectedVersion, requestId);
+    await this.store.enqueueDisableUser({ ...mutation, ...claim, ...(client === undefined ? {} : { client }) });
   }
 
   async listAuditEvents(principal: AuthorizationPrincipal, filters: AuditQueryFilters, requestId: string): Promise<AuditEventPage> {
@@ -266,12 +299,17 @@ export class IdentityCommandService {
     throw new IdentityVersionConflictError(target.version);
   }
 
-  private assertKnownRole(role: string): void {
-    if (role !== 'SUPER_ADMIN' && role !== 'GROUP_LEADER' && role !== 'SALES') throw new AuthorizationDeniedError('unknown-role');
+  private async assertKnownRole(principal: AuthorizationPrincipal, role: string, resourceId: string, requestId: string): Promise<void> {
+    if (role !== 'SUPER_ADMIN' && role !== 'GROUP_LEADER' && role !== 'SALES') await this.reject(principal, 'identity.user.create', resourceId, requestId, 'unknown-role');
   }
 
   private async recordDenied(principal: AuthorizationPrincipal, action: string, resourceId: string, requestId: string, reason: string, outcome: AuditEventInput['outcome'] = 'DENIED'): Promise<void> {
     await this.store.recordAudit(this.audit(principal, action, resourceId, requestId, outcome, undefined, undefined, reason));
+  }
+
+  private async reject(principal: AuthorizationPrincipal, action: string, resourceId: string, requestId: string, reason: string): Promise<never> {
+    await this.recordDenied(principal, action, resourceId, requestId, reason);
+    throw new AuthorizationDeniedError(reason);
   }
 
   private audit(principal: AuthorizationPrincipal, action: string, resourceId: string, requestId: string, outcome: AuditEventInput['outcome'], beforeSummary?: Record<string, unknown>, afterSummary?: Record<string, unknown>, reason?: string): AuditEventInput {

@@ -21,10 +21,11 @@ export class AuthenticationGuard implements CanActivate {
 
     const sessionToken = request.cookies?.session_id;
     if (typeof sessionToken !== 'string' || sessionToken.length === 0) {
+      await this.sessions.recordSecurityAudit?.({ provider: 'REQUEST_SAFETY', outcome: 'DENIED', requestId: normalizeRequestId(request.headers['x-request-id']), reason: 'AUTHENTICATION_REQUIRED' });
       throw this.authenticationProblem(request);
     }
     try {
-      const session = await this.sessions.getCurrentSession(sessionToken);
+      const session = await this.sessions.getCurrentSession(sessionToken, normalizeRequestId(request.headers['x-request-id']));
       request.session = session;
       request.user = toPrincipal(session);
       return true;

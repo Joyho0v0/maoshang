@@ -90,6 +90,7 @@ describe('Postgres identity commands', () => {
 
       await client.query('BEGIN');
       transactionOpen = true;
+      await client.query("SET LOCAL app.allow_identity_down = 'true'");
       await client.query(down);
       await client.query(foundationDown);
       await client.query('COMMIT');

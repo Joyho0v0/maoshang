@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, Inject, Injectable } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Inject, Injectable, Optional } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { RequestSafetyPipeline } from './request-safety-pipeline.js';
 import { CsrfService } from '../../modules/auth/csrf/csrf.service.js';
@@ -7,9 +7,11 @@ import { buildProblem, normalizeRequestId, ProblemError } from '../http/problem.
 import { operations, type OperationId } from '../../../../../packages/contracts/openapi/generated-client.js';
 import type { ContractValidator } from '../../../../../packages/contracts/openapi/runtime-validator.js';
 import { validateOperationRequest, type ClientCallInput } from '../../../../../packages/contracts/openapi/client.js';
+import type { AuthorizationPrincipal } from '../../modules/identity/domain/authz.js';
+import type { AuthenticationAuditInput } from '../../modules/identity/application/session.service.js';
 
 interface PrincipalRequest extends FastifyRequest {
-  user?: { id: string; organizationId: string };
+  user?: AuthorizationPrincipal;
 }
 
 @Injectable()
@@ -17,6 +19,7 @@ export class RequestSafetyGuard implements CanActivate {
   constructor(
     @Inject(CsrfService) private readonly csrf: CsrfService,
     @Inject('CONTRACT_VALIDATOR') private readonly validator: ContractValidator,
+    @Optional() @Inject('IDENTITY_STORE') private readonly securityAudit?: { recordAuthenticationAudit?(input: AuthenticationAuditInput): Promise<void> },
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -27,6 +30,7 @@ export class RequestSafetyGuard implements CanActivate {
     const operation = EXPECTED_OPERATION_MANIFEST.find((candidate) => candidate.method === method.toLowerCase() && candidate.path === contractPath);
     const unsafe = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
     if (operation === undefined && unsafe) {
+      await this.recordSafetyRejection(request, 'UNSAFE_ROUTE');
       throw new ProblemError(buildProblem({ status: 500, code: 'INTERNAL_ERROR', title: 'Unsafe route is absent from the contract.', requestId: normalizeRequestId(request.headers['x-request-id']), retryable: false }));
     }
     if (operation === undefined) return true;
@@ -64,26 +68,48 @@ export class RequestSafetyGuard implements CanActivate {
     };
     if (!unsafe) {
       if (principal === undefined && !['getCsrfToken'].includes(operationId)) {
+        await this.recordSafetyRejection(request, 'AUTHENTICATION_REQUIRED');
         throw new ProblemError(buildProblem({ status: 401, code: 'AUTHENTICATION_REQUIRED', title: 'Authentication required', requestId: normalizeRequestId(request.headers['x-request-id']), retryable: false }));
       }
       validateStructure();
       return true;
     }
     const pipeline = new RequestSafetyPipeline({ validateStructure });
-    pipeline.validate({
-      method: method as 'POST' | 'PUT' | 'PATCH' | 'DELETE',
-      operationId,
-      authenticated: principal !== undefined,
-      allowAnonymous: anonymousSessionBootstrap,
-      ...(csrfToken === undefined ? {} : { csrfToken }),
-      ...(sessionId === undefined || this.csrf.currentToken(`session:${sessionId}`) === undefined ? {} : { expectedCsrfToken: this.csrf.currentToken(`session:${sessionId}`) as string }),
-      ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
-      ...(ifMatch === undefined ? {} : { ifMatch }),
-      requiresIfMatch: operation.ifMatch,
-      requiresIdempotencyKey: operation.idempotency,
-      body: requestBody,
-    });
+    try {
+      pipeline.validate({
+        method: method as 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+        operationId,
+        authenticated: principal !== undefined,
+        allowAnonymous: anonymousSessionBootstrap,
+        ...(csrfToken === undefined ? {} : { csrfToken }),
+        ...(sessionId === undefined || this.csrf.currentToken(`session:${sessionId}`) === undefined ? {} : { expectedCsrfToken: this.csrf.currentToken(`session:${sessionId}`) as string }),
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+        ...(ifMatch === undefined ? {} : { ifMatch }),
+        requiresIfMatch: operation.ifMatch,
+        requiresIdempotencyKey: operation.idempotency,
+        body: requestBody,
+      });
+    } catch (error) {
+      await this.recordSafetyRejection(request, error instanceof ProblemError ? error.code : 'SAFETY_REJECTED');
+      throw error;
+    }
     return true;
+  }
+
+  private async recordSafetyRejection(request: PrincipalRequest, reason: string): Promise<void> {
+    try {
+      await this.securityAudit?.recordAuthenticationAudit?.({
+        provider: 'REQUEST_SAFETY',
+        outcome: 'DENIED',
+        requestId: normalizeRequestId(request.headers['x-request-id']),
+        ...(request.user === undefined ? {} : { organizationId: request.user.organizationId, actorUserId: request.user.userId }),
+        reason,
+      });
+    } catch {
+      // Preserve the original safety problem and avoid leaking audit storage
+      // details. The database-backed sink is still the authoritative path
+      // whenever the security audit boundary is available.
+    }
   }
 }
 

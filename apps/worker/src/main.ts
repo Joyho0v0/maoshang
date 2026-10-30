@@ -5,11 +5,16 @@ import { loadRuntimeConfig, type RuntimeConfig } from '../../api/src/config/runt
 import { PostgresOutboxSource } from './postgres-outbox-source.js';
 import { CombinedOutboxSource } from './combined-outbox-source.js';
 import { OutboxWorker, type EventPublisher } from './worker.js';
+import { IdentityCommandProcessor } from './identity-command-processor.js';
+import { PostgresIdentityStore } from '../../api/src/modules/identity/infrastructure/postgres-identity.store.js';
+import { PostgresIdempotencyRepository } from '../../api/src/modules/integration/idempotency/postgres-idempotency-repository.js';
 
 export function buildWorker(config: RuntimeConfig, pool: pg.Pool = new pg.Pool({ connectionString: config.databaseUrl, max: 4 })): { worker: OutboxWorker; pool: pg.Pool } {
   const source = new CombinedOutboxSource(new PostgresOutboxSource(pool), new PostgresOutboxSource(pool, 'integration.identity_outbox_event'));
+  const identityCommands = new IdentityCommandProcessor(new PostgresIdentityStore(pool), new PostgresIdempotencyRepository(pool));
   const publisher: EventPublisher = {
     async publish(event) {
+      await identityCommands.process(event);
       process.stdout.write(JSON.stringify({ eventId: event.id, topic: event.topic }) + '\n');
     },
   };

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { CsrfService } from '../../apps/api/src/modules/auth/csrf/csrf.service.js';
 import {
+  InvalidCredentialsError,
+  LoginAttemptLimiter,
   SessionExpiredError,
   SessionService,
   type AuthenticationProvider,
@@ -32,9 +34,10 @@ function user(overrides: Partial<IdentityUser> = {}): IdentityUser {
 }
 
 class FakeStore implements IdentityStore {
-  currentUser = user();
+  currentUser: IdentityUser | undefined = user();
   currentSession: StoredSession | undefined;
   revoked: string[] = [];
+  authAudits: Array<{ reason: string }> = [];
 
   async findUserForProvider(): Promise<IdentityUser | undefined> {
     return this.currentUser;
@@ -46,12 +49,16 @@ class FakeStore implements IdentityStore {
   }
 
   async findSession(): Promise<{ session: StoredSession; user: IdentityUser } | undefined> {
-    if (this.currentSession === undefined) return undefined;
+    if (this.currentSession === undefined || this.currentUser === undefined) return undefined;
     return { session: this.currentSession, user: this.currentUser };
   }
 
   async revokeSession(tokenHash: string): Promise<void> {
     this.revoked.push(tokenHash);
+  }
+
+  async recordAuthenticationAudit(input: { reason: string }): Promise<void> {
+    this.authAudits.push(input);
   }
 }
 
@@ -98,6 +105,36 @@ describe('identity session service', () => {
     store.currentUser = user({ status: 'DISABLED' });
     const service = new SessionService(store, provider, new CsrfService(), () => sessionId);
 
-    await expect(service.createSession({ provider: 'LOCAL_PASSWORD', username: 'admin@example.test', password: 'pw' })).rejects.toBeInstanceOf(SessionExpiredError);
+    await expect(service.createSession({ provider: 'LOCAL_PASSWORD', username: 'admin@example.test', password: 'pw' })).rejects.toBeInstanceOf(InvalidCredentialsError);
+  });
+
+  it('bounds repeated login failures and releases the key after the retry window', () => {
+    let now = 1_000;
+    const limiter = new LoginAttemptLimiter({ limit: 2, windowMs: 10_000, now: () => now });
+    expect(limiter.check('LOCAL_PASSWORD:admin@example.test')).toEqual({ allowed: true, retryAfterSeconds: 0 });
+    limiter.recordFailure('LOCAL_PASSWORD:admin@example.test');
+    expect(limiter.check('LOCAL_PASSWORD:admin@example.test')).toEqual({ allowed: true, retryAfterSeconds: 0 });
+    limiter.recordFailure('LOCAL_PASSWORD:admin@example.test');
+    expect(limiter.check('LOCAL_PASSWORD:admin@example.test').allowed).toBe(false);
+    now += 10_001;
+    expect(limiter.check('LOCAL_PASSWORD:admin@example.test')).toEqual({ allowed: true, retryAfterSeconds: 0 });
+  });
+
+  it('uses one non-enumerating login error and audits an unmapped provider identity', async () => {
+    const store = new FakeStore();
+    store.currentUser = undefined;
+    const service = new SessionService(store, provider, new CsrfService(), () => sessionId);
+
+    await expect(service.createSession({ provider: 'LOCAL_PASSWORD', username: 'admin@example.test', password: 'pw' })).rejects.toBeInstanceOf(InvalidCredentialsError);
+    expect(store.authAudits).toMatchObject([{ reason: 'identity-not-mapped' }]);
+  });
+
+  it('preserves the authentication decision when the audit sink is unavailable', async () => {
+    const store = new FakeStore();
+    store.recordAuthenticationAudit = async () => { throw new Error('audit database unavailable'); };
+    const invalidProvider: AuthenticationProvider = { async authenticate() { return undefined; } };
+    const service = new SessionService(store, invalidProvider, new CsrfService(), () => sessionId);
+
+    await expect(service.createSession({ provider: 'LOCAL_PASSWORD', username: 'admin@example.test', password: 'pw' })).rejects.toBeInstanceOf(InvalidCredentialsError);
   });
 });

@@ -36,4 +36,14 @@ describe('combined identity/foundation outbox source', () => {
     expect(identity.published).toEqual(['identity-1']);
     expect(foundation.failed).toEqual(['foundation-1']);
   });
+
+  it('gives identity a bounded turn while foundation remains continuously full', async () => {
+    const foundation = new FakeSource(Array.from({ length: 8 }, (_, index) => ({ id: `foundation-${index}`, topic: 'foundation', payload: {} })));
+    const identity = new FakeSource([{ id: 'identity-1', topic: 'identity', payload: {} }]);
+    const source = new CombinedOutboxSource(foundation, identity);
+
+    await expect(source.claimBatch(4)).resolves.toEqual(expect.arrayContaining([
+      { id: 'identity-1', topic: 'identity', payload: {}, source: 'identity' },
+    ]));
+  });
 });

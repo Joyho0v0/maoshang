@@ -17,6 +17,16 @@ export interface IdentityStore {
   createSession(input: Omit<StoredSession, 'createdAt'>): Promise<StoredSession>;
   findSession(tokenHash: string): Promise<{ session: StoredSession; user: IdentityUser } | undefined>;
   revokeSession(tokenHash: string): Promise<void>;
+  recordAuthenticationAudit?(input: AuthenticationAuditInput): Promise<void>;
+}
+
+export interface AuthenticationAuditInput {
+  provider: SessionCredentials['provider'] | 'REQUEST_SAFETY';
+  outcome: 'SUCCEEDED' | 'DENIED';
+  requestId: string;
+  organizationId?: string;
+  actorUserId?: string;
+  reason: string;
 }
 
 export interface SessionCreation {
@@ -53,6 +63,52 @@ export class DisabledAuthenticationProvider implements AuthenticationProvider {
 
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
+export interface LoginAttemptLimiterOptions {
+  limit?: number;
+  windowMs?: number;
+  now?: () => number;
+}
+
+export class LoginAttemptLimiter {
+  private readonly failures = new Map<string, number[]>();
+  private readonly limit: number;
+  private readonly windowMs: number;
+  private readonly now: () => number;
+
+  constructor(options: LoginAttemptLimiterOptions = {}) {
+    this.limit = options.limit ?? 5;
+    this.windowMs = options.windowMs ?? 60_000;
+    this.now = options.now ?? (() => Date.now());
+    if (!Number.isInteger(this.limit) || this.limit < 1) throw new Error('Login attempt limit must be positive.');
+    if (!Number.isInteger(this.windowMs) || this.windowMs < 1) throw new Error('Login attempt window must be positive.');
+  }
+
+  check(key: string): { allowed: boolean; retryAfterSeconds: number } {
+    const timestamps = this.prune(key);
+    if (timestamps.length < this.limit) return { allowed: true, retryAfterSeconds: 0 };
+    const oldest = timestamps[0] ?? this.now();
+    return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((oldest + this.windowMs - this.now()) / 1000)) };
+  }
+
+  recordFailure(key: string): void {
+    const timestamps = this.prune(key);
+    timestamps.push(this.now());
+    this.failures.set(key, timestamps);
+  }
+
+  recordSuccess(key: string): void {
+    this.failures.delete(key);
+  }
+
+  private prune(key: string): number[] {
+    const cutoff = this.now() - this.windowMs;
+    const retained = (this.failures.get(key) ?? []).filter((timestamp) => timestamp > cutoff);
+    if (retained.length === 0) this.failures.delete(key);
+    else this.failures.set(key, retained);
+    return retained;
+  }
+}
+
 export class SessionService {
   constructor(
     private readonly store: IdentityStore,
@@ -61,11 +117,33 @@ export class SessionService {
     private readonly tokenFactory: () => string = () => randomBytes(32).toString('base64url'),
   ) {}
 
-  async createSession(credentials: SessionCredentials): Promise<SessionCreation> {
-    const identity = await this.provider.authenticate(credentials);
-    if (identity === undefined) throw new InvalidCredentialsError();
+  async recordSecurityAudit(input: AuthenticationAuditInput): Promise<void> {
+    await this.recordAudit(input);
+  }
+
+  async createSession(credentials: SessionCredentials, requestId: string = randomUUID()): Promise<SessionCreation> {
+    let identity: ProviderIdentity | undefined;
+    try {
+      identity = await this.provider.authenticate(credentials);
+    } catch (error) {
+      await this.recordAudit({ provider: credentials.provider, outcome: 'DENIED', requestId, reason: error instanceof AuthenticationProviderUnavailableError ? 'provider-unavailable' : 'provider-failure' });
+      throw error;
+    }
+    if (identity === undefined) {
+      await this.recordAudit({ provider: credentials.provider, outcome: 'DENIED', requestId, reason: 'invalid-credentials' });
+      throw new InvalidCredentialsError();
+    }
     const account = await this.store.findUserForProvider(credentials.provider, identity);
-    if (account === undefined || account.status !== 'ACTIVE') throw new SessionExpiredError();
+    if (account === undefined || account.status !== 'ACTIVE') {
+      await this.recordAudit({
+        provider: credentials.provider,
+        outcome: 'DENIED',
+        requestId,
+        ...(account === undefined ? {} : { organizationId: account.organizationId, actorUserId: account.id }),
+        reason: account === undefined ? 'identity-not-mapped' : 'account-disabled',
+      });
+      throw new InvalidCredentialsError();
+    }
 
     const sessionToken = this.tokenFactory();
     const now = new Date();
@@ -78,17 +156,19 @@ export class SessionService {
       sessionEpoch: account.sessionEpoch,
       expiresAt: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
     });
+    await this.recordAudit({ provider: credentials.provider, outcome: 'SUCCEEDED', requestId, organizationId: account.organizationId, actorUserId: account.id, reason: 'login-succeeded' });
     return {
       document: this.toDocument(account, this.csrf.bootstrap(`session:${sessionToken}`).csrfToken),
       sessionToken,
     };
   }
 
-  async getCurrentSession(sessionToken: string): Promise<SessionDocument> {
+  async getCurrentSession(sessionToken: string, requestId: string = randomUUID()): Promise<SessionDocument> {
     if (sessionToken.length === 0) throw new SessionExpiredError();
     const tokenHash = hashToken(sessionToken);
     const found = await this.store.findSession(tokenHash);
     if (found === undefined || Date.parse(found.session.expiresAt) <= Date.now()) {
+      await this.recordAudit({ provider: 'LOCAL_PASSWORD', outcome: 'DENIED', requestId, reason: 'session-not-found' });
       throw new SessionExpiredError();
     }
     const { session, user } = found;
@@ -100,9 +180,21 @@ export class SessionService {
       || session.sessionEpoch !== user.sessionEpoch
     ) {
       await this.store.revokeSession(tokenHash);
+      await this.recordAudit({ provider: 'LOCAL_PASSWORD', outcome: 'DENIED', requestId, organizationId: user.organizationId, actorUserId: user.id, reason: 'session-snapshot-mismatch' });
       throw new SessionExpiredError();
     }
     return this.toDocument(user, this.csrf.bootstrap(`session:${sessionToken}`).csrfToken);
+  }
+
+  private async recordAudit(input: AuthenticationAuditInput): Promise<void> {
+    try {
+      await this.store.recordAuthenticationAudit?.(input);
+    } catch {
+      // A failed audit sink must not replace the original authentication or
+      // safety decision with a database error. The sink remains append-only
+      // when available; operational alerting belongs at the infrastructure
+      // boundary rather than exposing storage details to clients.
+    }
   }
 
   async deleteSession(sessionToken: string): Promise<void> {

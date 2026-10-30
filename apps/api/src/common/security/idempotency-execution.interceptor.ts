@@ -11,9 +11,10 @@ import type { ContractValidator } from '../../../../../packages/contracts/openap
 import { buildProblem, normalizeRequestId, ProblemError } from '../http/problem.js';
 import { ensureContractResponseContentType, validateContractResponse } from '../http/contract-response.interceptor.js';
 import { restoreIdempotencyTransaction, setIdempotencyTransaction } from './idempotency-transaction-context.js';
+import type { AuthorizationPrincipal } from '../../modules/identity/domain/authz.js';
 
 interface PrincipalRequest extends FastifyRequest {
-  user?: { id: string; organizationId: string };
+  user?: AuthorizationPrincipal;
 }
 
 @Injectable()
@@ -29,7 +30,7 @@ export class IdempotencyExecutionInterceptor implements NestInterceptor {
     if (match === undefined || !match.definition.idempotency || principal === undefined || idempotencyKey === undefined) return next.handle();
 
     const input: PostgresIdempotencyInput = {
-      actorId: principal.id,
+      actorId: principal.userId,
       organizationId: principal.organizationId,
       operationId: match.definition.operationId,
       idempotencyKey,
@@ -138,7 +139,7 @@ function isCommandResult(value: CommandResult<unknown> | CommandStatus): value i
 
 function publicCommandStatus(value: CommandStatus, operation: GeneratedOperation): CommandStatus {
   const publicValue = Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'claimRole' && key !== 'ownerToken' && key !== 'attemptCount')) as CommandStatus;
-  if (publicValue.state !== 'RECOVERY_REQUIRED' || operation.responses['202']?.schema !== 'CommandStatusInProgress') return publicValue;
+  if (publicValue.state === 'IN_PROGRESS' || operation.responses['202']?.schema !== 'CommandStatusInProgress') return publicValue;
   return {
     ...publicValue,
     state: 'IN_PROGRESS',

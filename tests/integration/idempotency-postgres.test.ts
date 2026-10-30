@@ -29,7 +29,7 @@ class PostgresCustomerController {
 
   @Post()
   @HttpCode(201)
-  async create(@Req() request: FastifyRequest & { user?: { id: string; organizationId: string } }, @Res({ passthrough: true }) response: FastifyReply): Promise<Record<string, unknown>> {
+  async create(@Req() request: FastifyRequest & { user?: { userId: string; organizationId: string } }, @Res({ passthrough: true }) response: FastifyReply): Promise<Record<string, unknown>> {
     PostgresCustomerController.executions += 1;
     const { client } = requireIdempotencyTransaction(request);
     const pid = await client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
@@ -58,8 +58,8 @@ class PostgresPrincipalGuard implements CanActivate {
   constructor(private readonly actorId: string, private readonly organizationId: string) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<FastifyRequest & { user?: { id: string; organizationId: string } }>();
-    request.user = { id: this.actorId, organizationId: this.organizationId };
+    const request = context.switchToHttp().getRequest<FastifyRequest & { user?: { userId: string; organizationId: string } }>();
+    request.user = { userId: this.actorId, organizationId: this.organizationId };
     return true;
   }
 }

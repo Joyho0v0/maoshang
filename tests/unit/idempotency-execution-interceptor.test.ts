@@ -300,7 +300,7 @@ describe('idempotency execution interceptor', () => {
       query: {},
       body: { name: 'Acme', ownerUserId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2' },
       headers: { 'idempotency-key': 'key-1', 'x-csrf-token': 'csrf-token-value' },
-      user: { id: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
+      user: { userId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
     };
     const response = { statusCode: 201, getHeader: (name: string) => name.toLowerCase() === 'location' ? '/api/v1/customers/2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' : undefined, header: () => response };
     const context = { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as never;
@@ -328,7 +328,7 @@ describe('idempotency execution interceptor', () => {
       query: {},
       body: { name: 'Acme', ownerUserId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2' },
       headers: { 'idempotency-key': 'key-1', 'x-csrf-token': 'csrf-token-value' },
-      user: { id: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
+      user: { userId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
     };
     const response = { statusCode: 201, getHeader: () => undefined, header: () => response };
     const context = { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as never;
@@ -348,13 +348,46 @@ describe('idempotency execution interceptor', () => {
       query: {},
       body: { name: 'Acme', ownerUserId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2' },
       headers: { 'idempotency-key': 'key-1', 'x-csrf-token': 'csrf-token-value' },
-      user: { id: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
+      user: { userId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
     };
     const response = { statusCode: 201, getHeader: () => undefined, header: (name: string, value: string) => { headers[name] = value; return response; } };
     const context = { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as never;
 
     await expect(lastValueFrom(interceptor.intercept(context, { handle: () => of({}) } as never))).resolves.toEqual({ id: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' });
     expect(headers['idempotent-replay']).toBe('true');
+  });
+
+  it('keeps an async command endpoint contract-compatible after the worker reaches a terminal state', async () => {
+    const repository = { execute: async () => ({
+      commandId: '00000000-0000-4000-8000-000000000091',
+      operationId: 'disableUser',
+      state: 'SUCCEEDED' as const,
+      startedAt: '2026-01-01T00:00:00.000Z',
+      completedAt: '2026-01-01T00:00:01.000Z',
+      expiresAt: '2026-01-02T00:00:00.000Z',
+      retryAfterMs: 0,
+      httpStatus: 202,
+      resource: { type: 'USER', id: '00000000-0000-4000-8000-000000000012', href: '/api/v1/users/00000000-0000-4000-8000-000000000012' },
+      resultHref: null,
+      problem: null,
+      attemptCount: 1,
+    }) };
+    const interceptor = new IdempotencyExecutionInterceptor(repository as never);
+    const headers: Record<string, string> = {};
+    const request = {
+      method: 'POST',
+      url: '/api/v1/users/00000000-0000-4000-8000-000000000012/disable',
+      routeOptions: { url: '/api/v1/users/:id/disable' },
+      params: { id: '00000000-0000-4000-8000-000000000012' },
+      query: {},
+      body: {},
+      headers: { 'idempotency-key': 'disable-key', 'x-csrf-token': 'csrf-token-value', 'if-match': '"v1"' },
+      user: { userId: '00000000-0000-4000-8000-000000000011', organizationId: '00000000-0000-4000-8000-000000000001' },
+    };
+    const response = { statusCode: 202, getHeader: () => undefined, header: (name: string, value: string) => { headers[name] = value; return response; } };
+    const context = { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as never;
+
+    await expect(lastValueFrom(interceptor.intercept(context, { handle: () => of({}) } as never))).resolves.toMatchObject({ state: 'IN_PROGRESS', operationId: 'disableUser', resource: null });
   });
 
   it('projects transition resources to their canonical resource href', async () => {
@@ -375,7 +408,7 @@ describe('idempotency execution interceptor', () => {
       query: {},
       body: { action: 'CONFIRM' },
       headers: { 'idempotency-key': 'transition-key', 'x-csrf-token': 'csrf-token-value', 'if-match': '"1"' },
-      user: { id: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
+      user: { userId: 'f8b6e3a9-3a0a-4c1c-b3e3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
     };
     const response = { statusCode: 200, getHeader: () => undefined, header: () => response };
     const context = { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as never;
@@ -403,7 +436,7 @@ describe('idempotency execution interceptor', () => {
       query: {},
       body: { skuId: observationId, quantity: '1' },
       headers: { 'idempotency-key': 'observation-key', 'x-csrf-token': 'csrf-token-value' },
-      user: { id: 'f8b6e3a9-3a0a-4c1c-b3f3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
+      user: { userId: 'f8b6e3a9-3a0a-4c1c-b3f3-5d65d08c17e2', organizationId: '2f6a6a3d-90e4-4ff8-b0f3-8a8225e7f019' },
     };
     const response = { statusCode: 201, getHeader: () => undefined, header: () => response };
     const context = { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as never;
@@ -432,7 +465,7 @@ describe('idempotency execution interceptor', () => {
       query: {},
       body: { reason: 'manual' },
       headers: { 'idempotency-key': 'release-key', 'x-csrf-token': 'csrf-token-value', 'if-match': '"1"' },
-      user: { id: reservationId, organizationId: operationId },
+      user: { userId: reservationId, organizationId: operationId },
     };
     const response = { statusCode: 200, getHeader: () => undefined, header: () => response };
     const context = { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as never;
@@ -461,7 +494,7 @@ describe('idempotency execution interceptor', () => {
       query: {},
       body: { operationType: 'REVERSAL', lines: [{ skuId: sourceOperationId, quantity: '1' }] },
       headers: { 'idempotency-key': 'reverse-key', 'x-csrf-token': 'csrf-token-value', 'if-match': '"v1"' },
-      user: { id: sourceOperationId, organizationId: reversalOperationId },
+      user: { userId: sourceOperationId, organizationId: reversalOperationId },
     };
     const response = { statusCode: 201, getHeader: () => undefined, header: () => response };
     const context = { switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }) } as never;

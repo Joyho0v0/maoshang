@@ -13,6 +13,41 @@ CREATE TABLE IF NOT EXISTS org.organization (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS organization_code_ci_idx ON org.organization (lower(code));
 
+-- The foundation tables remain the compatibility owner for integration records.
+-- Keep a strict same-id mirror so an IAM principal can satisfy foundation FKs;
+-- this is a constrained bridge, not an application-level best-effort dual write.
+CREATE OR REPLACE FUNCTION org.sync_core_organization() RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  INSERT INTO core.organization (id, name) VALUES (NEW.id, NEW.name)
+  ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
+    WHERE core.organization.name IS DISTINCT FROM EXCLUDED.name;
+  RETURN NEW;
+END;
+$$;
+CREATE OR REPLACE FUNCTION core.sync_identity_organization() RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  INSERT INTO org.organization (id, code, name) VALUES (NEW.id, NEW.id::text, NEW.name)
+  ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
+    WHERE org.organization.name IS DISTINCT FROM EXCLUDED.name;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS organization_core_mirror ON org.organization;
+CREATE TRIGGER organization_core_mirror
+  AFTER INSERT OR UPDATE OF name ON org.organization
+  FOR EACH ROW EXECUTE FUNCTION org.sync_core_organization();
+DROP TRIGGER IF EXISTS core_organization_identity_mirror ON core.organization;
+CREATE TRIGGER core_organization_identity_mirror
+  AFTER INSERT OR UPDATE OF name ON core.organization
+  FOR EACH ROW EXECUTE FUNCTION core.sync_identity_organization();
+INSERT INTO org.organization (id, code, name)
+SELECT id, id::text, name FROM core.organization
+ON CONFLICT (id) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS org.business_group (
   id uuid PRIMARY KEY,
   organization_id uuid NOT NULL REFERENCES org.organization(id) ON DELETE RESTRICT,
@@ -47,7 +82,30 @@ CREATE TABLE IF NOT EXISTS iam.user_account (
   UNIQUE (organization_id, provider, provider_subject)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS user_account_username_ci_idx ON iam.user_account (organization_id, lower(username_normalized));
+CREATE UNIQUE INDEX IF NOT EXISTS user_account_provider_subject_global_idx ON iam.user_account (provider, provider_subject);
 CREATE INDEX IF NOT EXISTS user_account_organization_status_idx ON iam.user_account (organization_id, status, id);
+
+CREATE OR REPLACE FUNCTION iam.sync_core_user_account() RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM core.user_account
+     WHERE id = NEW.id AND organization_id IS DISTINCT FROM NEW.organization_id
+  ) THEN
+    RAISE EXCEPTION 'IAM and foundation user organizations must match';
+  END IF;
+  INSERT INTO core.user_account (id, organization_id, status) VALUES (NEW.id, NEW.organization_id, NEW.status)
+  ON CONFLICT (id) DO UPDATE SET organization_id = EXCLUDED.organization_id, status = EXCLUDED.status
+    WHERE core.user_account.organization_id IS DISTINCT FROM EXCLUDED.organization_id
+       OR core.user_account.status IS DISTINCT FROM EXCLUDED.status;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS user_account_core_mirror ON iam.user_account;
+CREATE TRIGGER user_account_core_mirror
+  AFTER INSERT OR UPDATE OF organization_id, status ON iam.user_account
+  FOR EACH ROW EXECUTE FUNCTION iam.sync_core_user_account();
 
 CREATE TABLE IF NOT EXISTS org.membership (
   id uuid PRIMARY KEY,
@@ -84,6 +142,8 @@ CREATE TABLE IF NOT EXISTS org.position_history (
 );
 CREATE INDEX IF NOT EXISTS position_history_user_idx ON org.position_history (organization_id, user_id, effective_at DESC, id);
 CREATE INDEX IF NOT EXISTS position_history_actor_idx ON org.position_history (organization_id, actor_user_id, effective_at DESC, id);
+CREATE INDEX IF NOT EXISTS position_history_from_group_idx ON org.position_history (organization_id, from_group_id, effective_at DESC, id);
+CREATE INDEX IF NOT EXISTS position_history_to_group_idx ON org.position_history (organization_id, to_group_id, effective_at DESC, id);
 
 CREATE TABLE IF NOT EXISTS iam.session (
   id uuid PRIMARY KEY,
@@ -146,6 +206,26 @@ CREATE TABLE IF NOT EXISTS iam.user_role_binding (
 CREATE UNIQUE INDEX IF NOT EXISTS user_role_binding_active_idx ON iam.user_role_binding (organization_id, user_id, role_id) WHERE valid_to IS NULL;
 CREATE INDEX IF NOT EXISTS user_role_binding_user_idx ON iam.user_role_binding (organization_id, user_id, valid_from DESC, id);
 CREATE INDEX IF NOT EXISTS user_role_binding_granted_by_idx ON iam.user_role_binding (organization_id, granted_by, created_at DESC, id);
+CREATE INDEX IF NOT EXISTS user_role_binding_role_idx ON iam.user_role_binding (organization_id, role_id, user_id, id);
+
+CREATE OR REPLACE FUNCTION iam.assert_role_binding_organization() RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  role_org uuid;
+  system_role boolean;
+BEGIN
+  SELECT organization_id, is_system INTO role_org, system_role FROM iam.role WHERE id = NEW.role_id;
+  IF NOT FOUND OR (NOT system_role AND role_org IS DISTINCT FROM NEW.organization_id) THEN
+    RAISE EXCEPTION 'role organization does not match user role binding organization';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS user_role_binding_organization_guard ON iam.user_role_binding;
+CREATE TRIGGER user_role_binding_organization_guard
+  BEFORE INSERT OR UPDATE OF organization_id, role_id ON iam.user_role_binding
+  FOR EACH ROW EXECUTE FUNCTION iam.assert_role_binding_organization();
 
 CREATE TABLE IF NOT EXISTS iam.user_data_scope (
   id uuid PRIMARY KEY,
@@ -193,6 +273,30 @@ CREATE INDEX IF NOT EXISTS audit_event_organization_time_idx ON audit.audit_even
 CREATE INDEX IF NOT EXISTS audit_event_actor_time_idx ON audit.audit_event (organization_id, actor_user_id, created_at DESC, id);
 CREATE INDEX IF NOT EXISTS audit_event_resource_idx ON audit.audit_event (organization_id, resource_type, resource_id, created_at DESC, id);
 CREATE INDEX IF NOT EXISTS audit_event_request_idx ON audit.audit_event (organization_id, request_id, id);
+
+CREATE TABLE IF NOT EXISTS audit.authentication_event (
+  id uuid PRIMARY KEY,
+  organization_id uuid,
+  actor_user_id uuid,
+  provider text NOT NULL CHECK (provider IN ('LOCAL_PASSWORD', 'OIDC_SSO', 'REQUEST_SAFETY')),
+  outcome text NOT NULL CHECK (outcome IN ('SUCCEEDED', 'DENIED')),
+  reason text NOT NULL CHECK (length(reason) BETWEEN 1 AND 128),
+  request_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  FOREIGN KEY (organization_id, actor_user_id) REFERENCES iam.user_account (organization_id, id) ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS authentication_event_time_idx ON audit.authentication_event (organization_id, created_at DESC, id);
+CREATE OR REPLACE FUNCTION audit.reject_authentication_mutation() RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'authentication events are append-only';
+END;
+$$;
+DROP TRIGGER IF EXISTS authentication_event_immutable ON audit.authentication_event;
+CREATE TRIGGER authentication_event_immutable
+  BEFORE UPDATE OR DELETE ON audit.authentication_event
+  FOR EACH ROW EXECUTE FUNCTION audit.reject_authentication_mutation();
 
 CREATE TABLE IF NOT EXISTS integration.identity_outbox_event (
   id uuid PRIMARY KEY,

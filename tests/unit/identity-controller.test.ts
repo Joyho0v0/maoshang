@@ -15,7 +15,7 @@ const principal: AuthorizationPrincipal = {
 
 describe('identity controller idempotency response', () => {
   it('uses the repository claim identity for an accepted disable command', async () => {
-    const service = { disableUser: vi.fn().mockResolvedValue({}) };
+    const service = { queueDisableUser: vi.fn().mockResolvedValue(undefined) };
     const controller = new IdentityController(service as never);
     const request = {
       method: 'POST',
@@ -37,6 +37,7 @@ describe('identity controller idempotency response', () => {
       problem: null,
       attemptCount: 1,
       claimRole: 'OWNER' as const,
+      ownerToken: Buffer.alloc(32, 7),
     };
     setIdempotencyTransaction(request, { client: {} as never, claim });
     const reply = {
@@ -45,6 +46,6 @@ describe('identity controller idempotency response', () => {
     };
     const result = await controller.disableUser(request as never, '00000000-0000-4000-8000-000000000012', '"v1"', reply as never);
     expect(result).toMatchObject({ commandId: claim.commandId, operationId: claim.operationId, startedAt: claim.startedAt, expiresAt: claim.expiresAt, retryAfterMs: claim.retryAfterMs });
-    expect(service.disableUser).toHaveBeenCalledWith(principal, '00000000-0000-4000-8000-000000000012', 1, '00000000-0000-4000-8000-000000000099', {});
+    expect(service.queueDisableUser).toHaveBeenCalledWith(principal, '00000000-0000-4000-8000-000000000012', 1, '00000000-0000-4000-8000-000000000099', expect.objectContaining({ commandId: claim.commandId, ownerToken: claim.ownerToken }), {});
   });
 });

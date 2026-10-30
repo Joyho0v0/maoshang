@@ -44,6 +44,7 @@ describe('Postgres identity store', () => {
       await expect(store.findSession('a'.repeat(64))).resolves.toBeUndefined();
       await client.query('BEGIN');
       transactionOpen = true;
+      await client.query("SET LOCAL app.allow_identity_down = 'true'");
       await client.query(down);
       await client.query(foundationDown);
       await client.query('COMMIT');

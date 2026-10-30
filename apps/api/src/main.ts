@@ -15,12 +15,13 @@ import { createContractValidator } from '../../../packages/contracts/openapi/run
 import { ContractResponseValidationInterceptor } from './common/http/contract-response.interceptor.js';
 import { IdempotencyExecutionInterceptor } from './common/security/idempotency-execution.interceptor.js';
 import { IDEMPOTENCY_REPOSITORY } from './modules/integration/idempotency/postgres-idempotency-repository.js';
+import type { AuthenticationProvider } from './modules/identity/application/session.service.js';
 
-export async function createApp(options: { config?: RuntimeConfig; env?: Record<string, string | undefined> } = {}): Promise<NestFastifyApplication> {
+export async function createApp(options: { config?: RuntimeConfig; env?: Record<string, string | undefined>; authenticationProvider?: AuthenticationProvider } = {}): Promise<NestFastifyApplication> {
   const config = options.config ?? loadRuntimeConfig(options.env);
   const contractDocument = parse(await readFile(join(process.cwd(), 'packages/contracts/openapi/openapi.yaml'), 'utf8')) as Record<string, unknown>;
   const contractValidator = createContractValidator(contractDocument);
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule.register(config, contractValidator), new FastifyAdapter({ logger: false }));
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule.register(config, contractValidator, options.authenticationProvider), new FastifyAdapter({ logger: false }));
   await app.register(cookie as unknown as Parameters<typeof app.register>[0]);
   app.setGlobalPrefix('api/v1');
   app.useGlobalFilters(new ProblemExceptionFilter(contractValidator));

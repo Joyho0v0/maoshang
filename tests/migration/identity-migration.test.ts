@@ -19,6 +19,11 @@ describe('Identity and authorization migration', () => {
     expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS integration\.identity_outbox_event/i);
     expect(sql).toMatch(/identity_outbox_claim_consistency/i);
     expect(sql).toMatch(/CREATE TRIGGER .*audit.*immutable/i);
+    expect(sql).toMatch(/UNIQUE INDEX .*provider_subject_global/i);
+    expect(sql).toMatch(/position_history.*from_group/i);
+    expect(sql).toMatch(/user_role_binding.*role/i);
+    expect(sql).toMatch(/role.*organization.*binding/i);
+    expect(down).toMatch(/allow_identity_down/i);
     expect(sql).toMatch(/SUPER_ADMIN/i);
     expect(sql).toMatch(/GROUP_LEADER/i);
     expect(sql).toMatch(/SALES/i);
@@ -51,6 +56,7 @@ describe('Identity and authorization migration', () => {
       ]);
       const roles = await client.query<{ code: string }>('SELECT code FROM iam.role WHERE organization_id IS NULL ORDER BY code');
       expect(roles.rows.map((row) => row.code)).toEqual(['GROUP_LEADER', 'SALES', 'SUPER_ADMIN']);
+      await client.query("SET LOCAL app.allow_identity_down = 'true'");
       await client.query(down);
       const remaining = await client.query<{ table_name: string }>(
         "SELECT table_name FROM information_schema.tables WHERE (table_schema, table_name) IN (('iam','user_account'), ('iam','session'), ('iam','user_data_scope'), ('org','organization'), ('org','business_group'), ('audit','audit_event'), ('integration','identity_outbox_event'))",

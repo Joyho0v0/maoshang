@@ -11,6 +11,7 @@ import {
   IdentityVersionConflictError,
   type AuditQueryFilters,
 } from '../application/identity-command.service.js';
+import type { PostgresClaim } from '../../integration/idempotency/postgres-idempotency-repository.js';
 import type { AuthorizationPrincipal } from '../domain/authz.js';
 import { AuthorizationDeniedError } from '../domain/authz.js';
 import { requireIdempotencyTransaction } from '../../../common/security/idempotency-transaction-context.js';
@@ -77,8 +78,16 @@ export class IdentityController {
   @Post('users/:id/disable')
   async disableUser(@Req() request: IdentityRequest, @Param('id') id: string, @Headers('if-match') ifMatch: string, @Res({ passthrough: true }) reply: FastifyReply): Promise<CommandStatusInProgress> {
     try {
-      await this.service.disableUser(this.principal(request), id, parseEtag(ifMatch), this.requestId(request), this.transactionClient(request));
       const claim = this.transactionClaim(request);
+      if (claim === undefined || claim.ownerToken === undefined) throw new Error('Disable command requires an idempotency owner claim.');
+      await this.service.queueDisableUser(this.principal(request), id, parseEtag(ifMatch), this.requestId(request), {
+        commandId: claim.commandId,
+        operationId: claim.operationId,
+        ownerToken: claim.ownerToken,
+        startedAt: claim.startedAt,
+        expiresAt: claim.expiresAt,
+        retryAfterMs: claim.retryAfterMs,
+      }, this.transactionClient(request));
       const now = new Date();
       const command: CommandStatusInProgress = {
         commandId: claim?.commandId ?? randomUUID(),
@@ -138,10 +147,10 @@ export class IdentityController {
     }
   }
 
-  private transactionClaim(request: FastifyRequest): { commandId: string; operationId: string; startedAt: string; expiresAt: string; retryAfterMs: number } | undefined {
+  private transactionClaim(request: FastifyRequest): PostgresClaim | undefined {
     try {
       const claim = requireIdempotencyTransaction(request).claim;
-      return { commandId: claim.commandId, operationId: claim.operationId, startedAt: claim.startedAt, expiresAt: claim.expiresAt, retryAfterMs: claim.retryAfterMs };
+      return claim;
     } catch {
       return undefined;
     }
