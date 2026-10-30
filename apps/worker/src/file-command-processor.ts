@@ -29,7 +29,10 @@ export class FileCommandProcessor {
     const command = parseCompletion(event.payload);
     const snapshot = await this.store.findWorkerFile(command.organizationId, command.fileId);
     if (snapshot === undefined) throw new Error('File completion target is missing.');
-    if (snapshot.file.status !== 'PENDING_UPLOAD') return;
+    if (snapshot.file.status !== 'PENDING_UPLOAD') {
+      await this.finishStateConflict(command, snapshot.file.status);
+      return;
+    }
     if (snapshot.intentStatus !== 'ACTIVE' || snapshot.expiresAt.getTime() <= Date.now()) {
       await this.finishExpiredCompletion(command);
       return;
@@ -117,6 +120,22 @@ export class FileCommandProcessor {
         await client.query('ROLLBACK TO SAVEPOINT file_expired');
         throw failure;
       }
+    });
+  }
+
+  private async finishStateConflict(command: ParsedCompletion, currentState: string): Promise<void> {
+    await this.repository.withTransaction(async (client) => {
+      const ownerState = await this.repository.checkCommandOwner(client, command.commandId, command.operationId, command.ownerToken);
+      if (ownerState !== 'OWNED') return;
+      const problem = buildProblem({
+        status: 409,
+        code: 'STATE_CONFLICT',
+        title: 'File state conflict',
+        requestId: command.requestId,
+        retryable: false,
+        meta: { resourceType: 'FILE', resourceId: command.fileId, currentState },
+      });
+      await this.repository.fail(client, command.commandId, command.ownerToken, problem);
     });
   }
 
