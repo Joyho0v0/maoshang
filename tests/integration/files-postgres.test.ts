@@ -6,8 +6,8 @@ import type { AuthorizationPrincipal, DataScopeType } from '../../apps/api/src/m
 import { CommandFailureError, type CommandResult } from '../../apps/api/src/modules/integration/idempotency/in-memory-idempotency-store.js';
 import { PostgresIdempotencyRepository } from '../../apps/api/src/modules/integration/idempotency/postgres-idempotency-repository.js';
 import { FilesService, toApiFile } from '../../apps/api/src/modules/files/application/files.service.js';
-import { FileState } from '../../apps/api/src/modules/files/domain/files.js';
-import { ControlledFakeObjectStorageAdapter, ControlledFakeScanAdapter } from '../../apps/api/src/modules/files/infrastructure/file-adapters.js';
+import { FileDependencyUnavailableError, FileState } from '../../apps/api/src/modules/files/domain/files.js';
+import { ControlledFakeObjectStorageAdapter, ControlledFakeScanAdapter, type ObjectStorageAdapter } from '../../apps/api/src/modules/files/infrastructure/file-adapters.js';
 import { PostgresFilesStore } from '../../apps/api/src/modules/files/infrastructure/postgres-files.store.js';
 import { FileCommandProcessor } from '../../apps/worker/src/file-command-processor.js';
 import { PostgresOutboxSource } from '../../apps/worker/src/postgres-outbox-source.js';
@@ -166,6 +166,43 @@ describeFilesPostgres('Files PostgreSQL vertical slice', () => {
     return { fileId: intent.fileId, completeCommandId: accepted.body.commandId as string };
   }
 
+  async function enqueueCompletion(owner: AuthorizationPrincipal, suffix: string): Promise<{ fileId: string; commandId: string }> {
+    const intent = await createIntent(owner, suffix);
+    const replayTransfer = (intent.replay.body as { transfer: { locator: string } }).transfer;
+    storage.putForTest(replayTransfer.locator, { sizeBytes: 12, contentType: 'application/pdf' });
+    const completeInput = {
+      actorId: owner.userId,
+      organizationId: owner.organizationId,
+      operationId: 'completeUpload',
+      idempotencyKey: `files-complete-${suffix}`,
+      requestHash: `files-complete-request-${suffix}`,
+    };
+    const accepted = await repository.execute(completeInput, async (client, claim) => serviceFor(owner, storage).completeUpload(owner, intent.fileId, { action: 'COMPLETE' }, '"v1"', randomUUID(), client, claim)) as FileCommandResult;
+    expect(accepted.status).toBe(202);
+    return { fileId: intent.fileId, commandId: accepted.body.commandId as string };
+  }
+
+  async function claimNextTopic(source: PostgresOutboxSource, topic: string): Promise<OutboxEvent> {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const event = (await source.claimBatch(1))[0];
+      if (event === undefined) break;
+      if (event.topic === topic) return event;
+      await source.markPublished(event.id, event.claimToken);
+    }
+    throw new Error(`Expected a pending ${topic} event.`);
+  }
+
+  async function resetNextTopicToPending(source: PostgresOutboxSource, topic: string): Promise<OutboxEvent> {
+    const event = await claimNextTopic(source, topic);
+    await pool.query(
+      `UPDATE integration.outbox_event
+          SET status = 'PENDING', attempts = 0, claimed_at = NULL, claim_owner_token = NULL, claim_expires_at = NULL
+        WHERE id = $1`,
+      [event.id],
+    );
+    return event;
+  }
+
   beforeAll(async () => {
     await applyMigrations();
     await insertIdentity(organizationId, actorId, 'primary');
@@ -291,5 +328,92 @@ describeFilesPostgres('Files PostgreSQL vertical slice', () => {
     } finally {
       client.release();
     }
+  });
+
+  it('serializes concurrent complete and scan deliveries to one state transition and one audit/outbox effect', async () => {
+    const owner = principal(organizationId, actorId);
+    const { fileId } = await enqueueCompletion(owner, `concurrent-${randomUUID()}`);
+    const source = new PostgresOutboxSource(pool);
+    const completion = await claimNextTopic(source, 'file.complete.requested');
+    const processor = new FileCommandProcessor(store, repository, storage, new ControlledFakeScanAdapter('CLEAN'));
+    await Promise.all([
+      processor.process(completion),
+      processor.process({ ...completion, payload: { ...completion.payload } }),
+    ]);
+    await source.markPublished(completion.id, completion.claimToken);
+
+    const scan = await claimNextTopic(source, 'file.scan.requested');
+    await Promise.all([
+      processor.process(scan),
+      processor.process({ ...scan, payload: { ...scan.payload } }),
+    ]);
+    await source.markPublished(scan.id, scan.claimToken);
+
+    await expect(pool.query<{ status: FileState; version: number }>('SELECT status, version FROM files.file_object WHERE id = $1', [fileId])).resolves.toMatchObject({ rows: [{ status: FileState.AVAILABLE, version: 4 }] });
+    await expect(pool.query<{ count: number }>("SELECT count(*)::int AS count FROM files.scan_result WHERE file_id = $1", [fileId])).resolves.toMatchObject({ rows: [{ count: 1 }] });
+    await expect(pool.query<{ count: number }>("SELECT count(*)::int AS count FROM integration.inbox_consumption WHERE consumer_name = 'files.scan' AND event_id = $1", [scan.payload.scanEventId])).resolves.toMatchObject({ rows: [{ count: 1 }] });
+    await expect(pool.query<{ count: number }>("SELECT count(*)::int AS count FROM audit.audit_event WHERE resource_id = $1 AND action IN ('file.scan.started', 'file.available')", [fileId])).resolves.toMatchObject({ rows: [{ count: 2 }] });
+    await expect(pool.query<{ count: number }>("SELECT count(*)::int AS count FROM integration.outbox_event WHERE aggregate_id = $1 AND event_type IN ('file.scan.requested', 'file.available')", [fileId])).resolves.toMatchObject({ rows: [{ count: 2 }] });
+  });
+
+  it('fences a crash-after-claim takeover and ignores the stale duplicate scan delivery', async () => {
+    const owner = principal(organizationId, actorId);
+    const { fileId } = await enqueueCompletion(owner, `takeover-${randomUUID()}`);
+    const source = new PostgresOutboxSource(pool);
+    const completion = await claimNextTopic(source, 'file.complete.requested');
+    const processor = new FileCommandProcessor(store, repository, storage, new ControlledFakeScanAdapter('CLEAN'));
+    await processor.process(completion);
+    await source.markPublished(completion.id, completion.claimToken);
+
+    const stale = await claimNextTopic(source, 'file.scan.requested');
+    await pool.query('UPDATE integration.outbox_event SET claim_expires_at = now() - interval \'1 second\' WHERE id = $1', [stale.id]);
+    const takeover = (await source.claimBatch(1))[0];
+    if (takeover === undefined) throw new Error('Expected a reclaimed file scan event.');
+    expect(takeover.attempts).toBe(2);
+    await Promise.all([processor.process(stale), processor.process(takeover)]);
+    await source.markPublished(takeover.id, takeover.claimToken);
+
+    await expect(pool.query<{ status: string; attempts: number }>('SELECT status, attempts FROM integration.outbox_event WHERE id = $1', [takeover.id])).resolves.toMatchObject({ rows: [{ status: 'PUBLISHED', attempts: 2 }] });
+    await expect(pool.query<{ status: FileState }>('SELECT status FROM files.file_object WHERE id = $1', [fileId])).resolves.toMatchObject({ rows: [{ status: FileState.AVAILABLE }] });
+    await expect(pool.query<{ count: number }>("SELECT count(*)::int AS count FROM files.scan_result WHERE file_id = $1", [fileId])).resolves.toMatchObject({ rows: [{ count: 1 }] });
+    await expect(pool.query<{ count: number }>("SELECT count(*)::int AS count FROM audit.audit_event WHERE resource_id = $1 AND action = 'file.available'", [fileId])).resolves.toMatchObject({ rows: [{ count: 1 }] });
+    await expect(pool.query<{ count: number }>("SELECT count(*)::int AS count FROM integration.outbox_event WHERE aggregate_id = $1 AND event_type = 'file.available'", [fileId])).resolves.toMatchObject({ rows: [{ count: 1 }] });
+  });
+
+  it('quarantines a completion after five unavailable object-head attempts with stable command and database terminals', async () => {
+    const owner = principal(organizationId, actorId);
+    const { fileId, commandId } = await enqueueCompletion(owner, `retry-exhausted-${randomUUID()}`);
+    const unavailableStorage: ObjectStorageAdapter = {
+      createUploadTransfer: (input) => storage.createUploadTransfer(input),
+      createDownloadTransfer: (input) => storage.createDownloadTransfer(input),
+      async headObject() {
+        throw new FileDependencyUnavailableError();
+      },
+    };
+    const source = new PostgresOutboxSource(pool);
+    const resetCompletion = await resetNextTopicToPending(source, 'file.complete.requested');
+    expect(resetCompletion.payload.fileId).toBe(fileId);
+    const pendingSnapshot = await store.findWorkerFile(organizationId, fileId);
+    expect(pendingSnapshot?.file.status).toBe(FileState.PENDING_UPLOAD);
+    expect(pendingSnapshot?.intentStatus).toBe('ACTIVE');
+    expect(pendingSnapshot?.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    const processor = new FileCommandProcessor(store, repository, unavailableStorage, new ControlledFakeScanAdapter('CLEAN'));
+    const worker = new OutboxWorker(source, { publish: (event) => processor.process(event) });
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      if (attempt > 1) await pool.query('UPDATE integration.outbox_event SET available_at = now() WHERE aggregate_id = $1 AND event_type = \'file.complete.requested\'', [fileId]);
+      if (attempt < 5) {
+        await expect(worker.runOnce(1)).rejects.toThrow(FileDependencyUnavailableError);
+      } else {
+        await expect(worker.runOnce(1)).resolves.toBe(1);
+      }
+    }
+
+    await expect(pool.query<{ status: FileState; rejection_reason: string }>('SELECT status, rejection_reason FROM files.file_object WHERE id = $1', [fileId])).resolves.toMatchObject({ rows: [{ status: FileState.QUARANTINED, rejection_reason: 'FileDependencyUnavailableError' }] });
+    await expect(pool.query<{ status: string }>('SELECT status FROM files.upload_intent WHERE file_id = $1', [fileId])).resolves.toMatchObject({ rows: [{ status: 'REJECTED' }] });
+    await expect(pool.query<{ result: string }>('SELECT result FROM files.scan_result WHERE file_id = $1', [fileId])).resolves.toMatchObject({ rows: [{ result: 'ERROR' }] });
+    await expect(pool.query<{ state: string; http_status: number; code: string }>("SELECT state, http_status, problem_body->>'code' AS code FROM integration.idempotency_record WHERE id = $1", [commandId])).resolves.toMatchObject({ rows: [{ state: 'FAILED', http_status: 503, code: 'DEPENDENCY_UNAVAILABLE' }] });
+    await expect(pool.query<{ count: number }>("SELECT count(*)::int AS count FROM audit.audit_event WHERE resource_id = $1 AND action = 'file.quarantined'", [fileId])).resolves.toMatchObject({ rows: [{ count: 1 }] });
+    await expect(pool.query<{ count: number }>("SELECT count(*)::int AS count FROM integration.outbox_event WHERE aggregate_id = $1 AND event_type = 'file.quarantined'", [fileId])).resolves.toMatchObject({ rows: [{ count: 1 }] });
+    await expect(pool.query<{ status: string; attempts: number }>("SELECT status, attempts FROM integration.outbox_event WHERE aggregate_id = $1 AND event_type = 'file.complete.requested'", [fileId])).resolves.toMatchObject({ rows: [{ status: 'PUBLISHED', attempts: 5 }] });
   });
 });

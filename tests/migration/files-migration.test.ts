@@ -25,12 +25,23 @@ describe('Files migration', () => {
     expect(down).not.toMatch(/CASCADE/i);
   });
 
-  it.skipIf(process.env.DATABASE_URL === undefined)('proves every Files foreign key has a usable left-prefix child index', async () => {
+  it.skipIf(process.env.DATABASE_URL === undefined)('proves every Files foreign key has a usable non-partial left-prefix child index after Files migrations are applied', async () => {
     const databaseUrl = process.env.DATABASE_URL;
     if (databaseUrl === undefined) return;
     const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
+    const client = await pool.connect();
+    const foundation = await readFile(new URL('../../packages/database/migrations/001_foundation.sql', import.meta.url), 'utf8');
+    const identity = await readFile(new URL('../../packages/database/migrations/002_identity_authorization.sql', import.meta.url), 'utf8');
+    const files = await readFile(new URL('../../packages/database/migrations/003_files.sql', import.meta.url), 'utf8');
+    const down = await readFile(new URL('../../packages/database/migrations/003_files.down.sql', import.meta.url), 'utf8');
+    let transactionOpen = false;
     try {
-      const result = await pool.query<{ constraint_name: string }>(`
+      await client.query('BEGIN');
+      transactionOpen = true;
+      await client.query(foundation);
+      await client.query(identity);
+      await client.query(files);
+      const result = await client.query<{ constraint_name: string }>(`
         WITH files_fks AS (
           SELECT con.oid, con.conrelid, con.conkey, con.conname
             FROM pg_constraint AS con
@@ -45,16 +56,48 @@ describe('Files migration', () => {
              FROM pg_index AS idx
             WHERE idx.indrelid = fk.conrelid
               AND idx.indisvalid
+              AND idx.indisready
+              AND idx.indpred IS NULL
               AND idx.indnkeyatts >= cardinality(fk.conkey)
               AND NOT EXISTS (
                 SELECT 1
                 FROM generate_subscripts(fk.conkey, 1) AS position(index_position)
-                 WHERE idx.indkey[position.index_position] <> fk.conkey[position.index_position]
+                 WHERE idx.indkey[position.index_position - 1] <> fk.conkey[position.index_position]
               )
          )
          ORDER BY conname`);
       expect(result.rows).toEqual([]);
+      const foreignKeys = await client.query<{ constraint_name: string }>(`
+        SELECT conname AS constraint_name
+          FROM pg_constraint AS con
+          JOIN pg_class AS rel ON rel.oid = con.conrelid
+          JOIN pg_namespace AS ns ON ns.oid = rel.relnamespace
+         WHERE con.contype = 'f' AND ns.nspname = 'files'
+         ORDER BY conname`);
+      expect(foreignKeys.rows.map((row) => row.constraint_name)).toEqual([
+        'file_link_organization_id_file_id_fkey',
+        'file_link_organization_id_linked_by_fkey',
+        'file_link_organization_id_resource_business_group_id_fkey',
+        'file_link_organization_id_resource_owner_id_fkey',
+        'file_object_organization_id_business_group_id_fkey',
+        'file_object_organization_id_created_by_fkey',
+        'file_object_organization_id_fkey',
+        'scan_result_organization_id_file_id_fkey',
+        'upload_intent_organization_id_created_by_fkey',
+        'upload_intent_organization_id_file_id_object_key_fkey',
+      ]);
+      await client.query('CREATE TABLE integration.files_catalog_later_sentinel (id integer PRIMARY KEY)');
+      await client.query(down);
+      const ownedTables = await client.query<{ table_schema: string; table_name: string }>(`SELECT table_schema, table_name
+        FROM information_schema.tables
+       WHERE (table_schema, table_name) IN (('files','file_object'), ('files','upload_intent'), ('files','file_link'), ('files','scan_result'), ('integration','inbox_consumption'))`);
+      expect(ownedTables.rows).toEqual([]);
+      await expect(client.query("SELECT 1 FROM information_schema.tables WHERE table_schema = 'integration' AND table_name = 'files_catalog_later_sentinel'")).resolves.toMatchObject({ rows: [{ '?column?': 1 }] });
+      await client.query('ROLLBACK');
+      transactionOpen = false;
     } finally {
+      if (transactionOpen) await client.query('ROLLBACK').catch(() => undefined);
+      client.release();
       await pool.end();
     }
   });
