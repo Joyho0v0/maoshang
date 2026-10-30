@@ -8,10 +8,13 @@
 The repository contains two distinct TypeScript execution environments. The API,
 Worker, shared packages, root tests, and Vitest configuration use Node and
 NodeNext semantics. The Vue application uses Bundler module resolution, browser
-libraries, Vue single-file components, and `vue-tsc`. A single root program
-previously included both environments and also served as the production emit
-configuration. That allowed DOM and Node globals to overlap and caused the root
-build to emit tests and tool entrypoints.
+libraries, Vue single-file components, and `vue-tsc`. The previous root program
+was a Node-configured mixed program: its broad include absorbed Web `.ts` files
+under NodeNext, ES2022-only libraries, and Node/Vitest globals. It therefore
+lacked the Web DOM environment and did not understand Vue single-file components
+or Bundler resolution. The same configuration also served as the production
+emit configuration, causing the root build to emit tests and tool entrypoints
+while omitting `.vue` checking and the Vite build.
 
 The root `typecheck` and `build` scripts also checked only the Node TypeScript
 program. They therefore did not represent repository-wide gates even though
@@ -45,12 +48,15 @@ scripts can explicitly compose the independent checks and builds.
 ## Proposed decision
 
 Introduce `tsconfig.base.json` containing only environment-neutral target and
-strictness settings. Use three independent programs:
+strictness settings. Use a shared strictness base and three
+environment-specific programs:
 
 - root `tsconfig.json` checks API, Worker, shared packages, root tests, and the
   Vitest configuration with NodeNext, ES2022, Node, and Vitest globals;
-- `tsconfig.build.json` emits only API and Worker production source to `dist/`,
-  with `rootDir` set to the repository root and `noEmitOnError` enabled;
+- `tsconfig.build.json` inherits the root Node program and narrows it to API and
+  Worker production source for emission to `dist/`; its only environment
+  difference is production-only Node globals without Vitest globals, and it
+  sets `rootDir`, `outDir`, and `noEmitOnError` for emission;
 - `apps/web/tsconfig.json` checks Vue and Vite sources with ESNext, Bundler,
   DOM, DOM.Iterable, Vue/Vitest/Node types, isolated modules, and no emit.
 
@@ -78,3 +84,29 @@ failure behavior and readable logs over build parallelism.
 This decision remains `proposed` until the exact implementation head receives
 the required review and verification. It does not authorize API, database,
 security, contract, deployment, CI, shared-environment, or production changes.
+
+## Failure, rollback, and review conditions
+
+The proposal fails verification if the root typecheck and production build no
+longer inherit the same Node environment settings (apart from the build's
+production-only `types`), if production emit admits a test or tool entrypoint,
+if an API or Worker runtime dependency is omitted, or if an aggregate gate can
+report success after either its Node or Web subcommand fails. Verification must
+stop rather than relax checks, swallow a non-zero exit, claim a false green, or
+temporarily recombine the Node and Web programs.
+
+Before this decision is accepted, a failure leaves it `proposed` (or moves it to
+`rejected`) and requires renewed architecture review. Rollback is one complete,
+reviewable revert of the toolchain implementation commit together with its
+matching root and Web lockfiles; configurations and lockfiles must not be mixed
+across revisions. After shared use, prefer a traceable forward-fix when that is
+safer than reverting other consumers, otherwise use an explicit revert. This
+toolchain-only rollback does not include a database, API, Session, or data
+migration rollback.
+
+Re-review this decision whenever configuration inheritance changes, production
+entry boundaries change, aggregate gate composition or exit propagation
+changes, or the Node, Web, and build programs drift from their documented
+environments. Any event that would require dual runtimes, weaker checks, broader
+emit, or a changed Node/Web architecture must return to architecture decision
+rather than being treated as an implementation exception.
