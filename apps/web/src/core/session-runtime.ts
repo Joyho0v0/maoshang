@@ -239,10 +239,11 @@ export class SessionRuntime {
     const operationEpoch = this.state.epoch;
     const controller = this.trackRequest();
     try {
-      const response = await this.adapter.rotateCsrf(controller.signal);
-      if (this.state.epoch !== operationEpoch) throw new SessionEpochChangedError();
-      this.sensitive.set('csrfToken', response.csrfToken);
-      return this.snapshot;
+      return await this.rotateCsrfWithDeadline(
+        operationEpoch,
+        controller.signal,
+        Date.now() + this.requestTimeoutMs,
+      );
     } finally {
       this.activeRequests.delete(controller);
     }
@@ -251,6 +252,7 @@ export class SessionRuntime {
   async request<T>(request: ApiRequest): Promise<HttpResponse<T>> {
     const epoch = this.state.epoch;
     const controller = this.trackRequest();
+    const deadline = Date.now() + this.requestTimeoutMs;
     let timedOut = false;
     const timeoutId = setTimeout(() => {
       timedOut = true;
@@ -274,7 +276,7 @@ export class SessionRuntime {
           }
           if (!csrfReplayUsed && isCsrfFailure(error)) {
             csrfReplayUsed = true;
-            await this.rotateCsrf();
+            await this.rotateCsrfWithDeadline(epoch, controller.signal, deadline);
             continue;
           }
           throw error;
@@ -408,6 +410,15 @@ export class SessionRuntime {
         }
       }
       if (this.state.epoch !== stored.sessionEpoch) throw new SessionEpochChangedError();
+      const current = this.pendingCommands.get(commandId);
+      if (
+        error instanceof PendingCommandRecoveryError
+        && current?.status === 'failed'
+        && current.state === 'failed-stable'
+        && current.problem?.code === 'RECOVERY_WINDOW_EXPIRED'
+      ) {
+        throw error;
+      }
       this.pendingCommands.update(commandId, {
         status: isResultUnknownFailure(error, problem) ? 'in-flight' : 'failed',
         state: isResultUnknownFailure(error, problem) ? 'result-unknown' : 'failed-stable',
@@ -525,6 +536,57 @@ export class SessionRuntime {
         code: 'RECOVERY_WINDOW_EXPIRED',
       },
     });
+  }
+
+  private async rotateCsrfWithDeadline(
+    operationEpoch: number,
+    parentSignal: AbortSignal,
+    deadline: number,
+  ): Promise<SessionSnapshot> {
+    const controller = this.trackRequest();
+    let timedOut = false;
+    const abortChild = () => controller.abort();
+    const remaining = Math.max(0, deadline - Date.now());
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, remaining);
+    parentSignal.addEventListener('abort', abortChild, { once: true });
+    let cancelListener: (() => void) | undefined;
+    try {
+      if (parentSignal.aborted || remaining === 0) {
+        timedOut = this.state.epoch === operationEpoch;
+        controller.abort();
+        if (this.state.epoch !== operationEpoch) throw new SessionEpochChangedError();
+        throw new RequestTimeoutError();
+      }
+      const cancellation = new Promise<never>((_, reject) => {
+        cancelListener = () => {
+          reject(this.state.epoch === operationEpoch
+            ? new RequestTimeoutError()
+            : new SessionEpochChangedError());
+        };
+        if (controller.signal.aborted) cancelListener();
+        else controller.signal.addEventListener('abort', cancelListener, { once: true });
+      });
+      const response = await Promise.race([
+        this.adapter.rotateCsrf(controller.signal),
+        cancellation,
+      ]);
+      if (this.state.epoch !== operationEpoch) throw new SessionEpochChangedError();
+      if (timedOut || parentSignal.aborted) throw new RequestTimeoutError();
+      this.sensitive.set('csrfToken', response.csrfToken);
+      return this.snapshot;
+    } catch (error) {
+      if (this.state.epoch !== operationEpoch) throw new SessionEpochChangedError();
+      if (timedOut || parentSignal.aborted) throw new RequestTimeoutError();
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+      parentSignal.removeEventListener('abort', abortChild);
+      if (cancelListener) controller.signal.removeEventListener('abort', cancelListener);
+      this.activeRequests.delete(controller);
+    }
   }
 
   private trackRequest(): AbortController {

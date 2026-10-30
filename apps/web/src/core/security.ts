@@ -91,8 +91,8 @@ export function createSignedTransferRequest(
   options: SignedTransferOptions,
 ): SignedTransferRequest {
   const parsed = new URL(url);
-  if (!['http:', 'https:'].includes(parsed.protocol)) {
-    throw new Error('Signed transfer URL must use HTTP(S)');
+  if (parsed.protocol !== 'https:') {
+    throw new Error('Signed transfer URL must use HTTPS');
   }
   const headers = validateTransferHeaders(options.headers ?? {});
 

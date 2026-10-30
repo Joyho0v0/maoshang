@@ -63,6 +63,13 @@ describe('API URL and request security boundaries', () => {
     expect(request.url).toBe('https://files.example.test/signed-url');
   });
 
+  it('rejects cleartext signed transfer locators', () => {
+    expect(() => createSignedTransferRequest('http://files.example.test/signed-url', {
+      method: 'PUT',
+      body: 'file-bytes',
+    })).toThrow('HTTPS');
+  });
+
   it('keeps the signed transfer fetch client separate from application credentials', async () => {
     const fetcher = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       void url;

@@ -324,6 +324,43 @@ describe('SessionRuntime', () => {
     });
   });
 
+  it('bounds the shared timeout across a stalled csrf refresh without replaying the business request', async () => {
+    const csrfRefresh = deferred<{ csrfToken: string }>();
+    let refreshSignal: AbortSignal | undefined;
+    const request = vi.fn()
+      .mockRejectedValueOnce({
+        type: 'urn:autoflow:problem:csrf-failed',
+        title: 'CSRF failed',
+        status: 403,
+        code: 'CSRF_FAILED',
+      })
+      .mockImplementation((_request: unknown, signal: AbortSignal) => new Promise((_resolve, reject) => {
+        if (signal.aborted) {
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+          return;
+        }
+        signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true });
+      }));
+    const rotateCsrf = vi.fn((signal?: AbortSignal) => {
+      refreshSignal = signal;
+      return csrfRefresh.promise;
+    });
+    const runtime = new SessionRuntime(createAdapter({ request, rotateCsrf }), { requestTimeoutMs: 10 });
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+
+    const requestPromise = runtime.request({ method: 'POST', href: '/api/v1/orders' });
+    const outcome = await Promise.race([
+      requestPromise.then(() => 'settled', (error: unknown) => ({ code: (error as { code?: string }).code })),
+      new Promise<'still-pending'>((resolve) => setTimeout(() => resolve('still-pending'), 80)),
+    ]);
+
+    expect(outcome).toEqual({ code: 'REQUEST_TIMEOUT' });
+    expect(refreshSignal?.aborted).toBe(true);
+    expect(request).toHaveBeenCalledOnce();
+    expect((runtime as unknown as { activeRequests: Set<AbortController> }).activeRequests.size).toBe(0);
+    csrfRefresh.resolve({ csrfToken: 'unused' });
+  });
+
   it('tracks a 202 command and recovers a terminal result with the same idempotency key', async () => {
     const commandRequest = {
       status: 202,
@@ -473,6 +510,59 @@ describe('SessionRuntime', () => {
     expect(request).toHaveBeenCalledOnce();
   });
 
+  it('preserves the recovery-window terminal problem after actual in-progress polling expires', async () => {
+    let now = 100;
+    const inProgress = (commandId: string) => ({
+      status: 200,
+      data: {
+        commandId,
+        operationId: 'createOrder',
+        state: 'IN_PROGRESS',
+        startedAt: '2030-01-01T00:00:00.000Z',
+        completedAt: null,
+        expiresAt: '2030-01-01T00:05:00.000Z',
+        retryAfterMs: 5,
+        httpStatus: null,
+        resource: null,
+        resultHref: null,
+        problem: null,
+      },
+      headers: {},
+    });
+    const request = vi.fn()
+      .mockResolvedValueOnce({ status: 202, data: { accepted: true }, headers: {} })
+      .mockResolvedValueOnce(inProgress('command-polling'))
+      .mockResolvedValueOnce(inProgress('command-polling'))
+      .mockResolvedValueOnce(inProgress('command-polling'));
+    const sleep = vi.fn(async (milliseconds: number) => { now += milliseconds; });
+    const runtime = new SessionRuntime(createAdapter({ request }), {
+      now: () => now,
+      recoveryWindowMs: 10,
+      sleep,
+    });
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+    await runtime.executeCommand({
+      method: 'POST',
+      href: '/api/v1/orders',
+      operationId: 'createOrder',
+      body: { order: 'draft' },
+      idempotencyKey: 'idem-polling',
+    });
+    const commandId = runtime.pendingCommands.list()[0]?.id ?? '';
+
+    await expect(runtime.recoverPendingCommand(commandId)).rejects.toThrow('recovery window has expired');
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(request).toHaveBeenCalledTimes(4);
+    expect(runtime.pendingCommands.get(commandId)).toMatchObject({
+      status: 'failed',
+      state: 'failed-stable',
+      problem: { status: 409, code: 'RECOVERY_WINDOW_EXPIRED' },
+    });
+
+    await expect(runtime.recoverPendingCommand(commandId)).rejects.toBeInstanceOf(PendingCommandFailedError);
+    expect(request).toHaveBeenCalledTimes(4);
+  });
+
   it('keeps an unavailable replay result recoverable while making a command failure terminal', async () => {
     const failedRequest = vi.fn()
       .mockResolvedValueOnce({ status: 202, data: { accepted: true }, headers: {} })
@@ -511,6 +601,69 @@ describe('SessionRuntime', () => {
     const unavailableId = unavailableRuntime.pendingCommands.list()[0]?.id ?? '';
     await expect(unavailableRuntime.recoverPendingCommand(unavailableId)).rejects.toMatchObject({ status: 503 });
     expect(unavailableRuntime.pendingCommands.get(unavailableId)).toMatchObject({ status: 'in-flight', state: 'result-unknown' });
+  });
+
+  it('keeps a connection reset result unknown until the command is reconciled', async () => {
+    const request = vi.fn().mockRejectedValueOnce(new TypeError('connection reset'));
+    const runtime = new SessionRuntime(createAdapter({ request }));
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+
+    await expect(runtime.executeCommand({
+      method: 'POST',
+      href: '/api/v1/orders',
+      operationId: 'createOrder',
+      body: { order: 'draft' },
+      idempotencyKey: 'idem-reset',
+    })).rejects.toThrow('connection reset');
+    expect(runtime.pendingCommands.list()).toEqual([
+      expect.objectContaining({
+        status: 'in-flight',
+        state: 'result-unknown',
+        problem: expect.objectContaining({ status: 500, detail: 'connection reset' }),
+      }),
+    ]);
+  });
+
+  it('records idempotency key reuse as a stable replay failure without changing identity', async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce({ status: 202, data: { accepted: true }, headers: {} })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: {
+          commandId: 'command-key-reused', operationId: 'createOrder', state: 'RECOVERY_REQUIRED',
+          startedAt: '2030-01-01T00:00:00.000Z', completedAt: null, expiresAt: '2030-01-01T00:05:00.000Z',
+          retryAfterMs: 0, httpStatus: null, resource: null, resultHref: null, problem: null,
+        },
+        headers: {},
+      })
+      .mockRejectedValueOnce({
+        type: 'urn:autoflow:problem:idempotency-key-reused',
+        title: 'Idempotency key reused',
+        status: 409,
+        code: 'IDEMPOTENCY_KEY_REUSED',
+      });
+    const runtime = new SessionRuntime(createAdapter({ request }));
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+    await runtime.executeCommand({
+      method: 'POST',
+      href: '/api/v1/orders',
+      operationId: 'createOrder',
+      body: { order: 'draft' },
+      idempotencyKey: 'idem-reused',
+      etag: '"v1"',
+    });
+    const commandId = runtime.pendingCommands.list()[0]?.id ?? '';
+
+    await expect(runtime.recoverPendingCommand(commandId)).rejects.toMatchObject({ status: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
+    expect(runtime.pendingCommands.get(commandId)).toMatchObject({
+      status: 'failed',
+      state: 'failed-stable',
+      idempotencyKey: 'idem-reused',
+      etag: '"v1"',
+      problem: { code: 'IDEMPOTENCY_KEY_REUSED' },
+    });
+    await expect(runtime.recoverPendingCommand(commandId)).rejects.toBeInstanceOf(PendingCommandFailedError);
+    expect(request).toHaveBeenCalledTimes(3);
   });
 
   it('requires an explicit operation identity for commands and bounds a stalled request', async () => {
