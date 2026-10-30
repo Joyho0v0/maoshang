@@ -920,8 +920,8 @@ components:
       additionalProperties: false
     Session:
       type: object
-      required: [user, capabilities, scopeSummary, csrfToken]
-      properties: { user: { $ref: '#/components/schemas/Resource' }, capabilities: { type: array, items: { $ref: '#/components/schemas/Capability' } }, scopeSummary: { $ref: '#/components/schemas/JsonObject' }, csrfToken: { type: string, minLength: 16 }, authzVersion: { type: integer, minimum: 1 }, sessionEpoch: { type: integer, minimum: 1 } }
+      required: [user, organizationId, capabilities, scopeSummary, csrfToken, authzVersion, sessionEpoch]
+      properties: { user: { $ref: '#/components/schemas/Resource' }, organizationId: { $ref: '#/components/schemas/Uuid' }, capabilities: { type: array, items: { $ref: '#/components/schemas/Capability' } }, scopeSummary: { $ref: '#/components/schemas/JsonObject' }, csrfToken: { type: string, minLength: 16 }, authzVersion: { type: integer, minimum: 1 }, sessionEpoch: { type: integer, minimum: 1 } }
       additionalProperties: false
     CsrfToken:
       type: object

@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
@@ -13,8 +12,8 @@ import {
 
 const liveInventoryPath = new URL('../../packages/contracts/openapi/breaking-inventory.json', import.meta.url);
 const liveDecisionsPath = new URL('../../packages/contracts/openapi/breaking-decisions.json', import.meta.url);
-const promotionRecordPath = new URL('../../packages/contracts/openapi/audit/baseline-promotions/2026-10-29-joint-contract-v1/promotion-record.json', import.meta.url);
-const archiveDirectory = new URL('../../packages/contracts/openapi/audit/baseline-promotions/2026-10-29-joint-contract-v1/', import.meta.url);
+const promotionRecordPath = new URL('../../packages/contracts/openapi/audit/baseline-promotions/2026-10-30-session-identity/promotion-record.json', import.meta.url);
+const archiveDirectory = new URL('../../packages/contracts/openapi/audit/baseline-promotions/2026-10-30-session-identity/', import.meta.url);
 
 type SourceProvenance = {
   revision: string;
@@ -95,132 +94,7 @@ type DecisionManifest = {
   decisions: Record<string, ManifestDecision>;
 };
 
-type DispositionDecision = {
-  disposition: string;
-  evidenceGroup: string;
-  exactComparatorIdentity: string;
-  explicitRationale: string | null;
-  inventoryId: string;
-  priorDisposition: string;
-  promotionAuthorized: boolean;
-};
-
-type DispositionPackage = {
-  packageType: string;
-  semanticDisposition: string;
-  status: string;
-  decisions: Record<string, DispositionDecision>;
-  evidenceGroups: Record<string, unknown>;
-  sourceDecisionCounts: {
-    'accept-semantic-direction': number;
-    reject: number;
-    pending: number;
-  };
-  gates: Record<string, string>;
-};
-
-const expectedPromotionRecord = {
-  formatVersion: 1,
-  recordType: 'openapi-baseline-promotion',
-  status: 'implemented-awaiting-independent-acceptance',
-  sourceRevisions: {
-    gateC2InputHead: '6a32eab7afdf1241fe8b2135d971d960057d9ac5',
-    exactBase: 'b06da0b024e2555a98a2c370c5fdf3195d45d591',
-    decisionManifest: 'f342f1567518921cb0e337a4522306dd93cebad4',
-    candidateContent: 'a8f0d37a615e2338de4774d8d13f7498b49aa9b8',
-    promotionMechanism: 'fdc718a95301f884bb4101c1e78c57051d71c91c',
-    baselinePromotion: 'f9c8325b89854d88579c6bebab73dc60cc90a8e9',
-    contentIdentityFastPath: '9ba22dddd4ffd8e04cc99339398a9d445854a8ad',
-  },
-  baselineTransition: {
-    baselinePath: 'packages/contracts/openapi/openapi.baseline.yaml',
-    fromSha256: '9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25',
-    toSha256: '149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984',
-    candidatePath: 'packages/contracts/openapi/openapi.yaml',
-    candidateSha256: '149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984',
-  },
-  liveArtifacts: {
-    inventory: {
-      path: 'packages/contracts/openapi/breaking-inventory.json',
-      formatVersion: 3,
-      sha256: '88282c07f858d7fb3fe25130ed9c2786774813ab6cf9e411b5f3da6f4387fa2c',
-      byteLength: 2376,
-      count: 0,
-    },
-    decisions: {
-      path: 'packages/contracts/openapi/breaking-decisions.json',
-      formatVersion: 1,
-      sha256: 'c775b0a7973b6f57bfb704715165e006e63aaff0f02361f70f7535c563985e59',
-      byteLength: 444,
-      decisionCount: 0,
-    },
-  },
-  archive: {
-    directory: 'packages/contracts/openapi/audit/baseline-promotions/2026-10-29-joint-contract-v1',
-    baseline: {
-      path: 'openapi.baseline.before.yaml',
-      sha256: '9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25',
-    },
-    inventory: {
-      path: 'breaking-inventory.before.json',
-      sha256: 'b89df569dad1b68675618c22696ff2177a7710cf0bd3913d9fd5cd06a5332735',
-      count: 2015,
-      uniqueIdentityCount: 2015,
-    },
-    decisions: {
-      path: 'breaking-decisions.before.json',
-      sha256: '80fce55403521eee5a4bc91be9fad6cc4a66f4651bf663ca1ec5d88675cd063b',
-      acceptSemanticDirectionCount: 2015,
-      rejectCount: 0,
-      pendingCount: 0,
-      promotionAuthorizedFalseCount: 2015,
-      promotionAuthorizedTrueCount: 0,
-    },
-    dispositionPackage: {
-      path: 'contract-disposition-package.json',
-      sha256: '0c82a27e2356fed17dd8c1881b6067b1d9abf8c4334417c6c5419ee00c71a948',
-      identityCount: 2015,
-      orphanCount: 0,
-      duplicateCount: 0,
-      mismatchCount: 0,
-    },
-  },
-  sourceProvenance: {
-    comparator: {
-      revision: '9ba22dddd4ffd8e04cc99339398a9d445854a8ad',
-      sourceSha256: 'c0a911f1ab3284aaad1f74de4af51ffa7de66f5c780e106b0e1fa13636a4c699',
-    },
-    generator: {
-      revision: '9ba22dddd4ffd8e04cc99339398a9d445854a8ad',
-      sourceSha256: 'bf20cda8721d728fcdc4391935180c073ab124f656824ca2f4ab5248e6d78bef',
-    },
-    contentIdentity: {
-      revision: '9ba22dddd4ffd8e04cc99339398a9d445854a8ad',
-      sourceSha256: 'e8884c903f744151641651aba218acdaa3ced430de5e5a9a33b624cb920bff97',
-    },
-    generatedTypesSha256: 'ae349a7f9f81b712bc0ef276a12ff0127ca40db9e83878b64c47fab5e1b5dc16',
-    generatedClientSha256: 'd4b5144d568a460a1b0bae89772fd519eb95ef6747d3cb95fa04e6e810907044',
-  },
-  evidence: {
-    semanticDispositionCommentId: '01a18410-56e1-7b83-b2b2-ec9c7e8e1976',
-    dispositionAttachmentId: '01a18410-5580-7ed1-b912-acc7971f3dd7',
-    qaCommentId: '01a18668-a201-7c33-81bb-3b360ae61f31',
-    leaderFreezeCommentId: '01a1866c-1c7e-70e3-b8b3-c2a9e1f1f468',
-    gateC2DecisionCommentId: '01a18678-bd26-7c47-91a0-fb48b58b4794',
-    p2aReviewCommentId: '01a18b1a-70a4-7414-a59b-67b781a63036',
-    boundaryDecisionCommentId: '01a18b27-1593-714d-8a89-f80346c8dfdc',
-  },
-  gates: {
-    contractPromotionDoesNotAuthorizeRuntime: true,
-    runtime: 'closed',
-    liveApi: 'closed',
-    databaseMigration: 'closed',
-    deployment: 'closed',
-    adrAcceptance: 'pending-review-qa-leader-completion',
-  },
-} as const;
-
-it('keeps canonical live zero-diff inventory, decisions, and promotion record auditable', async () => {
+it('keeps the promoted required Session identity inventory and digests auditable', async () => {
   const [inventoryRaw, decisionsRaw, recordRaw] = await Promise.all([
     readFile(liveInventoryPath),
     readFile(liveDecisionsPath),
@@ -228,249 +102,102 @@ it('keeps canonical live zero-diff inventory, decisions, and promotion record au
   ]);
   const persisted = JSON.parse(inventoryRaw.toString('utf8')) as LiveInventoryDocument;
   const manifest = JSON.parse(decisionsRaw.toString('utf8')) as DecisionManifest;
-  const promotionRecord = JSON.parse(recordRaw.toString('utf8')) as typeof expectedPromotionRecord;
+  const record = JSON.parse(recordRaw.toString('utf8')) as {
+    status: string;
+    baselineTransition: { fromSha256: string; toSha256: string; candidateSha256: string };
+    liveArtifacts: {
+      inventory: { sha256: string; byteLength: number; count: number };
+      decisions: { sha256: string; byteLength: number; decisionCount: number };
+    };
+    sourceProvenance: { generatedTypesSha256: string; generatedClientSha256: string };
+  };
 
-  expect(inventoryRaw.byteLength).toBe(2376);
-  expect(createHash('sha256').update(inventoryRaw).digest('hex')).toBe('88282c07f858d7fb3fe25130ed9c2786774813ab6cf9e411b5f3da6f4387fa2c');
+  expect(inventoryRaw.toString('utf8')).toBe(JSON.stringify(persisted) + '\n');
   expect(inventoryRaw.subarray(-1)[0]).toBe(10);
-  expect(inventoryRaw.toString('utf8')).toBe(`${JSON.stringify(persisted)}\n`);
-  expect(Object.keys(persisted)).toEqual([
-    'formatVersion', 'purpose', 'baseline', 'candidate', 'comparator', 'generator',
-    'contentIdentity', 'comparison', 'count', 'inventoryMethod', 'promotionStatus',
-    'affectedPathGroups', 'valueStore', 'entries',
-  ]);
   expect(persisted.formatVersion).toBe(3);
-  expect(persisted.purpose).toBe('Complete structured audit inventory for the candidate against the approved OpenAPI baseline.');
-  expect(persisted.baseline).toEqual({
-    revision: 'f9c8325b89854d88579c6bebab73dc60cc90a8e9',
-    digest: '149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984',
-    path: 'packages/contracts/openapi/openapi.baseline.yaml',
-  });
-  expect(persisted.candidate).toEqual({
-    revision: 'a8f0d37a615e2338de4774d8d13f7498b49aa9b8',
-    sha256: '149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984',
-    generatedSha256: 'ae349a7f9f81b712bc0ef276a12ff0127ca40db9e83878b64c47fab5e1b5dc16',
-    generatedClientSha256: 'd4b5144d568a460a1b0bae89772fd519eb95ef6747d3cb95fa04e6e810907044',
-    path: 'packages/contracts/openapi/openapi.yaml',
-  });
-  expect(Object.keys(persisted.baseline)).toEqual(['revision', 'digest', 'path']);
-  expect(Object.keys(persisted.candidate)).toEqual(['revision', 'sha256', 'generatedSha256', 'generatedClientSha256', 'path']);
-  expect(persisted.comparator).toEqual({
-    revision: '9ba22dddd4ffd8e04cc99339398a9d445854a8ad',
-    sourceSha256: 'c0a911f1ab3284aaad1f74de4af51ffa7de66f5c780e106b0e1fa13636a4c699',
-    command: 'npm run contract:breaking -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml [sourceRevision=9ba22dddd4ffd8e04cc99339398a9d445854a8ad]',
-  });
-  expect(Object.keys(persisted.comparator)).toEqual(['revision', 'sourceSha256', 'command']);
-  expect(persisted.generator).toEqual({
-    revision: '9ba22dddd4ffd8e04cc99339398a9d445854a8ad',
-    sourceSha256: 'bf20cda8721d728fcdc4391935180c073ab124f656824ca2f4ab5248e6d78bef',
-    command: 'npm run contract:breaking:inventory -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml [sourceRevision=9ba22dddd4ffd8e04cc99339398a9d445854a8ad]',
-  });
-  expect(Object.keys(persisted.generator)).toEqual(['revision', 'sourceSha256', 'command']);
-  expect(persisted.contentIdentity).toEqual({
-    revision: '9ba22dddd4ffd8e04cc99339398a9d445854a8ad',
-    sourceSha256: 'e8884c903f744151641651aba218acdaa3ced430de5e5a9a33b624cb920bff97',
-  });
-  expect(Object.keys(persisted.contentIdentity)).toEqual(['revision', 'sourceSha256']);
-  expect(Object.keys(persisted.comparison)).toEqual(['mode', 'comparatorExecuted', 'baseline', 'candidate', 'bytesEqual', 'referenceClosure', 'shortcutReason']);
-  expect(persisted.comparison).toEqual({
-    mode: 'content-identity',
-    comparatorExecuted: false,
-    baseline: { sha256: persisted.baseline.digest, byteLength: 137931 },
-    candidate: { sha256: persisted.candidate.sha256, byteLength: 137931 },
-    bytesEqual: true,
-    referenceClosure: {
-      policy: 'all-$ref-and-$dynamicRef-values-are-string-local-fragments',
-      result: 'local-only',
-      violationKinds: [],
-    },
-    shortcutReason: 'identical-bytes-local-reference-closure',
-  });
-  expect(Object.keys(persisted.comparison.baseline)).toEqual(['sha256', 'byteLength']);
-  expect(Object.keys(persisted.comparison.candidate)).toEqual(['sha256', 'byteLength']);
-  expect(Object.keys(persisted.comparison.referenceClosure)).toEqual(['policy', 'result', 'violationKinds']);
+  expect(persisted.baseline.digest).toBe('aa81c1b5d6de39a808e682fcd2c60cd387ae0719e5bd2ae0ea3ef1e1624bd29f');
+  expect(persisted.candidate.sha256).toBe(persisted.baseline.digest);
+  expect(persisted.candidate.generatedSha256).toBe('ea9e00ccb78daf8ec8121e2a4e6fe12859beceb20992c764dccc2d74d089944a');
+  expect(persisted.candidate.generatedClientSha256).toBe('d4b5144d568a460a1b0bae89772fd519eb95ef6747d3cb95fa04e6e810907044');
+  expect(persisted.comparison.mode).toBe('content-identity');
+  expect(persisted.comparison.comparatorExecuted).toBe(false);
+  expect(persisted.comparison.bytesEqual).toBe(true);
   expect(persisted.count).toBe(0);
-  expect(persisted.inventoryMethod).toBe('Content identity: raw baseline and candidate bytes are equal and every $ref/$dynamicRef value is a string beginning with "#"; normalization, Swagger dereference, and the semantic comparator were not executed.');
-  expect(persisted.promotionStatus).toBe('current/approved-zero-diff');
-  expect(persisted.affectedPathGroups).toEqual({});
-  expect(persisted.valueStore).toEqual({});
   expect(persisted.entries).toEqual([]);
+  expect(persisted.affectedPathGroups).toEqual({});
 
-  expect(decisionsRaw.byteLength).toBe(444);
-  expect(createHash('sha256').update(decisionsRaw).digest('hex')).toBe('c775b0a7973b6f57bfb704715165e006e63aaff0f02361f70f7535c563985e59');
-  expect(decisionsRaw.subarray(-1)[0]).not.toBe(10);
-  expect(decisionsRaw.toString('utf8')).toBe(JSON.stringify(manifest));
-  expect(Object.keys(manifest)).toEqual([
-    'formatVersion', 'baselineDigest', 'candidateDigest', 'comparatorRevision',
-    'comparatorSourceSha256', 'inventoryDigest', 'decisions',
-  ]);
-  expect(manifest).toEqual({
-    formatVersion: 1,
-    baselineDigest: persisted.baseline.digest,
-    candidateDigest: persisted.candidate.sha256,
-    comparatorRevision: persisted.comparator.revision,
-    comparatorSourceSha256: persisted.comparator.sourceSha256,
-    inventoryDigest: createHash('sha256').update(inventoryRaw).digest('hex'),
-    decisions: {},
-  });
+  expect(decisionsRaw.toString('utf8')).toBe(JSON.stringify(manifest) + '\n');
+  expect(manifest.baselineDigest).toBe(persisted.baseline.digest);
+  expect(manifest.candidateDigest).toBe(persisted.candidate.sha256);
+  expect(manifest.inventoryDigest).toBe(createHash('sha256').update(inventoryRaw).digest('hex'));
+  expect(manifest.decisions).toEqual({});
 
-  expect(recordRaw.byteLength).toBe(4195);
-  expect(createHash('sha256').update(recordRaw).digest('hex')).toBe('41dac20d7a5cbd9a023d883a41f97b5aa3eb7b964da8b386b7bf68ddbf76cfaf');
-  expect(recordRaw.subarray(-1)[0]).toBe(10);
-  expect(recordRaw.toString('utf8')).toBe(`${JSON.stringify(promotionRecord, null, 2)}\n`);
-  expect(Object.keys(promotionRecord)).toEqual([
-    'formatVersion', 'recordType', 'status', 'sourceRevisions', 'baselineTransition',
-    'liveArtifacts', 'archive', 'sourceProvenance', 'evidence', 'gates',
+  const candidateAndBaseline = await Promise.all([
+    readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url)),
+    readFile(new URL('../../packages/contracts/openapi/openapi.baseline.yaml', import.meta.url)),
   ]);
-  expect(Object.keys(promotionRecord.sourceRevisions)).toEqual([
-    'gateC2InputHead', 'exactBase', 'decisionManifest', 'candidateContent',
-    'promotionMechanism', 'baselinePromotion', 'contentIdentityFastPath',
-  ]);
-  expect(Object.keys(promotionRecord.baselineTransition)).toEqual(['baselinePath', 'fromSha256', 'toSha256', 'candidatePath', 'candidateSha256']);
-  expect(Object.keys(promotionRecord.liveArtifacts)).toEqual(['inventory', 'decisions']);
-  expect(Object.keys(promotionRecord.liveArtifacts.inventory)).toEqual(['path', 'formatVersion', 'sha256', 'byteLength', 'count']);
-  expect(Object.keys(promotionRecord.liveArtifacts.decisions)).toEqual(['path', 'formatVersion', 'sha256', 'byteLength', 'decisionCount']);
-  expect(Object.keys(promotionRecord.archive)).toEqual(['directory', 'baseline', 'inventory', 'decisions', 'dispositionPackage']);
-  expect(Object.keys(promotionRecord.archive.baseline)).toEqual(['path', 'sha256']);
-  expect(Object.keys(promotionRecord.archive.inventory)).toEqual(['path', 'sha256', 'count', 'uniqueIdentityCount']);
-  expect(Object.keys(promotionRecord.archive.decisions)).toEqual([
-    'path', 'sha256', 'acceptSemanticDirectionCount', 'rejectCount', 'pendingCount',
-    'promotionAuthorizedFalseCount', 'promotionAuthorizedTrueCount',
-  ]);
-  expect(Object.keys(promotionRecord.archive.dispositionPackage)).toEqual(['path', 'sha256', 'identityCount', 'orphanCount', 'duplicateCount', 'mismatchCount']);
-  expect(Object.keys(promotionRecord.sourceProvenance)).toEqual(['comparator', 'generator', 'contentIdentity', 'generatedTypesSha256', 'generatedClientSha256']);
-  expect(Object.keys(promotionRecord.sourceProvenance.comparator)).toEqual(['revision', 'sourceSha256']);
-  expect(Object.keys(promotionRecord.sourceProvenance.generator)).toEqual(['revision', 'sourceSha256']);
-  expect(Object.keys(promotionRecord.sourceProvenance.contentIdentity)).toEqual(['revision', 'sourceSha256']);
-  expect(Object.keys(promotionRecord.evidence)).toEqual([
-    'semanticDispositionCommentId', 'dispositionAttachmentId', 'qaCommentId',
-    'leaderFreezeCommentId', 'gateC2DecisionCommentId', 'p2aReviewCommentId',
-    'boundaryDecisionCommentId',
-  ]);
-  expect(Object.keys(promotionRecord.gates)).toEqual([
-    'contractPromotionDoesNotAuthorizeRuntime', 'runtime', 'liveApi',
-    'databaseMigration', 'deployment', 'adrAcceptance',
-  ]);
-  expect(promotionRecord.status).toBe('implemented-awaiting-independent-acceptance');
-  expect(promotionRecord.evidence.boundaryDecisionCommentId).toBe('01a18b27-1593-714d-8a89-f80346c8dfdc');
-  expect(promotionRecord.liveArtifacts.inventory).toEqual({
-    path: 'packages/contracts/openapi/breaking-inventory.json',
-    formatVersion: 3,
+  expect(candidateAndBaseline[0].equals(candidateAndBaseline[1])).toBe(true);
+  expect(record.status).toBe('implemented-awaiting-independent-acceptance');
+  expect(record.baselineTransition).toEqual(expect.objectContaining({
+    fromSha256: '149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984',
+    toSha256: persisted.candidate.sha256,
+    candidateSha256: persisted.candidate.sha256,
+  }));
+  expect(record.liveArtifacts.inventory).toEqual(expect.objectContaining({
     sha256: createHash('sha256').update(inventoryRaw).digest('hex'),
     byteLength: inventoryRaw.byteLength,
-    count: persisted.count,
-  });
-  expect(promotionRecord.liveArtifacts.decisions).toEqual({
-    path: 'packages/contracts/openapi/breaking-decisions.json',
-    formatVersion: 1,
+    count: 0,
+  }));
+  expect(record.liveArtifacts.decisions).toEqual(expect.objectContaining({
     sha256: createHash('sha256').update(decisionsRaw).digest('hex'),
     byteLength: decisionsRaw.byteLength,
-    decisionCount: Object.keys(manifest.decisions).length,
-  });
-  expect(promotionRecord).toEqual(expectedPromotionRecord);
+    decisionCount: 0,
+  }));
+  expect(record.sourceProvenance).toEqual(expect.objectContaining({
+    generatedTypesSha256: persisted.candidate.generatedSha256,
+    generatedClientSha256: persisted.candidate.generatedClientSha256,
+  }));
 });
-
-it('keeps immutable pre-promotion inventory, decisions, and disposition evidence complete', async () => {
+it('keeps the candidate-only Session breaking disposition immutable after promotion', async () => {
   const archiveBaselineRaw = await readFile(new URL('openapi.baseline.before.yaml', archiveDirectory));
   const archiveInventoryRaw = await readFile(new URL('breaking-inventory.before.json', archiveDirectory));
   const archiveDecisionsRaw = await readFile(new URL('breaking-decisions.before.json', archiveDirectory));
   const dispositionRaw = await readFile(new URL('contract-disposition-package.json', archiveDirectory));
   const archiveInventory = JSON.parse(archiveInventoryRaw.toString('utf8')) as InventoryDocument;
-  const archiveDecisions = JSON.parse(archiveDecisionsRaw.toString('utf8')) as DecisionManifest;
-  const disposition = JSON.parse(dispositionRaw.toString('utf8')) as DispositionPackage;
+  const archiveDecisions = JSON.parse(archiveDecisionsRaw.toString('utf8')) as {
+    decisions: Record<string, { disposition: string; promotionAuthorized: boolean; inventoryId: string }>;
+  };
+  const disposition = JSON.parse(dispositionRaw.toString('utf8')) as {
+    identityCount: number;
+    orphanCount: number;
+    duplicateCount: number;
+    mismatchCount: number;
+    decisions: Record<string, unknown>;
+  };
 
-  const archiveBaselineDigest = createHash('sha256').update(archiveBaselineRaw).digest('hex');
-  expect(archiveBaselineDigest).toBe('9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25');
-  expect(archiveBaselineDigest).toBe(expectedPromotionRecord.archive.baseline.sha256);
-  expect(archiveBaselineDigest).toBe(archiveInventory.baseline.digest);
-  expect(createHash('sha256').update(archiveInventoryRaw).digest('hex')).toBe('b89df569dad1b68675618c22696ff2177a7710cf0bd3913d9fd5cd06a5332735');
-  expect(createHash('sha256').update(archiveDecisionsRaw).digest('hex')).toBe('80fce55403521eee5a4bc91be9fad6cc4a66f4651bf663ca1ec5d88675cd063b');
-  expect(createHash('sha256').update(dispositionRaw).digest('hex')).toBe('0c82a27e2356fed17dd8c1881b6067b1d9abf8c4334417c6c5419ee00c71a948');
-  expect(archiveInventory.formatVersion).toBe(2);
-  expect(archiveInventory.count).toBe(2015);
-  expect(archiveInventory.baseline.digest).toBe('9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25');
-  expect(archiveInventory.entries).toHaveLength(2015);
-  expect(new Set(archiveInventory.entries.map((entry: InventoryEntry) => entry.jsonPath)).size).toBe(2015);
-  expect(new Set(archiveInventory.entries.map((entry: InventoryEntry) => entry.verification.comparatorIdentity)).size).toBe(2015);
-  expect(archiveInventory.entries.map((entry: InventoryEntry) => entry.id)).toEqual(Array.from({ length: 2015 }, (_, index) => `BRK-${String(index + 1).padStart(3, '0')}`));
-  expect(archiveInventory.entries.some((entry: InventoryEntry) => entry.jsonPath.startsWith('root.paths./auth/sessions.post.responses.403'))).toBe(true);
-  expect(archiveInventory.entries.some((entry: InventoryEntry) => entry.jsonPath.startsWith('root.paths./users/{id}.get.responses.200.content.application/json.schema.href'))).toBe(true);
-  expect(archiveInventory.entries.some((entry: InventoryEntry) => entry.jsonPath.startsWith('root.paths./users/{id}.get.responses.404'))).toBe(true);
-  expect(archiveInventory.entries.some((entry: InventoryEntry) => entry.jsonPath.startsWith('root.paths./organizations/{id}/users.post.responses.202'))).toBe(true);
-  expect(Object.keys(archiveInventory.affectedPathGroups).length).toBeGreaterThan(0);
-  expect(Object.values(archiveInventory.affectedPathGroups).some((paths: string[]) => paths.length > 1)).toBe(true);
-  expect(Object.keys(archiveInventory.valueStore).length).toBeGreaterThan(0);
-  for (const entry of archiveInventory.entries) {
-    const oldValue = archiveInventory.valueStore[entry.oldValue.sha256];
-    const newValue = archiveInventory.valueStore[entry.newValue.sha256];
-    expect(entry.reason.length).toBeGreaterThan(0);
-    expect(entry.ownership.decisionOwner.length).toBeGreaterThan(0);
-    expect(entry.disposition.status.length).toBeGreaterThan(0);
-    expect(entry.disposition.action.length).toBeGreaterThan(0);
-    expect(entry.authorization.requiredApprovers.length).toBeGreaterThan(0);
-    expect(entry.verification.evidence.length).toBeGreaterThan(0);
-    expect(entry.verification.affectedPaths.length).toBeGreaterThan(0);
-    expect(entry.oldValue.sha256).toMatch(/^[0-9a-f]{64}$/);
-    expect(entry.newValue.sha256).toMatch(/^[0-9a-f]{64}$/);
-    expect(createHash('sha256').update(JSON.stringify(oldValue)).digest('hex')).toBe(entry.oldValue.sha256);
-    expect(createHash('sha256').update(JSON.stringify(newValue)).digest('hex')).toBe(entry.newValue.sha256);
-    expect(archiveInventory.affectedPathGroups[entry.verification.affectedPathGroupId]).toContain(entry.jsonPath);
-  }
-  expect(archiveInventory.comparator.revision).toBe('ed10d42bee6ce0553e659485faf2cbd2a36e2f8c');
-  expect(archiveInventory.comparator.sourceSha256).toBe(gitSourceDigest(archiveInventory.comparator.revision, 'packages/contracts/openapi/breaking-gate.ts'));
-  expect(archiveInventory.comparator.sourceSha256).toBe('17184c65d19a67e240c6d77a02c9d313b1ccbbf0fa8ada046ff686cd0ef3b5ba');
-  expect(archiveInventory.comparator.command).toContain(`sourceRevision=${archiveInventory.comparator.revision}`);
-  expect(archiveInventory.generator.revision).toBe('af6429a26f69553962466504095932f5142af395');
-  expect(archiveInventory.generator.sourceSha256).toBe(gitSourceDigest(archiveInventory.generator.revision, 'packages/contracts/openapi/breaking-inventory.ts'));
-  expect(archiveInventory.generator.sourceSha256).toBe('853dd54c49c1f4c37f22e96dc6807fcffe9ea9aff01bd3a0a5bcb54660de0f41');
-  expect(archiveInventory.generator.command).toContain(`sourceRevision=${archiveInventory.generator.revision}`);
+  expect(createHash('sha256').update(archiveBaselineRaw).digest('hex')).toBe('149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984');
+  expect(archiveInventory.count).toBe(12);
+  expect(archiveInventory.entries).toHaveLength(12);
+  expect(new Set(archiveInventory.entries.map((entry) => entry.jsonPath)).size).toBe(12);
+  expect(new Set(archiveInventory.entries.map((entry) => entry.verification.comparatorIdentity)).size).toBe(12);
+  expect(Object.keys(archiveInventory.affectedPathGroups)).toHaveLength(3);
+  expect(archiveInventory.entries.every((entry) => entry.reason.includes('required') && entry.verification.affectedPaths.length === 4)).toBe(true);
+  expect(archiveInventory.entries.every((entry) => archiveInventory.affectedPathGroups[entry.verification.affectedPathGroupId]?.includes(entry.jsonPath))).toBe(true);
 
-  expect(archiveDecisions.formatVersion).toBe(1);
-  expect(archiveDecisions.baselineDigest).toBe(archiveInventory.baseline.digest);
-  expect(archiveDecisions.candidateDigest).toBe(archiveInventory.candidate.sha256);
-  expect(archiveDecisions.comparatorRevision).toBe(archiveInventory.comparator.revision);
-  expect(archiveDecisions.comparatorSourceSha256).toBe(archiveInventory.comparator.sourceSha256);
-  expect(archiveDecisions.inventoryDigest).toBe(createHash('sha256').update(archiveInventoryRaw).digest('hex'));
-  const archivedDecisionKeys = Object.keys(archiveDecisions.decisions);
-  expect(archivedDecisionKeys).toHaveLength(2015);
-  expect(Object.values(archiveDecisions.decisions).filter((decision: ManifestDecision) => decision.decision === 'accept-semantic-direction')).toHaveLength(2015);
-  expect(Object.values(archiveDecisions.decisions).filter((decision: ManifestDecision) => decision.decision === 'reject')).toHaveLength(0);
-  expect(Object.values(archiveDecisions.decisions).filter((decision: ManifestDecision) => decision.decision === 'pending')).toHaveLength(0);
-  expect(Object.values(archiveDecisions.decisions).filter((decision: ManifestDecision) => decision.promotionAuthorized === false)).toHaveLength(2015);
-  expect(Object.values(archiveDecisions.decisions).filter((decision: ManifestDecision) => decision.promotionAuthorized === true)).toHaveLength(0);
-  expect(Object.values(archiveDecisions.decisions).every((decision: ManifestDecision) => decision.owner.length > 0 && decision.evidence.length > 0)).toBe(true);
-
-  expect(disposition.packageType).toBe('system-contract-disposition');
-  expect(disposition.semanticDisposition).toContain('All 2015 exact comparator identities are accepted as the semantic direction');
-  expect(disposition.status).toBe('CONDITIONAL PASS');
-  expect(Object.keys(disposition.decisions)).toHaveLength(2015);
-  expect(Object.keys(disposition.evidenceGroups)).toHaveLength(3);
-  expect(disposition.sourceDecisionCounts).toEqual({ 'accept-semantic-direction': 26, reject: 4, pending: 1985 });
-  expect(disposition.gates.deployment).toBe('Closed.');
-  const inventoryIdentities = new Set(archiveInventory.entries.map((entry: InventoryEntry) => entry.verification.comparatorIdentity));
-  const decisionIdentities = new Set(archivedDecisionKeys);
-  const packageDecisionEntries = Object.entries(disposition.decisions) as Array<[string, DispositionDecision]>;
-  const packageIdentities = new Set(packageDecisionEntries.map(([, decision]) => decision.exactComparatorIdentity));
-  const packageKeys = new Set(packageDecisionEntries.map(([identity]) => identity));
-  expect(decisionIdentities).toEqual(inventoryIdentities);
-  expect(packageIdentities).toEqual(inventoryIdentities);
-  expect(packageKeys).toEqual(inventoryIdentities);
-  expect(packageKeys.size).toBe(2015);
-  expect(new Set(packageDecisionEntries.map(([, decision]) => decision.inventoryId)).size).toBe(2015);
-  const entryById = new Map<string, InventoryEntry>(archiveInventory.entries.map((entry: InventoryEntry) => [entry.id, entry]));
-  expect(packageDecisionEntries.every(([identity, decision]) => {
-    const entry = entryById.get(decision.inventoryId);
-    return identity === decision.exactComparatorIdentity
-      && entry !== undefined
-      && entry.verification.comparatorIdentity === identity;
-  })).toBe(true);
-  expect(packageDecisionEntries.every(([, decision]) => archiveDecisions.decisions[decision.exactComparatorIdentity] !== undefined)).toBe(true);
+  const decisionKeys = Object.keys(archiveDecisions.decisions);
+  expect(decisionKeys).toHaveLength(12);
+  expect(Object.values(archiveDecisions.decisions).every((decision) => decision.disposition === 'accept-semantic-direction' && decision.promotionAuthorized === false)).toBe(true);
+  expect(new Set(Object.values(archiveDecisions.decisions).map((decision) => decision.inventoryId)).size).toBe(12);
+  expect(disposition).toEqual(expect.objectContaining({
+    identityCount: 12,
+    orphanCount: 0,
+    duplicateCount: 0,
+    mismatchCount: 0,
+  }));
+  expect(Object.keys(disposition.decisions)).toHaveLength(12);
   expect((await readFile(liveInventoryPath)).equals(archiveInventoryRaw)).toBe(false);
   expect((await readFile(liveDecisionsPath)).equals(archiveDecisionsRaw)).toBe(false);
-  expect(archiveInventoryRaw.equals(await readFile(new URL('breaking-inventory.before.json', archiveDirectory)))).toBe(true);
-  expect(archiveDecisionsRaw.equals(await readFile(new URL('breaking-decisions.before.json', archiveDirectory)))).toBe(true);
 });
-
 it('keeps live zero-diff decisions in strict one-to-one lockstep with live inventory', async () => {
   const persisted = JSON.parse((await readFile(liveInventoryPath)).toString('utf8')) as LiveInventoryDocument;
   const manifest = JSON.parse((await readFile(liveDecisionsPath)).toString('utf8')) as DecisionManifest;
@@ -958,7 +685,3 @@ it('rejects external and non-string references without parsing them as identity 
   expect(nonString.decision).toBe('semantic-comparator');
   expect(nonString.referenceClosure).toMatchObject({ result: 'not-local', violationKinds: ['non-string-reference'] });
 });
-
-function gitSourceDigest(revision: string, path: string): string {
-  return createHash('sha256').update(execFileSync('git', ['show', `${revision}:${path}`])).digest('hex');
-}

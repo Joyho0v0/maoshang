@@ -1,0 +1,765 @@
+{
+  "formatVersion": 3,
+  "purpose": "Complete structured audit inventory for the candidate against the approved OpenAPI baseline.",
+  "baseline": {
+    "revision": "f9c8325b89854d88579c6bebab73dc60cc90a8e9",
+    "digest": "149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984",
+    "path": "packages/contracts/openapi/openapi.baseline.yaml"
+  },
+  "candidate": {
+    "revision": "520154f9ec5b6cee864e380fd80826067875da06",
+    "sha256": "aa81c1b5d6de39a808e682fcd2c60cd387ae0719e5bd2ae0ea3ef1e1624bd29f",
+    "generatedSha256": "ea9e00ccb78daf8ec8121e2a4e6fe12859beceb20992c764dccc2d74d089944a",
+    "generatedClientSha256": "d4b5144d568a460a1b0bae89772fd519eb95ef6747d3cb95fa04e6e810907044",
+    "path": "packages/contracts/openapi/openapi.yaml"
+  },
+  "comparator": {
+    "revision": "9ba22dddd4ffd8e04cc99339398a9d445854a8ad",
+    "sourceSha256": "c0a911f1ab3284aaad1f74de4af51ffa7de66f5c780e106b0e1fa13636a4c699",
+    "command": "npm run contract:breaking -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml"
+  },
+  "generator": {
+    "revision": "9ba22dddd4ffd8e04cc99339398a9d445854a8ad",
+    "sourceSha256": "bf20cda8721d728fcdc4391935180c073ab124f656824ca2f4ab5248e6d78bef",
+    "command": "npm run contract:breaking:inventory -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml"
+  },
+  "contentIdentity": null,
+  "comparison": {
+    "mode": "semantic-comparator",
+    "comparatorExecuted": true,
+    "baseline": {
+      "sha256": "149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984",
+      "byteLength": 137931
+    },
+    "candidate": {
+      "sha256": "aa81c1b5d6de39a808e682fcd2c60cd387ae0719e5bd2ae0ea3ef1e1624bd29f",
+      "byteLength": 138030
+    },
+    "bytesEqual": false,
+    "referenceClosure": {
+      "policy": "all--and--values-are-string-local-fragments",
+      "result": "not-scanned-bytes-differ",
+      "violationKinds": []
+    },
+    "shortcutReason": "bytes-differ"
+  },
+  "count": 12,
+  "inventoryMethod": "All structured BreakingChange records from the same normalized comparator used by the fail-fast gate; entries retain exact paths and stable identities, raw old/new values via the content-addressed valueStore, and complete affected-path groups after template expansion and Swagger dereference.",
+  "promotionStatus": "review-required before baseline promotion",
+  "affectedPathGroups": {
+    "affected-paths-a17b0574d086fa1a337ad27b5db5688a2cbf3e711c7900b613c019f8f8dc4c41": [
+      "root.paths./auth/sessions.post.responses.201.content.application/json.schema.organizationId.required",
+      "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.organizationId.required",
+      "root.components.responses.Session.content.application/json.schema.organizationId.required",
+      "root.components.schemas.Session.organizationId.required"
+    ],
+    "affected-paths-e0e27dbf2df49548bb3fb1d320576a5005a8c4627a65b531d6d5b07cc30f15fb": [
+      "root.paths./auth/sessions.post.responses.201.content.application/json.schema.authzVersion.required",
+      "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.authzVersion.required",
+      "root.components.responses.Session.content.application/json.schema.authzVersion.required",
+      "root.components.schemas.Session.authzVersion.required"
+    ],
+    "affected-paths-e4aea2f45172c83d504926bbb456e0504085302ee4c0801ca044076e5056daef": [
+      "root.paths./auth/sessions.post.responses.201.content.application/json.schema.sessionEpoch.required",
+      "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.sessionEpoch.required",
+      "root.components.responses.Session.content.application/json.schema.sessionEpoch.required",
+      "root.components.schemas.Session.sessionEpoch.required"
+    ]
+  },
+  "valueStore": {
+    "f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5": {
+      "present": true,
+      "value": false
+    },
+    "a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f": {
+      "present": true,
+      "value": true
+    }
+  },
+  "entries": [
+    {
+      "id": "BRK-001",
+      "jsonPath": "root.paths./auth/sessions.post.responses.201.content.application/json.schema.organizationId.required",
+      "oldValue": {
+        "kind": "content-addressed-value",
+        "sha256": "f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5",
+        "jsonLength": 30,
+        "valuePath": "#/valueStore/f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5"
+      },
+      "newValue": {
+        "kind": "content-addressed-value",
+        "sha256": "a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f",
+        "jsonLength": 29,
+        "valuePath": "#/valueStore/a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f"
+      },
+      "reason": "field became required.",
+      "ownership": {
+        "domain": "OpenAPI compatibility change; exact consumer impact is reviewed by stable comparator identity.",
+        "decisionOwner": "高级 Web 后端架构师 + 高级 Web 前端架构师 + 全栈交付 Leader",
+        "consumerImpact": "operation/API compatibility impact; no path-derived authorization is inferred",
+        "scope": "stable comparator identity: root.paths./auth/sessions.post.responses.201.content.application/json.schema.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "disposition": {
+        "status": "review-required",
+        "action": "obtain the approved identity-complete baseline evolution before promotion",
+        "rationale": "The system-level architecture decision approves the required Session identity fields; no semantic direction is inferred by the comparator."
+      },
+      "authorization": {
+        "status": "review-required",
+        "requiredApprovers": [
+          "高级 Web 后端架构师",
+          "高级 Web 前端架构师",
+          "全栈交付 Leader"
+        ],
+        "acceptedSemanticDecisionBy": [
+          "首席 Web 系统架构师"
+        ],
+        "baselinePromotion": "review required before promotion in revision 520154f9ec5b6cee864e380fd80826067875da06"
+      },
+      "verification": {
+        "evidence": [
+          "candidate revision 520154f9ec5b6cee864e380fd80826067875da06; baseline revision and digest are recorded in audit provenance",
+          "npm run contract:breaking:inventory",
+          "complete structured comparator collection over normalized components, response content and schemas"
+        ],
+        "source": "packages/contracts/openapi/breaking-gate.ts + packages/contracts/openapi/breaking-inventory.ts",
+        "affectedPaths": [
+          "root.paths./auth/sessions.post.responses.201.content.application/json.schema.organizationId.required",
+          "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.organizationId.required",
+          "root.components.responses.Session.content.application/json.schema.organizationId.required",
+          "root.components.schemas.Session.organizationId.required"
+        ],
+        "affectedPathGroupId": "affected-paths-a17b0574d086fa1a337ad27b5db5688a2cbf3e711c7900b613c019f8f8dc4c41",
+        "comparatorIdentity": "root.paths./auth/sessions.post.responses.201.content.application/json.schema.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "sourceIdentity": "previous.components.responses.Session.content.application/json.schema"
+      }
+    },
+    {
+      "id": "BRK-002",
+      "jsonPath": "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.organizationId.required",
+      "oldValue": {
+        "kind": "content-addressed-value",
+        "sha256": "f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5",
+        "jsonLength": 30,
+        "valuePath": "#/valueStore/f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5"
+      },
+      "newValue": {
+        "kind": "content-addressed-value",
+        "sha256": "a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f",
+        "jsonLength": 29,
+        "valuePath": "#/valueStore/a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f"
+      },
+      "reason": "field became required.",
+      "ownership": {
+        "domain": "OpenAPI compatibility change; exact consumer impact is reviewed by stable comparator identity.",
+        "decisionOwner": "高级 Web 后端架构师 + 高级 Web 前端架构师 + 全栈交付 Leader",
+        "consumerImpact": "operation/API compatibility impact; no path-derived authorization is inferred",
+        "scope": "stable comparator identity: root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "disposition": {
+        "status": "review-required",
+        "action": "obtain the approved identity-complete baseline evolution before promotion",
+        "rationale": "The system-level architecture decision approves the required Session identity fields; no semantic direction is inferred by the comparator."
+      },
+      "authorization": {
+        "status": "review-required",
+        "requiredApprovers": [
+          "高级 Web 后端架构师",
+          "高级 Web 前端架构师",
+          "全栈交付 Leader"
+        ],
+        "acceptedSemanticDecisionBy": [
+          "首席 Web 系统架构师"
+        ],
+        "baselinePromotion": "review required before promotion in revision 520154f9ec5b6cee864e380fd80826067875da06"
+      },
+      "verification": {
+        "evidence": [
+          "candidate revision 520154f9ec5b6cee864e380fd80826067875da06; baseline revision and digest are recorded in audit provenance",
+          "npm run contract:breaking:inventory",
+          "complete structured comparator collection over normalized components, response content and schemas"
+        ],
+        "source": "packages/contracts/openapi/breaking-gate.ts + packages/contracts/openapi/breaking-inventory.ts",
+        "affectedPaths": [
+          "root.paths./auth/sessions.post.responses.201.content.application/json.schema.organizationId.required",
+          "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.organizationId.required",
+          "root.components.responses.Session.content.application/json.schema.organizationId.required",
+          "root.components.schemas.Session.organizationId.required"
+        ],
+        "affectedPathGroupId": "affected-paths-a17b0574d086fa1a337ad27b5db5688a2cbf3e711c7900b613c019f8f8dc4c41",
+        "comparatorIdentity": "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "sourceIdentity": "previous.components.responses.Session.content.application/json.schema"
+      }
+    },
+    {
+      "id": "BRK-003",
+      "jsonPath": "root.components.responses.Session.content.application/json.schema.organizationId.required",
+      "oldValue": {
+        "kind": "content-addressed-value",
+        "sha256": "f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5",
+        "jsonLength": 30,
+        "valuePath": "#/valueStore/f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5"
+      },
+      "newValue": {
+        "kind": "content-addressed-value",
+        "sha256": "a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f",
+        "jsonLength": 29,
+        "valuePath": "#/valueStore/a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f"
+      },
+      "reason": "field became required.",
+      "ownership": {
+        "domain": "OpenAPI compatibility change; exact consumer impact is reviewed by stable comparator identity.",
+        "decisionOwner": "高级 Web 后端架构师 + 高级 Web 前端架构师 + 全栈交付 Leader",
+        "consumerImpact": "operation/API compatibility impact; no path-derived authorization is inferred",
+        "scope": "stable comparator identity: root.components.responses.Session.content.application/json.schema.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "disposition": {
+        "status": "review-required",
+        "action": "obtain the approved identity-complete baseline evolution before promotion",
+        "rationale": "The system-level architecture decision approves the required Session identity fields; no semantic direction is inferred by the comparator."
+      },
+      "authorization": {
+        "status": "review-required",
+        "requiredApprovers": [
+          "高级 Web 后端架构师",
+          "高级 Web 前端架构师",
+          "全栈交付 Leader"
+        ],
+        "acceptedSemanticDecisionBy": [
+          "首席 Web 系统架构师"
+        ],
+        "baselinePromotion": "review required before promotion in revision 520154f9ec5b6cee864e380fd80826067875da06"
+      },
+      "verification": {
+        "evidence": [
+          "candidate revision 520154f9ec5b6cee864e380fd80826067875da06; baseline revision and digest are recorded in audit provenance",
+          "npm run contract:breaking:inventory",
+          "complete structured comparator collection over normalized components, response content and schemas"
+        ],
+        "source": "packages/contracts/openapi/breaking-gate.ts + packages/contracts/openapi/breaking-inventory.ts",
+        "affectedPaths": [
+          "root.paths./auth/sessions.post.responses.201.content.application/json.schema.organizationId.required",
+          "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.organizationId.required",
+          "root.components.responses.Session.content.application/json.schema.organizationId.required",
+          "root.components.schemas.Session.organizationId.required"
+        ],
+        "affectedPathGroupId": "affected-paths-a17b0574d086fa1a337ad27b5db5688a2cbf3e711c7900b613c019f8f8dc4c41",
+        "comparatorIdentity": "root.components.responses.Session.content.application/json.schema.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "sourceIdentity": "previous.components.responses.Session.content.application/json.schema"
+      }
+    },
+    {
+      "id": "BRK-004",
+      "jsonPath": "root.components.schemas.Session.organizationId.required",
+      "oldValue": {
+        "kind": "content-addressed-value",
+        "sha256": "f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5",
+        "jsonLength": 30,
+        "valuePath": "#/valueStore/f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5"
+      },
+      "newValue": {
+        "kind": "content-addressed-value",
+        "sha256": "a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f",
+        "jsonLength": 29,
+        "valuePath": "#/valueStore/a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f"
+      },
+      "reason": "field became required.",
+      "ownership": {
+        "domain": "OpenAPI compatibility change; exact consumer impact is reviewed by stable comparator identity.",
+        "decisionOwner": "高级 Web 后端架构师 + 高级 Web 前端架构师 + 全栈交付 Leader",
+        "consumerImpact": "operation/API compatibility impact; no path-derived authorization is inferred",
+        "scope": "stable comparator identity: root.components.schemas.Session.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "disposition": {
+        "status": "review-required",
+        "action": "obtain the approved identity-complete baseline evolution before promotion",
+        "rationale": "The system-level architecture decision approves the required Session identity fields; no semantic direction is inferred by the comparator."
+      },
+      "authorization": {
+        "status": "review-required",
+        "requiredApprovers": [
+          "高级 Web 后端架构师",
+          "高级 Web 前端架构师",
+          "全栈交付 Leader"
+        ],
+        "acceptedSemanticDecisionBy": [
+          "首席 Web 系统架构师"
+        ],
+        "baselinePromotion": "review required before promotion in revision 520154f9ec5b6cee864e380fd80826067875da06"
+      },
+      "verification": {
+        "evidence": [
+          "candidate revision 520154f9ec5b6cee864e380fd80826067875da06; baseline revision and digest are recorded in audit provenance",
+          "npm run contract:breaking:inventory",
+          "complete structured comparator collection over normalized components, response content and schemas"
+        ],
+        "source": "packages/contracts/openapi/breaking-gate.ts + packages/contracts/openapi/breaking-inventory.ts",
+        "affectedPaths": [
+          "root.paths./auth/sessions.post.responses.201.content.application/json.schema.organizationId.required",
+          "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.organizationId.required",
+          "root.components.responses.Session.content.application/json.schema.organizationId.required",
+          "root.components.schemas.Session.organizationId.required"
+        ],
+        "affectedPathGroupId": "affected-paths-a17b0574d086fa1a337ad27b5db5688a2cbf3e711c7900b613c019f8f8dc4c41",
+        "comparatorIdentity": "root.components.schemas.Session.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "sourceIdentity": "previous.components.responses.Session.content.application/json.schema"
+      }
+    },
+    {
+      "id": "BRK-005",
+      "jsonPath": "root.paths./auth/sessions.post.responses.201.content.application/json.schema.authzVersion.required",
+      "oldValue": {
+        "kind": "content-addressed-value",
+        "sha256": "f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5",
+        "jsonLength": 30,
+        "valuePath": "#/valueStore/f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5"
+      },
+      "newValue": {
+        "kind": "content-addressed-value",
+        "sha256": "a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f",
+        "jsonLength": 29,
+        "valuePath": "#/valueStore/a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f"
+      },
+      "reason": "field became required.",
+      "ownership": {
+        "domain": "OpenAPI compatibility change; exact consumer impact is reviewed by stable comparator identity.",
+        "decisionOwner": "高级 Web 后端架构师 + 高级 Web 前端架构师 + 全栈交付 Leader",
+        "consumerImpact": "operation/API compatibility impact; no path-derived authorization is inferred",
+        "scope": "stable comparator identity: root.paths./auth/sessions.post.responses.201.content.application/json.schema.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "disposition": {
+        "status": "review-required",
+        "action": "obtain the approved identity-complete baseline evolution before promotion",
+        "rationale": "The system-level architecture decision approves the required Session identity fields; no semantic direction is inferred by the comparator."
+      },
+      "authorization": {
+        "status": "review-required",
+        "requiredApprovers": [
+          "高级 Web 后端架构师",
+          "高级 Web 前端架构师",
+          "全栈交付 Leader"
+        ],
+        "acceptedSemanticDecisionBy": [
+          "首席 Web 系统架构师"
+        ],
+        "baselinePromotion": "review required before promotion in revision 520154f9ec5b6cee864e380fd80826067875da06"
+      },
+      "verification": {
+        "evidence": [
+          "candidate revision 520154f9ec5b6cee864e380fd80826067875da06; baseline revision and digest are recorded in audit provenance",
+          "npm run contract:breaking:inventory",
+          "complete structured comparator collection over normalized components, response content and schemas"
+        ],
+        "source": "packages/contracts/openapi/breaking-gate.ts + packages/contracts/openapi/breaking-inventory.ts",
+        "affectedPaths": [
+          "root.paths./auth/sessions.post.responses.201.content.application/json.schema.authzVersion.required",
+          "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.authzVersion.required",
+          "root.components.responses.Session.content.application/json.schema.authzVersion.required",
+          "root.components.schemas.Session.authzVersion.required"
+        ],
+        "affectedPathGroupId": "affected-paths-e0e27dbf2df49548bb3fb1d320576a5005a8c4627a65b531d6d5b07cc30f15fb",
+        "comparatorIdentity": "root.paths./auth/sessions.post.responses.201.content.application/json.schema.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "sourceIdentity": "previous.components.responses.Session.content.application/json.schema"
+      }
+    },
+    {
+      "id": "BRK-006",
+      "jsonPath": "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.authzVersion.required",
+      "oldValue": {
+        "kind": "content-addressed-value",
+        "sha256": "f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5",
+        "jsonLength": 30,
+        "valuePath": "#/valueStore/f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5"
+      },
+      "newValue": {
+        "kind": "content-addressed-value",
+        "sha256": "a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f",
+        "jsonLength": 29,
+        "valuePath": "#/valueStore/a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f"
+      },
+      "reason": "field became required.",
+      "ownership": {
+        "domain": "OpenAPI compatibility change; exact consumer impact is reviewed by stable comparator identity.",
+        "decisionOwner": "高级 Web 后端架构师 + 高级 Web 前端架构师 + 全栈交付 Leader",
+        "consumerImpact": "operation/API compatibility impact; no path-derived authorization is inferred",
+        "scope": "stable comparator identity: root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "disposition": {
+        "status": "review-required",
+        "action": "obtain the approved identity-complete baseline evolution before promotion",
+        "rationale": "The system-level architecture decision approves the required Session identity fields; no semantic direction is inferred by the comparator."
+      },
+      "authorization": {
+        "status": "review-required",
+        "requiredApprovers": [
+          "高级 Web 后端架构师",
+          "高级 Web 前端架构师",
+          "全栈交付 Leader"
+        ],
+        "acceptedSemanticDecisionBy": [
+          "首席 Web 系统架构师"
+        ],
+        "baselinePromotion": "review required before promotion in revision 520154f9ec5b6cee864e380fd80826067875da06"
+      },
+      "verification": {
+        "evidence": [
+          "candidate revision 520154f9ec5b6cee864e380fd80826067875da06; baseline revision and digest are recorded in audit provenance",
+          "npm run contract:breaking:inventory",
+          "complete structured comparator collection over normalized components, response content and schemas"
+        ],
+        "source": "packages/contracts/openapi/breaking-gate.ts + packages/contracts/openapi/breaking-inventory.ts",
+        "affectedPaths": [
+          "root.paths./auth/sessions.post.responses.201.content.application/json.schema.authzVersion.required",
+          "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.authzVersion.required",
+          "root.components.responses.Session.content.application/json.schema.authzVersion.required",
+          "root.components.schemas.Session.authzVersion.required"
+        ],
+        "affectedPathGroupId": "affected-paths-e0e27dbf2df49548bb3fb1d320576a5005a8c4627a65b531d6d5b07cc30f15fb",
+        "comparatorIdentity": "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "sourceIdentity": "previous.components.responses.Session.content.application/json.schema"
+      }
+    },
+    {
+      "id": "BRK-007",
+      "jsonPath": "root.components.responses.Session.content.application/json.schema.authzVersion.required",
+      "oldValue": {
+        "kind": "content-addressed-value",
+        "sha256": "f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5",
+        "jsonLength": 30,
+        "valuePath": "#/valueStore/f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5"
+      },
+      "newValue": {
+        "kind": "content-addressed-value",
+        "sha256": "a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f",
+        "jsonLength": 29,
+        "valuePath": "#/valueStore/a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f"
+      },
+      "reason": "field became required.",
+      "ownership": {
+        "domain": "OpenAPI compatibility change; exact consumer impact is reviewed by stable comparator identity.",
+        "decisionOwner": "高级 Web 后端架构师 + 高级 Web 前端架构师 + 全栈交付 Leader",
+        "consumerImpact": "operation/API compatibility impact; no path-derived authorization is inferred",
+        "scope": "stable comparator identity: root.components.responses.Session.content.application/json.schema.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "disposition": {
+        "status": "review-required",
+        "action": "obtain the approved identity-complete baseline evolution before promotion",
+        "rationale": "The system-level architecture decision approves the required Session identity fields; no semantic direction is inferred by the comparator."
+      },
+      "authorization": {
+        "status": "review-required",
+        "requiredApprovers": [
+          "高级 Web 后端架构师",
+          "高级 Web 前端架构师",
+          "全栈交付 Leader"
+        ],
+        "acceptedSemanticDecisionBy": [
+          "首席 Web 系统架构师"
+        ],
+        "baselinePromotion": "review required before promotion in revision 520154f9ec5b6cee864e380fd80826067875da06"
+      },
+      "verification": {
+        "evidence": [
+          "candidate revision 520154f9ec5b6cee864e380fd80826067875da06; baseline revision and digest are recorded in audit provenance",
+          "npm run contract:breaking:inventory",
+          "complete structured comparator collection over normalized components, response content and schemas"
+        ],
+        "source": "packages/contracts/openapi/breaking-gate.ts + packages/contracts/openapi/breaking-inventory.ts",
+        "affectedPaths": [
+          "root.paths./auth/sessions.post.responses.201.content.application/json.schema.authzVersion.required",
+          "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.authzVersion.required",
+          "root.components.responses.Session.content.application/json.schema.authzVersion.required",
+          "root.components.schemas.Session.authzVersion.required"
+        ],
+        "affectedPathGroupId": "affected-paths-e0e27dbf2df49548bb3fb1d320576a5005a8c4627a65b531d6d5b07cc30f15fb",
+        "comparatorIdentity": "root.components.responses.Session.content.application/json.schema.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "sourceIdentity": "previous.components.responses.Session.content.application/json.schema"
+      }
+    },
+    {
+      "id": "BRK-008",
+      "jsonPath": "root.components.schemas.Session.authzVersion.required",
+      "oldValue": {
+        "kind": "content-addressed-value",
+        "sha256": "f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5",
+        "jsonLength": 30,
+        "valuePath": "#/valueStore/f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5"
+      },
+      "newValue": {
+        "kind": "content-addressed-value",
+        "sha256": "a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f",
+        "jsonLength": 29,
+        "valuePath": "#/valueStore/a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f"
+      },
+      "reason": "field became required.",
+      "ownership": {
+        "domain": "OpenAPI compatibility change; exact consumer impact is reviewed by stable comparator identity.",
+        "decisionOwner": "高级 Web 后端架构师 + 高级 Web 前端架构师 + 全栈交付 Leader",
+        "consumerImpact": "operation/API compatibility impact; no path-derived authorization is inferred",
+        "scope": "stable comparator identity: root.components.schemas.Session.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "disposition": {
+        "status": "review-required",
+        "action": "obtain the approved identity-complete baseline evolution before promotion",
+        "rationale": "The system-level architecture decision approves the required Session identity fields; no semantic direction is inferred by the comparator."
+      },
+      "authorization": {
+        "status": "review-required",
+        "requiredApprovers": [
+          "高级 Web 后端架构师",
+          "高级 Web 前端架构师",
+          "全栈交付 Leader"
+        ],
+        "acceptedSemanticDecisionBy": [
+          "首席 Web 系统架构师"
+        ],
+        "baselinePromotion": "review required before promotion in revision 520154f9ec5b6cee864e380fd80826067875da06"
+      },
+      "verification": {
+        "evidence": [
+          "candidate revision 520154f9ec5b6cee864e380fd80826067875da06; baseline revision and digest are recorded in audit provenance",
+          "npm run contract:breaking:inventory",
+          "complete structured comparator collection over normalized components, response content and schemas"
+        ],
+        "source": "packages/contracts/openapi/breaking-gate.ts + packages/contracts/openapi/breaking-inventory.ts",
+        "affectedPaths": [
+          "root.paths./auth/sessions.post.responses.201.content.application/json.schema.authzVersion.required",
+          "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.authzVersion.required",
+          "root.components.responses.Session.content.application/json.schema.authzVersion.required",
+          "root.components.schemas.Session.authzVersion.required"
+        ],
+        "affectedPathGroupId": "affected-paths-e0e27dbf2df49548bb3fb1d320576a5005a8c4627a65b531d6d5b07cc30f15fb",
+        "comparatorIdentity": "root.components.schemas.Session.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "sourceIdentity": "previous.components.responses.Session.content.application/json.schema"
+      }
+    },
+    {
+      "id": "BRK-009",
+      "jsonPath": "root.paths./auth/sessions.post.responses.201.content.application/json.schema.sessionEpoch.required",
+      "oldValue": {
+        "kind": "content-addressed-value",
+        "sha256": "f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5",
+        "jsonLength": 30,
+        "valuePath": "#/valueStore/f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5"
+      },
+      "newValue": {
+        "kind": "content-addressed-value",
+        "sha256": "a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f",
+        "jsonLength": 29,
+        "valuePath": "#/valueStore/a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f"
+      },
+      "reason": "field became required.",
+      "ownership": {
+        "domain": "OpenAPI compatibility change; exact consumer impact is reviewed by stable comparator identity.",
+        "decisionOwner": "高级 Web 后端架构师 + 高级 Web 前端架构师 + 全栈交付 Leader",
+        "consumerImpact": "operation/API compatibility impact; no path-derived authorization is inferred",
+        "scope": "stable comparator identity: root.paths./auth/sessions.post.responses.201.content.application/json.schema.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "disposition": {
+        "status": "review-required",
+        "action": "obtain the approved identity-complete baseline evolution before promotion",
+        "rationale": "The system-level architecture decision approves the required Session identity fields; no semantic direction is inferred by the comparator."
+      },
+      "authorization": {
+        "status": "review-required",
+        "requiredApprovers": [
+          "高级 Web 后端架构师",
+          "高级 Web 前端架构师",
+          "全栈交付 Leader"
+        ],
+        "acceptedSemanticDecisionBy": [
+          "首席 Web 系统架构师"
+        ],
+        "baselinePromotion": "review required before promotion in revision 520154f9ec5b6cee864e380fd80826067875da06"
+      },
+      "verification": {
+        "evidence": [
+          "candidate revision 520154f9ec5b6cee864e380fd80826067875da06; baseline revision and digest are recorded in audit provenance",
+          "npm run contract:breaking:inventory",
+          "complete structured comparator collection over normalized components, response content and schemas"
+        ],
+        "source": "packages/contracts/openapi/breaking-gate.ts + packages/contracts/openapi/breaking-inventory.ts",
+        "affectedPaths": [
+          "root.paths./auth/sessions.post.responses.201.content.application/json.schema.sessionEpoch.required",
+          "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.sessionEpoch.required",
+          "root.components.responses.Session.content.application/json.schema.sessionEpoch.required",
+          "root.components.schemas.Session.sessionEpoch.required"
+        ],
+        "affectedPathGroupId": "affected-paths-e4aea2f45172c83d504926bbb456e0504085302ee4c0801ca044076e5056daef",
+        "comparatorIdentity": "root.paths./auth/sessions.post.responses.201.content.application/json.schema.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "sourceIdentity": "previous.components.responses.Session.content.application/json.schema"
+      }
+    },
+    {
+      "id": "BRK-010",
+      "jsonPath": "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.sessionEpoch.required",
+      "oldValue": {
+        "kind": "content-addressed-value",
+        "sha256": "f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5",
+        "jsonLength": 30,
+        "valuePath": "#/valueStore/f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5"
+      },
+      "newValue": {
+        "kind": "content-addressed-value",
+        "sha256": "a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f",
+        "jsonLength": 29,
+        "valuePath": "#/valueStore/a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f"
+      },
+      "reason": "field became required.",
+      "ownership": {
+        "domain": "OpenAPI compatibility change; exact consumer impact is reviewed by stable comparator identity.",
+        "decisionOwner": "高级 Web 后端架构师 + 高级 Web 前端架构师 + 全栈交付 Leader",
+        "consumerImpact": "operation/API compatibility impact; no path-derived authorization is inferred",
+        "scope": "stable comparator identity: root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "disposition": {
+        "status": "review-required",
+        "action": "obtain the approved identity-complete baseline evolution before promotion",
+        "rationale": "The system-level architecture decision approves the required Session identity fields; no semantic direction is inferred by the comparator."
+      },
+      "authorization": {
+        "status": "review-required",
+        "requiredApprovers": [
+          "高级 Web 后端架构师",
+          "高级 Web 前端架构师",
+          "全栈交付 Leader"
+        ],
+        "acceptedSemanticDecisionBy": [
+          "首席 Web 系统架构师"
+        ],
+        "baselinePromotion": "review required before promotion in revision 520154f9ec5b6cee864e380fd80826067875da06"
+      },
+      "verification": {
+        "evidence": [
+          "candidate revision 520154f9ec5b6cee864e380fd80826067875da06; baseline revision and digest are recorded in audit provenance",
+          "npm run contract:breaking:inventory",
+          "complete structured comparator collection over normalized components, response content and schemas"
+        ],
+        "source": "packages/contracts/openapi/breaking-gate.ts + packages/contracts/openapi/breaking-inventory.ts",
+        "affectedPaths": [
+          "root.paths./auth/sessions.post.responses.201.content.application/json.schema.sessionEpoch.required",
+          "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.sessionEpoch.required",
+          "root.components.responses.Session.content.application/json.schema.sessionEpoch.required",
+          "root.components.schemas.Session.sessionEpoch.required"
+        ],
+        "affectedPathGroupId": "affected-paths-e4aea2f45172c83d504926bbb456e0504085302ee4c0801ca044076e5056daef",
+        "comparatorIdentity": "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "sourceIdentity": "previous.components.responses.Session.content.application/json.schema"
+      }
+    },
+    {
+      "id": "BRK-011",
+      "jsonPath": "root.components.responses.Session.content.application/json.schema.sessionEpoch.required",
+      "oldValue": {
+        "kind": "content-addressed-value",
+        "sha256": "f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5",
+        "jsonLength": 30,
+        "valuePath": "#/valueStore/f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5"
+      },
+      "newValue": {
+        "kind": "content-addressed-value",
+        "sha256": "a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f",
+        "jsonLength": 29,
+        "valuePath": "#/valueStore/a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f"
+      },
+      "reason": "field became required.",
+      "ownership": {
+        "domain": "OpenAPI compatibility change; exact consumer impact is reviewed by stable comparator identity.",
+        "decisionOwner": "高级 Web 后端架构师 + 高级 Web 前端架构师 + 全栈交付 Leader",
+        "consumerImpact": "operation/API compatibility impact; no path-derived authorization is inferred",
+        "scope": "stable comparator identity: root.components.responses.Session.content.application/json.schema.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "disposition": {
+        "status": "review-required",
+        "action": "obtain the approved identity-complete baseline evolution before promotion",
+        "rationale": "The system-level architecture decision approves the required Session identity fields; no semantic direction is inferred by the comparator."
+      },
+      "authorization": {
+        "status": "review-required",
+        "requiredApprovers": [
+          "高级 Web 后端架构师",
+          "高级 Web 前端架构师",
+          "全栈交付 Leader"
+        ],
+        "acceptedSemanticDecisionBy": [
+          "首席 Web 系统架构师"
+        ],
+        "baselinePromotion": "review required before promotion in revision 520154f9ec5b6cee864e380fd80826067875da06"
+      },
+      "verification": {
+        "evidence": [
+          "candidate revision 520154f9ec5b6cee864e380fd80826067875da06; baseline revision and digest are recorded in audit provenance",
+          "npm run contract:breaking:inventory",
+          "complete structured comparator collection over normalized components, response content and schemas"
+        ],
+        "source": "packages/contracts/openapi/breaking-gate.ts + packages/contracts/openapi/breaking-inventory.ts",
+        "affectedPaths": [
+          "root.paths./auth/sessions.post.responses.201.content.application/json.schema.sessionEpoch.required",
+          "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.sessionEpoch.required",
+          "root.components.responses.Session.content.application/json.schema.sessionEpoch.required",
+          "root.components.schemas.Session.sessionEpoch.required"
+        ],
+        "affectedPathGroupId": "affected-paths-e4aea2f45172c83d504926bbb456e0504085302ee4c0801ca044076e5056daef",
+        "comparatorIdentity": "root.components.responses.Session.content.application/json.schema.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "sourceIdentity": "previous.components.responses.Session.content.application/json.schema"
+      }
+    },
+    {
+      "id": "BRK-012",
+      "jsonPath": "root.components.schemas.Session.sessionEpoch.required",
+      "oldValue": {
+        "kind": "content-addressed-value",
+        "sha256": "f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5",
+        "jsonLength": 30,
+        "valuePath": "#/valueStore/f31334156d7e5209dfc90f4f42f19e829fa93f75741665019395b045576b09a5"
+      },
+      "newValue": {
+        "kind": "content-addressed-value",
+        "sha256": "a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f",
+        "jsonLength": 29,
+        "valuePath": "#/valueStore/a56ab70691a68282d1c92ad09d3cfc1eb7a1b1ad3ad4f8fc9520cbac7af63d8f"
+      },
+      "reason": "field became required.",
+      "ownership": {
+        "domain": "OpenAPI compatibility change; exact consumer impact is reviewed by stable comparator identity.",
+        "decisionOwner": "高级 Web 后端架构师 + 高级 Web 前端架构师 + 全栈交付 Leader",
+        "consumerImpact": "operation/API compatibility impact; no path-derived authorization is inferred",
+        "scope": "stable comparator identity: root.components.schemas.Session.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+      },
+      "disposition": {
+        "status": "review-required",
+        "action": "obtain the approved identity-complete baseline evolution before promotion",
+        "rationale": "The system-level architecture decision approves the required Session identity fields; no semantic direction is inferred by the comparator."
+      },
+      "authorization": {
+        "status": "review-required",
+        "requiredApprovers": [
+          "高级 Web 后端架构师",
+          "高级 Web 前端架构师",
+          "全栈交付 Leader"
+        ],
+        "acceptedSemanticDecisionBy": [
+          "首席 Web 系统架构师"
+        ],
+        "baselinePromotion": "review required before promotion in revision 520154f9ec5b6cee864e380fd80826067875da06"
+      },
+      "verification": {
+        "evidence": [
+          "candidate revision 520154f9ec5b6cee864e380fd80826067875da06; baseline revision and digest are recorded in audit provenance",
+          "npm run contract:breaking:inventory",
+          "complete structured comparator collection over normalized components, response content and schemas"
+        ],
+        "source": "packages/contracts/openapi/breaking-gate.ts + packages/contracts/openapi/breaking-inventory.ts",
+        "affectedPaths": [
+          "root.paths./auth/sessions.post.responses.201.content.application/json.schema.sessionEpoch.required",
+          "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.sessionEpoch.required",
+          "root.components.responses.Session.content.application/json.schema.sessionEpoch.required",
+          "root.components.schemas.Session.sessionEpoch.required"
+        ],
+        "affectedPathGroupId": "affected-paths-e4aea2f45172c83d504926bbb456e0504085302ee4c0801ca044076e5056daef",
+        "comparatorIdentity": "root.components.schemas.Session.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+        "sourceIdentity": "previous.components.responses.Session.content.application/json.schema"
+      }
+    }
+  ]
+}
