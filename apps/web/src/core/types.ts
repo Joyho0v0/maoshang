@@ -13,8 +13,8 @@ export interface SessionIdentity {
   organizationId: string;
   capabilities: string[];
   scopeSummary: Record<string, unknown>;
-  authzVersion?: number;
-  serverSessionEpoch?: number;
+  authzVersion: number;
+  serverSessionEpoch: number;
 }
 
 export interface ProblemDetails {

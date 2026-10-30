@@ -12,6 +12,8 @@ describe('contract adapter seam', () => {
           organizationId: 'org-1',
           capabilities: [],
           scopeSummary: {},
+          authzVersion: 1,
+          serverSessionEpoch: 1,
         },
         csrfToken: 'csrf',
       }),

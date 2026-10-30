@@ -22,6 +22,7 @@ import type {
   LoginInput,
   SessionBootstrapResponse,
   SessionCredentials,
+  SessionIdentity,
   SessionUser,
 } from './types';
 
@@ -147,6 +148,8 @@ export function createMockContractAdapter(): ContractAdapter {
         organizationId: 'fixture-org',
         capabilities: [],
         scopeSummary: {},
+        authzVersion: 1,
+        serverSessionEpoch: 1,
       },
       csrfToken: 'fixture-csrf',
     }),
@@ -290,20 +293,22 @@ function mapSessionUser(session: components['schemas']['Session']): SessionUser 
   const role = normalizeRole(data.role);
   const displayName = firstString(data.displayName, data.name, data.username);
   if (displayName === undefined) throw new Error('Session user is missing a display name.');
-  const organizationId = firstString(session.user.organizationId, data.organizationId, isRecord(data.organization) ? data.organization.id : undefined);
-  if (organizationId === undefined) throw new Error('Session user is missing an organization identity.');
-  return { id: session.user.id, organizationId, displayName, ...(role === undefined ? {} : { role }) };
+  return {
+    id: session.user.id,
+    organizationId: session.organizationId,
+    displayName,
+    ...(role === undefined ? {} : { role }),
+  };
 }
 
-function mapSessionIdentity(session: components['schemas']['Session']): import('./types').SessionIdentity {
-  const user = mapSessionUser(session);
+function mapSessionIdentity(session: components['schemas']['Session']): SessionIdentity {
   return {
-    userId: user.id,
-    organizationId: user.organizationId,
+    userId: session.user.id,
+    organizationId: session.organizationId,
     capabilities: [...session.capabilities],
     scopeSummary: { ...session.scopeSummary },
-    ...(session.authzVersion === undefined ? {} : { authzVersion: session.authzVersion }),
-    ...(session.sessionEpoch === undefined ? {} : { serverSessionEpoch: session.sessionEpoch }),
+    authzVersion: session.authzVersion,
+    serverSessionEpoch: session.sessionEpoch,
   };
 }
 

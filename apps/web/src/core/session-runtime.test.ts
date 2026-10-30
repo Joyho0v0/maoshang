@@ -7,6 +7,7 @@ import {
 import type {
   ContractAdapter,
   SessionBootstrapResponse,
+  SessionIdentity,
   SessionUser,
 } from './types';
 
@@ -14,7 +15,7 @@ function createUser(id: string): SessionUser {
   return { id, organizationId: `org-${id}`, displayName: `User ${id}`, role: 'sales' };
 }
 
-function createIdentity(id = 'sales-1', organizationId = 'org-1', authzVersion = 1, serverSessionEpoch = 1) {
+function createIdentity(id = 'sales-1', organizationId = 'org-1', authzVersion = 1, serverSessionEpoch = 1): SessionIdentity {
   return {
     userId: id,
     organizationId,
@@ -181,6 +182,47 @@ describe('SessionRuntime', () => {
     expect(runtime.queryCache.get('dashboard')).toBeUndefined();
     expect(runtime.pendingCommands.list()).toHaveLength(0);
     expect(runtime.snapshot.csrfToken).toBe('csrf-2');
+  });
+
+  it.each([
+    ['organizationId', createIdentity('sales-1', 'org-1', 1, 1), createIdentity('sales-1', 'org-2', 1, 1)],
+    ['authzVersion increases', createIdentity('sales-1', 'org-1', 1, 1), createIdentity('sales-1', 'org-1', 2, 1)],
+    ['authzVersion decreases', createIdentity('sales-1', 'org-1', 2, 1), createIdentity('sales-1', 'org-1', 1, 1)],
+    ['serverSessionEpoch increases', createIdentity('sales-1', 'org-1', 1, 1), createIdentity('sales-1', 'org-1', 1, 2)],
+    ['serverSessionEpoch decreases', createIdentity('sales-1', 'org-1', 1, 2), createIdentity('sales-1', 'org-1', 1, 1)],
+  ] as const)('advances one epoch and isolates old state when only %s changes', async (_field, firstIdentity, nextIdentity) => {
+    const requestDeferred = deferred<{ status: number; data: { old: boolean }; headers: Record<string, string> }>();
+    const login = vi.fn()
+      .mockResolvedValueOnce({ user: createUser('sales-1'), identity: firstIdentity, csrfToken: 'csrf-1' })
+      .mockResolvedValueOnce({
+        user: { ...createUser('sales-1'), organizationId: nextIdentity.organizationId },
+        identity: nextIdentity,
+        csrfToken: 'csrf-2',
+      });
+    let requestSignal: AbortSignal | undefined;
+    const runtime = new SessionRuntime(createAdapter({
+      login,
+      request: async (_request, signal) => {
+        requestSignal = signal;
+        return requestDeferred.promise;
+      },
+    }));
+    await runtime.login({ email: 'sales@example.test', password: 'password' });
+    runtime.queryCache.set('dashboard', { value: 'old' }, runtime.snapshot.epoch);
+    runtime.pendingCommands.add({ id: 'command-identity-change', idempotencyKey: 'idem', sessionEpoch: runtime.snapshot.epoch, status: 'in-flight', createdAt: 1 });
+
+    const oldRequest = runtime.query('dashboard', { method: 'GET', href: '/api/v1/dashboard' });
+    await Promise.resolve();
+    const oldEpoch = runtime.snapshot.epoch;
+    await runtime.login({ email: 'new@example.test', password: 'password' });
+    requestDeferred.resolve({ status: 200, data: { old: true }, headers: {} });
+
+    await expect(oldRequest).rejects.toBeInstanceOf(SessionEpochChangedError);
+    expect(requestSignal?.aborted).toBe(true);
+    expect(runtime.snapshot.epoch).toBe(oldEpoch + 1);
+    expect(runtime.snapshot.identity).toEqual(nextIdentity);
+    expect(runtime.queryCache.get('dashboard')).toBeUndefined();
+    expect(runtime.pendingCommands.list()).toHaveLength(0);
   });
 
   it('clears an authenticated session exactly once when an API request reports session expiry', async () => {
