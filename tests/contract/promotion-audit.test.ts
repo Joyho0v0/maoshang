@@ -17,8 +17,8 @@ type InventoryEntry = {
 };
 
 type Inventory = {
-  baseline: { digest: string };
-  candidate: { sha256: string };
+  baseline: { revision?: string; digest: string };
+  candidate: { revision?: string; sha256: string };
   comparator: { revision: string; sourceSha256: string };
   generator: { revision: string; sourceSha256: string };
   count: number;
@@ -253,6 +253,8 @@ it('locks the Session promotion provenance to the immutable baseline transition 
   expect(record.archive.dispositionPackage).toMatchObject({ sha256: sha256(dispositionRaw), identityCount: 12, orphanCount: 0, duplicateCount: 0, mismatchCount: 0 });
   expect(record.liveArtifacts.inventory).toMatchObject({ path: 'packages/contracts/openapi/breaking-inventory.json', sha256: sha256(inventoryRaw), count: 0 });
   expect(record.liveArtifacts.decisions).toMatchObject({ path: 'packages/contracts/openapi/breaking-decisions.json', sha256: sha256(decisionsRaw), decisionCount: 0 });
+  expect(liveInventory.baseline.revision).toBe(record.sourceRevisions.baselinePromotion);
+  expect(liveInventory.candidate.revision).toBe(record.sourceRevisions.candidateContent);
   expect(liveInventory.count).toBe(0);
   expect(Object.keys(liveDecisions.decisions)).toHaveLength(0);
 

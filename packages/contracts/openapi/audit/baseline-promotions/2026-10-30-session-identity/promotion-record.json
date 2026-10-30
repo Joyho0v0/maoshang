@@ -20,14 +20,14 @@
     "inventory": {
       "path": "packages/contracts/openapi/breaking-inventory.json",
       "formatVersion": 3,
-      "sha256": "5f7879afe6f4f1962ba85a9f2a764f8f6720327e39a0b64931d5e9f6f90ccb42",
+      "sha256": "d901cec868eb19ad4dd62a83f0c5fa71599420567d17f63ea042f78f67fa7c81",
       "byteLength": 2376,
       "count": 0
     },
     "decisions": {
       "path": "packages/contracts/openapi/breaking-decisions.json",
       "formatVersion": 1,
-      "sha256": "73af8fae23eb8954f59a1190104b34674302c88a7117856fc6105976422622d5",
+      "sha256": "242f0ddc0347e4aaa8e850978320713fc2b6852ad8e2cb5193660c84ae6d04eb",
       "byteLength": 445,
       "decisionCount": 0
     }
