@@ -1,7 +1,223 @@
-import { assertNoBreakingChanges, collectBreakingChanges } from '../../packages/contracts/openapi/breaking-gate.js';
+import { assertNoBreakingChanges, collectBreakingChanges, runBreakingGate } from '../../packages/contracts/openapi/breaking-gate.js';
 import { normalizeDocument } from '../../packages/contracts/openapi/breaking-inventory.js';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+import { expect, it, vi } from 'vitest';
 
 describe('OpenAPI compatibility gate', () => {
+  it('short-circuits identical local-only bytes without invoking the semantic comparator', async () => {
+    const source = Buffer.from(`openapi: 3.1.0
+info: {title: identity gate, version: 1.0.0}
+paths: {}
+components:
+  schemas:
+    Node:
+      type: object
+      properties:
+        child:
+          $ref: '#/components/schemas/Node'
+`);
+    const comparator = vi.fn(assertNoBreakingChanges);
+    const stdout: string[] = [];
+    const evidence = await runBreakingGate(
+      new URL('file:///tmp/joyho-gate-baseline.yaml'),
+      new URL('file:///tmp/joyho-gate-candidate.yaml'),
+      {
+        readBinary: vi.fn(async (path) => path.href.includes('baseline') ? source : source),
+        semanticComparator: comparator,
+        writeStdout: (text) => stdout.push(text),
+      },
+    );
+
+    expect(comparator).toHaveBeenCalledTimes(0);
+    expect(evidence).toMatchObject({ mode: 'content-identity', comparatorExecuted: false, bytesEqual: true });
+    expect(evidence.referenceClosure.result).toBe('local-only');
+    expect(stdout).toEqual(['OpenAPI breaking gate passed: baseline and current artifacts are backward compatible.\n']);
+  });
+
+  it('routes byte-different semantic-equal input through the real comparator', async () => {
+    const baseline = Buffer.from(`openapi: 3.1.0
+info: {title: semantic gate, version: 1.0.0}
+paths: {}
+`);
+    const candidate = Buffer.from(`${baseline.toString('utf8')}# comment changes bytes only
+`);
+    const comparator = vi.fn(assertNoBreakingChanges);
+    const evidence = await runBreakingGate(
+      new URL('file:///tmp/joyho-gate-baseline.yaml'),
+      new URL('file:///tmp/joyho-gate-candidate.yaml'),
+      {
+        readBinary: async (path) => path.href.includes('baseline') ? baseline : candidate,
+        semanticComparator: comparator,
+        writeStdout: () => undefined,
+      },
+    );
+
+    expect(comparator).toHaveBeenCalledTimes(1);
+    expect(evidence).toMatchObject({ mode: 'semantic-comparator', comparatorExecuted: true, bytesEqual: false });
+    expect(evidence.referenceClosure.result).toBe('not-scanned-bytes-differ');
+  });
+
+  it('does not write gate success output when a one-byte semantic change is breaking', async () => {
+    const baseline = Buffer.from(`openapi: 3.1.0
+info: {title: breaking gate, version: 1.0.0}
+paths:
+  /probe:
+    get:
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {type: number, minimum: 1}
+`);
+    const candidate = Buffer.from(baseline.toString('utf8').replace('minimum: 1', 'minimum: 2'));
+    const comparator = vi.fn(assertNoBreakingChanges);
+    const stdout: string[] = [];
+    await expect(runBreakingGate(
+      new URL('file:///tmp/joyho-gate-baseline.yaml'),
+      new URL('file:///tmp/joyho-gate-candidate.yaml'),
+      {
+        readBinary: async (path) => path.href.includes('baseline') ? baseline : candidate,
+        semanticComparator: comparator,
+        writeStdout: (text) => stdout.push(text),
+      },
+    )).rejects.toThrow();
+
+    expect(comparator).toHaveBeenCalledTimes(1);
+    expect(stdout).toEqual([]);
+  });
+
+  it('fails closed before stdout when identity parsing fails', async () => {
+    const invalid = Buffer.from('openapi: [');
+    const comparator = vi.fn(assertNoBreakingChanges);
+    const stdout: string[] = [];
+    await expect(runBreakingGate(
+      new URL('file:///tmp/joyho-gate-baseline.yaml'),
+      new URL('file:///tmp/joyho-gate-candidate.yaml'),
+      {
+        readBinary: async () => invalid,
+        semanticComparator: comparator,
+        writeStdout: (text) => stdout.push(text),
+      },
+    )).rejects.toMatchObject({ phase: 'parse' });
+    expect(comparator).toHaveBeenCalledTimes(0);
+    expect(stdout).toEqual([]);
+  });
+
+  it('uses the semantic pipeline for external and non-string references', async () => {
+    const fixtures = [
+      `openapi: 3.1.0\ninfo: {title: external-dynamic, version: 1.0.0}\npaths: {}\ncomponents:\n  schemas:\n    Probe:\n      type: object\n      x-reference-holder:\n        $dynamicRef: https://example.invalid/schema.yaml\n`,
+      `openapi: 3.1.0\ninfo: {title: non-string, version: 1.0.0}\npaths: {}\ncomponents:\n  schemas:\n    Probe:\n      type: object\n      x-reference-holder:\n        $ref: 42\n`,
+    ];
+    for (const fixture of fixtures) {
+      const bytes = Buffer.from(fixture);
+      const comparator = vi.fn(assertNoBreakingChanges);
+      const evidence = await runBreakingGate(
+        new URL('file:///tmp/joyho-gate-baseline.yaml'),
+        new URL('file:///tmp/joyho-gate-candidate.yaml'),
+        {
+          readBinary: async () => bytes,
+          semanticComparator: comparator,
+          writeStdout: () => undefined,
+        },
+      );
+      expect(comparator).toHaveBeenCalledTimes(1);
+      expect(evidence.mode).toBe('semantic-comparator');
+    }
+  });
+
+  it('uses the semantic pipeline for a resolvable absolute external $ref', async () => {
+    const directory = await mkdtemp(join('/tmp', 'joyho-content-identity-'));
+    const externalFile = join(directory, 'external.yaml');
+    await writeFile(externalFile, 'type: object\nproperties:\n  id: {type: string}\n');
+    const externalReference = pathToFileURL(externalFile).href;
+    const bytes = Buffer.from(`openapi: 3.1.0
+info: {title: external ref, version: 1.0.0}
+paths: {}
+components:
+  schemas:
+    Probe:
+      $ref: '${externalReference}'
+`);
+    try {
+      const comparator = vi.fn(assertNoBreakingChanges);
+      const evidence = await runBreakingGate(
+        new URL('file:///tmp/joyho-gate-baseline.yaml'),
+        new URL('file:///tmp/joyho-gate-candidate.yaml'),
+        {
+          readBinary: async () => bytes,
+          semanticComparator: comparator,
+          writeStdout: () => undefined,
+        },
+      );
+      expect(comparator).toHaveBeenCalledTimes(1);
+      expect(evidence.mode).toBe('semantic-comparator');
+      expect(evidence.referenceClosure.violationKinds).toEqual(['external-reference']);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves real CLI stdout, stderr, and exit mappings in child processes', async () => {
+    const directory = await mkdtemp(join('/tmp', 'joyho-content-identity-'));
+    const identical = `openapi: 3.1.0
+info: {title: child success, version: 1.0.0}
+paths: {}
+`;
+    const oneByteBaseline = `openapi: 3.1.0
+info: {title: child breaking, version: 1.0.0}
+paths:
+  /probe:
+    get:
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {type: number, minimum: 1}
+`;
+    try {
+      const identicalBaseline = join(directory, 'identical-baseline.yaml');
+      const identicalCandidate = join(directory, 'identical-candidate.yaml');
+      const invalidBaseline = join(directory, 'invalid-baseline.yaml');
+      const invalidCandidate = join(directory, 'invalid-candidate.yaml');
+      const breakingBaseline = join(directory, 'breaking-baseline.yaml');
+      const breakingCandidate = join(directory, 'breaking-candidate.yaml');
+      await writeFile(identicalBaseline, identical);
+      await writeFile(identicalCandidate, identical);
+      await writeFile(invalidBaseline, 'openapi: [');
+      await writeFile(invalidCandidate, 'openapi: [');
+      await writeFile(breakingBaseline, oneByteBaseline);
+      await writeFile(breakingCandidate, oneByteBaseline.replace('minimum: 1', 'minimum: 2'));
+
+      const run = (baseline: string, candidate: string) => spawnSync(
+        process.execPath,
+        ['--import', 'tsx', 'packages/contracts/openapi/breaking-gate.ts', baseline, candidate],
+        { cwd: process.cwd(), encoding: 'utf8', timeout: 10000 },
+      );
+      const success = run(identicalBaseline, identicalCandidate);
+      expect(success.status).toBe(0);
+      expect(success.stdout).toBe('OpenAPI breaking gate passed: baseline and current artifacts are backward compatible.\n');
+      expect(success.stderr).toBe('');
+
+      const invalid = run(invalidBaseline, invalidCandidate);
+      expect(invalid.status).toBe(1);
+      expect(invalid.stdout).toBe('');
+      expect(invalid.stderr).toContain('ContentIdentityError');
+      expect(invalid.stderr).toContain('phase');
+
+      const breaking = run(breakingBaseline, breakingCandidate);
+      expect(breaking.status).toBe(1);
+      expect(breaking.stdout).toBe('');
+      expect(breaking.stderr).toContain('root.paths./probe.get.responses.200.content.application/json.schema.minimum');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('allows additive optional response fields', () => {
     expect(() => assertNoBreakingChanges(
       { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },

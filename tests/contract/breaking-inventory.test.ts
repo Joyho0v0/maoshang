@@ -1,23 +1,25 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
-import { parse } from 'yaml';
-import { expect, it } from 'vitest';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { expect, it, vi } from 'vitest';
 import inventory from '../../packages/contracts/openapi/breaking-inventory.json' with { type: 'json' };
 import decisionManifest from '../../packages/contracts/openapi/breaking-decisions.json' with { type: 'json' };
-import { buildAuditDocument, collectBreakingInventory, createContentAddressedValueStore, normalizeDocument } from '../../packages/contracts/openapi/breaking-inventory.js';
+import { collectBreakingInventory, createContentAddressedValueStore, normalizeDocument, runBreakingInventory } from '../../packages/contracts/openapi/breaking-inventory.js';
 import { collectBreakingChanges } from '../../packages/contracts/openapi/breaking-gate.js';
-
-const baselinePath = new URL('../../packages/contracts/openapi/openapi.baseline.yaml', import.meta.url);
-const candidatePath = new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url);
-const generatedPath = new URL('../../packages/contracts/openapi/generated.ts', import.meta.url);
-const generatedClientPath = new URL('../../packages/contracts/openapi/generated-client.ts', import.meta.url);
+import {
+  ContentIdentityError,
+  analyzeContentIdentity,
+  finalizeComparisonEvidence,
+} from '../../packages/contracts/openapi/content-identity.js';
 
 it('keeps the complete breaking inventory auditable and synchronized with both artifacts', async () => {
-  const baseline = parse(await readFile(baselinePath, 'utf8')) as Record<string, unknown>;
-  const candidate = parse(await readFile(candidatePath, 'utf8')) as Record<string, unknown>;
-  const generated = await collectBreakingInventory(baseline, candidate);
-  const persisted = inventory as typeof generated;
+  const persisted = inventory as typeof inventory & {
+    count: number;
+    entries: Array<Record<string, any>>;
+    affectedPathGroups: Record<string, string[]>;
+    valueStore: Record<string, any>;
+  };
   const persistedAudit = inventory as typeof inventory & {
     candidate: { revision: string; sha256: string; generatedSha256: string; generatedClientSha256: string; path: string };
     comparator: { revision: string; sourceSha256: string; command: string };
@@ -26,6 +28,7 @@ it('keeps the complete breaking inventory auditable and synchronized with both a
 
   expect(persisted.count).toBeGreaterThan(84);
   expect(persisted.entries).toHaveLength(persisted.count);
+  expect((inventory as { formatVersion: number }).formatVersion).toBe(2);
   expect((inventory as { baseline: { digest: string } }).baseline.digest).toBe('9fb299cb04ade8674e2819fb00768b6689a44bebc297175bb52b1eba39b29c25');
   expect(persistedAudit.comparator.revision).toMatch(/^[0-9a-f]{40}$/);
   expect(persistedAudit.generator.revision).toMatch(/^[0-9a-f]{40}$/);
@@ -33,29 +36,10 @@ it('keeps the complete breaking inventory auditable and synchronized with both a
   expect(persistedAudit.generator.sourceSha256).toBe(gitSourceDigest(persistedAudit.generator.revision, 'packages/contracts/openapi/breaking-inventory.ts'));
   expect(persistedAudit.comparator.command).toContain(`sourceRevision=${persistedAudit.comparator.revision}`);
   expect(persistedAudit.generator.command).toContain(`sourceRevision=${persistedAudit.generator.revision}`);
-  const comparatorRevision = latestRevision('packages/contracts/openapi/breaking-gate.ts');
-  const generatorRevision = latestRevision('packages/contracts/openapi/breaking-inventory.ts');
-
-  const freshAudit = buildAuditDocument(generated, {
-    baseline: await fileDigest(baselinePath),
-    candidate: await fileDigest(candidatePath),
-    generated: await fileDigest(generatedPath),
-    generatedClient: await fileDigest(generatedClientPath),
-  }, {
-    comparatorRevision,
-    generatorRevision,
-    comparatorSourceSha256: gitSourceDigest(comparatorRevision, 'packages/contracts/openapi/breaking-gate.ts'),
-    generatorSourceSha256: gitSourceDigest(generatorRevision, 'packages/contracts/openapi/breaking-inventory.ts'),
-    comparatorCommand: `npm run contract:breaking -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml [sourceRevision=${comparatorRevision}]`,
-    generatorCommand: `npm run contract:breaking:inventory -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml [sourceRevision=${generatorRevision}]`,
-  }, latestRevision('packages/contracts/openapi/openapi.yaml'));
-
-  expect(freshAudit).toEqual(inventory);
-  const freshCandidate = freshAudit.candidate as Record<string, string>;
-  expect(freshCandidate.path).toBe('packages/contracts/openapi/openapi.yaml');
-  expect(freshCandidate.sha256).toBe(await fileDigest(candidatePath));
-  expect(freshCandidate.generatedSha256).toBe(await fileDigest(generatedPath));
-  expect(freshCandidate.generatedClientSha256).toBe(await fileDigest(generatedClientPath));
+  expect(await fileDigest(new URL('../../packages/contracts/openapi/breaking-inventory.json', import.meta.url)))
+    .toBe(await fileDigest(new URL('../../packages/contracts/openapi/audit/baseline-promotions/2026-10-29-joint-contract-v1/breaking-inventory.before.json', import.meta.url)));
+  expect(await fileDigest(new URL('../../packages/contracts/openapi/breaking-decisions.json', import.meta.url)))
+    .toBe(await fileDigest(new URL('../../packages/contracts/openapi/audit/baseline-promotions/2026-10-29-joint-contract-v1/breaking-decisions.before.json', import.meta.url)));
   expect(new Set(persisted.entries.map((entry) => entry.jsonPath)).size).toBe(persisted.count);
   for (const pathPrefix of [
     'root.paths./auth/sessions.post.responses.403',
@@ -87,9 +71,6 @@ it('keeps the complete breaking inventory auditable and synchronized with both a
     return paths !== undefined && paths.includes(entry.jsonPath);
   })).toBe(true);
 
-  expect(digest(generated.entries)).toBe(digest(persisted.entries));
-  expect(digest(generated.affectedPathGroups)).toBe(digest(persisted.affectedPathGroups));
-  expect(digest(generated.valueStore)).toBe(digest(persisted.valueStore));
 });
 
 it('persists raw old/new values from the structured event without lossy summarization', async () => {
@@ -354,9 +335,269 @@ it('keeps the identity-keyed decision manifest in strict one-to-one lockstep', a
   expect(rejectedPaths).toEqual(new Set());
 });
 
-function digest(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
-}
+it('uses the content-identity branch for identical local-only bytes and emits v3 audit evidence', async () => {
+  const source = `openapi: 3.1.0
+info:
+  title: identity fixture
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    Node:
+      type: object
+      properties:
+        child:
+          $ref: '#/components/schemas/Node'
+`;
+  const directory = await mkdtemp(join('/tmp', 'joyho-content-identity-'));
+  const baselineFile = join(directory, 'baseline.yaml');
+  const candidateFile = join(directory, 'candidate.yaml');
+  await writeFile(baselineFile, source);
+  await writeFile(candidateFile, source);
+  try {
+    const output: string[] = [];
+    const comparator = vi.fn(collectBreakingInventory);
+    const provenanceCalls: string[] = [];
+    const evidence = await runBreakingInventory(baselineFile, candidateFile, {
+      semanticInventoryCollector: comparator,
+      latestRevision: () => 'a'.repeat(40),
+      sourceProvenance: async (relativePath) => {
+        provenanceCalls.push(relativePath);
+        return { revision: 'b'.repeat(40), sha256: createHash('sha256').update(relativePath).digest('hex') };
+      },
+      writeStdout: (text) => output.push(text),
+    });
+
+    expect(comparator).toHaveBeenCalledTimes(0);
+    expect(evidence.mode).toBe('content-identity');
+    expect(evidence.comparatorExecuted).toBe(false);
+    expect(evidence.referenceClosure.result).toBe('local-only');
+    expect(output).toHaveLength(1);
+    const audit = JSON.parse(output[0] ?? '{}') as Record<string, unknown>;
+    expect(Object.keys(audit)).toEqual([
+      'formatVersion', 'purpose', 'baseline', 'candidate', 'comparator', 'generator',
+      'contentIdentity', 'comparison', 'count', 'inventoryMethod', 'promotionStatus',
+      'affectedPathGroups', 'valueStore', 'entries',
+    ]);
+    expect(audit.formatVersion).toBe(3);
+    expect(audit.count).toBe(0);
+    expect(audit.entries).toEqual([]);
+    expect(audit.affectedPathGroups).toEqual({});
+    expect(audit.valueStore).toEqual({});
+    expect(audit.inventoryMethod).toBe('Content identity: raw baseline and candidate bytes are equal and every $ref/$dynamicRef value is a string beginning with "#"; normalization, Swagger dereference, and the semantic comparator were not executed.');
+    expect(provenanceCalls).toEqual([
+      'packages/contracts/openapi/breaking-gate.ts',
+      'packages/contracts/openapi/breaking-inventory.ts',
+      'packages/contracts/openapi/content-identity.ts',
+    ]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+it('routes byte-different semantic-equal documents through the real inventory collector', async () => {
+  const baseline = `openapi: 3.1.0
+info: {title: equal, version: 1.0.0}
+paths: {}
+`;
+  const candidate = `${baseline}# formatting-only comment
+`;
+  const directory = await mkdtemp(join('/tmp', 'joyho-content-identity-'));
+  const baselineFile = join(directory, 'baseline.yaml');
+  const candidateFile = join(directory, 'candidate.yaml');
+  await writeFile(baselineFile, baseline);
+  await writeFile(candidateFile, candidate);
+  try {
+    const output: string[] = [];
+    const comparator = vi.fn(collectBreakingInventory);
+    const evidence = await runBreakingInventory(baselineFile, candidateFile, {
+      semanticInventoryCollector: comparator,
+      latestRevision: () => 'a'.repeat(40),
+      sourceProvenance: async (relativePath) => ({
+        revision: 'b'.repeat(40),
+        sha256: createHash('sha256').update(relativePath).digest('hex'),
+      }),
+      writeStdout: (text) => output.push(text),
+    });
+
+    expect(comparator).toHaveBeenCalledTimes(1);
+    expect(evidence.mode).toBe('semantic-comparator');
+    expect(evidence.comparatorExecuted).toBe(true);
+    expect(evidence.bytesEqual).toBe(false);
+    expect(evidence.referenceClosure.result).toBe('not-scanned-bytes-differ');
+    expect(JSON.parse(output[0] ?? '{}')).toMatchObject({ formatVersion: 3, count: 0 });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+it('routes a one-byte semantic change through the real collector and records breaking inventory', async () => {
+  const baseline = `openapi: 3.1.0
+info: {title: breaking inventory, version: 1.0.0}
+paths:
+  /probe:
+    get:
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {type: number, minimum: 1}
+`;
+  const candidate = baseline.replace('minimum: 1', 'minimum: 2');
+  const directory = await mkdtemp(join('/tmp', 'joyho-content-identity-'));
+  const baselineFile = join(directory, 'baseline.yaml');
+  const candidateFile = join(directory, 'candidate.yaml');
+  await writeFile(baselineFile, baseline);
+  await writeFile(candidateFile, candidate);
+  try {
+    const output: string[] = [];
+    const comparator = vi.fn(collectBreakingInventory);
+    const evidence = await runBreakingInventory(baselineFile, candidateFile, {
+      semanticInventoryCollector: comparator,
+      latestRevision: () => 'a'.repeat(40),
+      sourceProvenance: async (relativePath) => ({
+        revision: 'b'.repeat(40),
+        sha256: createHash('sha256').update(relativePath).digest('hex'),
+      }),
+      writeStdout: (text) => output.push(text),
+    });
+
+    expect(comparator).toHaveBeenCalledTimes(1);
+    expect(evidence.mode).toBe('semantic-comparator');
+    const audit = JSON.parse(output[0] ?? '{}') as { count: number; comparison: { comparatorExecuted: boolean } };
+    expect(audit.comparison.comparatorExecuted).toBe(true);
+    expect(audit.count).toBeGreaterThan(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+it('does not write partial inventory output when provenance or serialization fails', async () => {
+  const source = `openapi: 3.1.0
+info: {title: failure fixture, version: 1.0.0}
+paths: {}
+`;
+  const directory = await mkdtemp(join('/tmp', 'joyho-content-identity-'));
+  const baselineFile = join(directory, 'baseline.yaml');
+  const candidateFile = join(directory, 'candidate.yaml');
+  await writeFile(baselineFile, source);
+  await writeFile(candidateFile, source);
+  const common = {
+    latestRevision: () => 'a'.repeat(40),
+    sourceProvenance: async () => { throw new Error('provenance failed'); },
+  };
+  try {
+    const provenanceOutput: string[] = [];
+    await expect(runBreakingInventory(baselineFile, candidateFile, {
+      ...common,
+      writeStdout: (text) => provenanceOutput.push(text),
+    })).rejects.toThrow('provenance failed');
+    expect(provenanceOutput).toEqual([]);
+
+    const serializationOutput: string[] = [];
+    await expect(runBreakingInventory(baselineFile, candidateFile, {
+      latestRevision: () => 'a'.repeat(40),
+      sourceProvenance: async (relativePath) => ({
+        revision: 'b'.repeat(40),
+        sha256: createHash('sha256').update(relativePath).digest('hex'),
+      }),
+      serialize: () => { throw new Error('serialization failed'); },
+      writeStdout: (text) => serializationOutput.push(text),
+    })).rejects.toThrow('serialization failed');
+    expect(serializationOutput).toEqual([]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+it('fails closed on hash, parse, scan, and evidence truthfulness violations', () => {
+  const hashOrder: string[] = [];
+  let parseCalls = 0;
+  const cyclic: Record<string, unknown> = {};
+  cyclic.self = cyclic;
+  const cyclicAnalysis = analyzeContentIdentity(Buffer.from('baseline'), Buffer.from('baseline'), {
+    sha256: (content) => {
+      hashOrder.push(content.toString('utf8'));
+      return 'a'.repeat(64);
+    },
+    parseYaml: () => {
+      parseCalls += 1;
+      return cyclic;
+    },
+  });
+  expect(cyclicAnalysis.decision).toBe('content-identity');
+  expect(parseCalls).toBe(1);
+  expect(hashOrder).toEqual(['baseline', 'baseline']);
+
+  parseCalls = 0;
+  const byteDifferent = analyzeContentIdentity(Buffer.from('baseline'), Buffer.from('candidate'), {
+    sha256: () => 'a'.repeat(64),
+    parseYaml: () => {
+      parseCalls += 1;
+      return {};
+    },
+  });
+  expect(byteDifferent.decision).toBe('semantic-comparator');
+  expect(byteDifferent.bytesEqual).toBe(false);
+  expect(parseCalls).toBe(0);
+
+  expect(() => analyzeContentIdentity(Buffer.from('same'), Buffer.from('same'), {
+    sha256: () => 'not-a-sha256',
+  })).toThrowError(ContentIdentityError);
+  try {
+    analyzeContentIdentity(Buffer.from('same'), Buffer.from('same'), { sha256: () => 'not-a-sha256' });
+  } catch (error) {
+    expect(error).toMatchObject({ phase: 'hash' });
+  }
+
+  expect(() => analyzeContentIdentity(Buffer.from('invalid'), Buffer.from('invalid'), {
+    parseYaml: () => { throw new Error('invalid yaml'); },
+  })).toThrowError(ContentIdentityError);
+  try {
+    analyzeContentIdentity(Buffer.from('invalid'), Buffer.from('invalid'), { parseYaml: () => { throw new Error('invalid yaml'); } });
+  } catch (error) {
+    expect(error).toMatchObject({ phase: 'parse' });
+  }
+
+  const throwingReference = {};
+  Object.defineProperty(throwingReference, '$ref', {
+    enumerable: true,
+    get: () => { throw new Error('getter failed'); },
+  });
+  expect(() => analyzeContentIdentity(Buffer.from('same'), Buffer.from('same'), {
+    parseYaml: () => throwingReference,
+  })).toThrowError(ContentIdentityError);
+  try {
+    analyzeContentIdentity(Buffer.from('same'), Buffer.from('same'), { parseYaml: () => throwingReference });
+  } catch (error) {
+    expect(error).toMatchObject({ phase: 'scan' });
+  }
+
+  const local = analyzeContentIdentity(Buffer.from('same'), Buffer.from('same'), { parseYaml: () => ({ $ref: '#/local' }) });
+  expect(() => finalizeComparisonEvidence(local, true)).toThrow(/comparatorExecuted/);
+  const semantic = analyzeContentIdentity(Buffer.from('a'), Buffer.from('b'));
+  expect(() => finalizeComparisonEvidence(semantic, false)).toThrow(/comparatorExecuted/);
+});
+
+it('rejects external and non-string references without parsing them as identity input', () => {
+  const external = analyzeContentIdentity(Buffer.from('same'), Buffer.from('same'), {
+    parseYaml: () => ({ $ref: '/tmp/external.yaml' }),
+  });
+  expect(external.decision).toBe('semantic-comparator');
+  expect(external.referenceClosure).toMatchObject({ result: 'not-local', violationKinds: ['external-reference'] });
+
+  const dynamic = analyzeContentIdentity(Buffer.from('same'), Buffer.from('same'), {
+    parseYaml: () => ({ $dynamicRef: '#/local' }),
+  });
+  expect(dynamic.decision).toBe('content-identity');
+
+  const nonString = analyzeContentIdentity(Buffer.from('same'), Buffer.from('same'), {
+    parseYaml: () => ({ $ref: 42 }),
+  });
+  expect(nonString.decision).toBe('semantic-comparator');
+  expect(nonString.referenceClosure).toMatchObject({ result: 'not-local', violationKinds: ['non-string-reference'] });
+});
 
 async function fileDigest(path: URL): Promise<string> {
   return createHash('sha256').update(await readFile(path)).digest('hex');

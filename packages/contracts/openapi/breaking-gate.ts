@@ -4,6 +4,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve as resolvePath } from 'node:path';
 import SwaggerParser from '@apidevtools/swagger-parser';
 import { parse } from 'yaml';
+import {
+  analyzeContentIdentity,
+  finalizeComparisonEvidence,
+  type ContentIdentityOptions,
+  type ComparisonEvidence,
+} from './content-identity.js';
 
 type RecordValue = Record<string, unknown>;
 
@@ -1131,15 +1137,41 @@ function arrayOfScalars(value: unknown): Array<string | number | boolean | null>
 function isScalar(value: unknown): value is string | number | boolean | null { return value === null || ['string', 'number', 'boolean'].includes(typeof value); }
 function isRecord(value: unknown): value is RecordValue { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 
-export async function runBreakingGate(previousPath: URL, currentPath: URL): Promise<void> {
-  const previous = await normalize(await readContract(previousPath));
-  const current = await normalize(await readContract(currentPath));
-  assertNoBreakingChanges(previous, current);
-  process.stdout.write('OpenAPI breaking gate passed: baseline and current artifacts are backward compatible.\n');
+export interface BreakingGateRunOptions {
+  readonly readBinary?: (path: URL) => Promise<Buffer>;
+  readonly sha256?: (content: Buffer) => string;
+  readonly parseYaml?: (source: string) => unknown;
+  readonly semanticComparator?: typeof assertNoBreakingChanges;
+  readonly writeStdout?: (text: string) => void;
 }
 
-async function readContract(path: URL): Promise<RecordValue> {
-  return parse(await readFile(path, 'utf8')) as RecordValue;
+export async function runBreakingGate(
+  previousPath: URL,
+  currentPath: URL,
+  options: BreakingGateRunOptions = {},
+): Promise<ComparisonEvidence> {
+  const readBinary = options.readBinary ?? ((path: URL) => readFile(path));
+  const parseYaml = options.parseYaml ?? parse;
+  const semanticComparator = options.semanticComparator ?? assertNoBreakingChanges;
+  const previousBytes = await readBinary(previousPath);
+  const currentBytes = await readBinary(currentPath);
+  const identityOptions: ContentIdentityOptions = options.sha256 === undefined
+    ? { parseYaml }
+    : { parseYaml, sha256: options.sha256 };
+  const analysis = analyzeContentIdentity(previousBytes, currentBytes, identityOptions);
+
+  let comparison: ComparisonEvidence;
+  if (analysis.decision === 'content-identity') {
+    comparison = finalizeComparisonEvidence(analysis, false);
+  } else {
+    const previous = await normalize(parseYaml(previousBytes.toString('utf8')) as RecordValue);
+    const current = await normalize(parseYaml(currentBytes.toString('utf8')) as RecordValue);
+    semanticComparator(previous, current);
+    comparison = finalizeComparisonEvidence(analysis, true);
+  }
+
+  (options.writeStdout ?? ((text: string) => process.stdout.write(text)))('OpenAPI breaking gate passed: baseline and current artifacts are backward compatible.\n');
+  return comparison;
 }
 
 async function normalize(document: RecordValue): Promise<RecordValue> {

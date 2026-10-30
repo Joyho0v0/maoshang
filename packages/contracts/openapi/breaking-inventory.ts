@@ -5,6 +5,12 @@ import { fileURLToPath } from 'node:url';
 import SwaggerParser from '@apidevtools/swagger-parser';
 import { parse } from 'yaml';
 import { collectBreakingChanges, type BreakingChange } from './breaking-gate.js';
+import {
+  analyzeContentIdentity,
+  finalizeComparisonEvidence,
+  type ContentIdentityOptions,
+  type ComparisonEvidence,
+} from './content-identity.js';
 
 type RecordValue = Record<string, unknown>;
 
@@ -59,6 +65,10 @@ export interface AuditProvenance {
   readonly baselineRevision?: string;
   readonly comparatorRevision: string;
   readonly generatorRevision: string;
+  readonly contentIdentity: {
+    readonly revision: string;
+    readonly sourceSha256: string;
+  };
   readonly comparatorSourceSha256: string;
   readonly generatorSourceSha256: string;
   readonly comparatorCommand: string;
@@ -69,6 +79,20 @@ const APPROVERS = ['高级 Web 后端架构师', '高级 Web 前端架构师', '
 const BREAKING_COMMAND = 'npm run contract:breaking';
 const COMPARATOR_COMMAND = 'npm run contract:breaking -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml';
 const GENERATOR_COMMAND = 'npm run contract:breaking:inventory -- packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml';
+
+export interface BreakingInventoryRunOptions {
+  readonly readBinary?: (path: string | URL) => Promise<Buffer>;
+  readonly sha256?: (content: Buffer) => string;
+  readonly parseYaml?: (source: string) => unknown;
+  readonly semanticInventoryCollector?: typeof collectBreakingInventory;
+  readonly latestRevision?: (path: string) => string;
+  readonly sourceProvenance?: (
+    relativePath: string,
+    currentPath: string,
+  ) => Promise<{ readonly revision: string; readonly sha256: string }>;
+  readonly serialize?: (value: unknown) => string;
+  readonly writeStdout?: (text: string) => void;
+}
 
 export async function collectBreakingInventory(previousDocument: RecordValue, nextDocument: RecordValue): Promise<BreakingInventory> {
   const previous = await normalizeDocument(previousDocument);
@@ -90,10 +114,12 @@ export function buildAuditDocument(inventory: BreakingInventory, digests: {
   readonly candidate: string;
   readonly generated: string;
   readonly generatedClient: string;
-}, provenance: AuditProvenance, candidateRevision: string): RecordValue {
+}, provenance: AuditProvenance, candidateRevision: string, comparison: ComparisonEvidence): RecordValue {
   const baselineRevision = provenance.baselineRevision ?? latestRevision('packages/contracts/openapi/openapi.baseline.yaml');
+  const identityInventoryMethod = 'Content identity: raw baseline and candidate bytes are equal and every $ref/$dynamicRef value is a string beginning with "#"; normalization, Swagger dereference, and the semantic comparator were not executed.';
+  const semanticInventoryMethod = 'All structured BreakingChange records from the same normalized comparator used by the fail-fast gate; entries retain exact paths and stable identities, raw old/new values via the content-addressed valueStore, and complete affected-path groups after template expansion and Swagger dereference. Semantic disposition is recorded separately by stable comparator identity in breaking-decisions.json.';
   return {
-    formatVersion: 2,
+    formatVersion: 3,
     purpose: 'Complete structured audit inventory for the candidate against the approved OpenAPI baseline.',
     baseline: { revision: baselineRevision, digest: digests.baseline, path: 'packages/contracts/openapi/openapi.baseline.yaml' },
     candidate: {
@@ -113,13 +139,83 @@ export function buildAuditDocument(inventory: BreakingInventory, digests: {
       sourceSha256: provenance.generatorSourceSha256,
       command: provenance.generatorCommand,
     },
+    contentIdentity: provenance.contentIdentity,
+    comparison,
     count: inventory.count,
-    inventoryMethod: 'All structured BreakingChange records from the same normalized comparator used by the fail-fast gate; entries retain exact paths and stable identities, raw old/new values via the content-addressed valueStore, and complete affected-path groups after template expansion and Swagger dereference. Semantic disposition is recorded separately by stable comparator identity in breaking-decisions.json.',
+    inventoryMethod: comparison.mode === 'content-identity' ? identityInventoryMethod : semanticInventoryMethod,
     promotionStatus: inventory.count === 0 ? 'current/approved-zero-diff' : 'review-required before baseline promotion',
     affectedPathGroups: inventory.affectedPathGroups,
     valueStore: inventory.valueStore,
     entries: inventory.entries,
   };
+}
+
+export async function runBreakingInventory(
+  previousPath: string,
+  currentPath: string,
+  options: BreakingInventoryRunOptions = {},
+): Promise<ComparisonEvidence> {
+  const readBinary = options.readBinary ?? ((path: string | URL) => readFile(path));
+  const parseYaml = options.parseYaml ?? parse;
+  const semanticInventoryCollector = options.semanticInventoryCollector ?? collectBreakingInventory;
+  const getLatestRevision = options.latestRevision ?? latestRevision;
+
+  const previousBytes = await readBinary(previousPath);
+  const currentBytes = await readBinary(currentPath);
+  const identityOptions: ContentIdentityOptions = options.sha256 === undefined
+    ? { parseYaml }
+    : { parseYaml, sha256: options.sha256 };
+  const analysis = analyzeContentIdentity(previousBytes, currentBytes, identityOptions);
+
+  let inventory: BreakingInventory;
+  let comparison: ComparisonEvidence;
+  if (analysis.decision === 'content-identity') {
+    inventory = { count: 0, entries: [], affectedPathGroups: {}, valueStore: {} };
+    comparison = finalizeComparisonEvidence(analysis, false);
+  } else {
+    const previous = parseYaml(previousBytes.toString('utf8')) as RecordValue;
+    const current = parseYaml(currentBytes.toString('utf8')) as RecordValue;
+    inventory = await semanticInventoryCollector(previous, current);
+    comparison = finalizeComparisonEvidence(analysis, true);
+  }
+
+  const comparatorSource = await (options.sourceProvenance ?? sourceProvenance)(
+    'packages/contracts/openapi/breaking-gate.ts',
+    fileURLToPath(new URL('./breaking-gate.ts', import.meta.url)),
+  );
+  const generatorSource = await (options.sourceProvenance ?? sourceProvenance)(
+    'packages/contracts/openapi/breaking-inventory.ts',
+    fileURLToPath(new URL('./breaking-inventory.ts', import.meta.url)),
+  );
+  const contentIdentitySource = await (options.sourceProvenance ?? sourceProvenance)(
+    'packages/contracts/openapi/content-identity.ts',
+    fileURLToPath(new URL('./content-identity.ts', import.meta.url)),
+  );
+  const baselineRevision = getLatestRevision(previousPath);
+  const candidateRevision = getLatestRevision(currentPath);
+  const digest = options.sha256 ?? defaultSha256;
+  const generated = await readBinary(fileURLToPath(new URL('./generated.ts', import.meta.url)));
+  const generatedClient = await readBinary(fileURLToPath(new URL('./generated-client.ts', import.meta.url)));
+  const audit = buildAuditDocument(inventory, {
+    baseline: analysis.baseline.sha256,
+    candidate: analysis.candidate.sha256,
+    generated: digest(generated),
+    generatedClient: digest(generatedClient),
+  }, {
+    baselineRevision,
+    comparatorRevision: comparatorSource.revision,
+    generatorRevision: generatorSource.revision,
+    contentIdentity: { revision: contentIdentitySource.revision, sourceSha256: contentIdentitySource.sha256 },
+    comparatorSourceSha256: comparatorSource.sha256,
+    generatorSourceSha256: generatorSource.sha256,
+    comparatorCommand: `${COMPARATOR_COMMAND} [sourceRevision=${comparatorSource.revision}]`,
+    generatorCommand: `${GENERATOR_COMMAND} [sourceRevision=${generatorSource.revision}]`,
+  }, candidateRevision, comparison);
+  const serialize = options.serialize ?? JSON.stringify;
+  const serialized = serialize(audit);
+  if (typeof serialized !== 'string') throw new Error('Inventory audit serializer must return a string.');
+  (options.writeStdout ?? ((text: string) => process.stdout.write(text)))(`${serialized}\n`);
+  return comparison;
 }
 function enrichEntry(index: number, change: BreakingChange, affectedPathGroupId: string, storeValue: (value: unknown) => ValueReference, candidateRevision: string): BreakingInventoryEntry {
   const status = 'review-required';
@@ -232,27 +328,11 @@ async function main(): Promise<void> {
   const previousPath = process.argv[2];
   const currentPath = process.argv[3];
   if (previousPath === undefined || currentPath === undefined) throw new Error('Usage: breaking-inventory <baseline> <candidate>');
-  const previous = parse(await readFile(previousPath, 'utf8')) as RecordValue;
-  const current = parse(await readFile(currentPath, 'utf8')) as RecordValue;
-  const inventory = await collectBreakingInventory(previous, current);
-  const digest = async (path: string) => createHash('sha256').update(await readFile(path)).digest('hex');
-  const comparatorSource = await sourceProvenance('packages/contracts/openapi/breaking-gate.ts', fileURLToPath(new URL('./breaking-gate.ts', import.meta.url)));
-  const generatorSource = await sourceProvenance('packages/contracts/openapi/breaking-inventory.ts', fileURLToPath(new URL('./breaking-inventory.ts', import.meta.url)));
-  const candidateRevision = latestRevision('packages/contracts/openapi/openapi.yaml');
-  process.stdout.write(`${JSON.stringify(buildAuditDocument(inventory, {
-    baseline: await digest(previousPath),
-    candidate: await digest(currentPath),
-    generated: await digest(fileURLToPath(new URL('./generated.ts', import.meta.url))),
-    generatedClient: await digest(fileURLToPath(new URL('./generated-client.ts', import.meta.url))),
-  }, {
-    baselineRevision: latestRevision(previousPath),
-    comparatorRevision: comparatorSource.revision,
-    generatorRevision: generatorSource.revision,
-    comparatorSourceSha256: comparatorSource.sha256,
-    generatorSourceSha256: generatorSource.sha256,
-    comparatorCommand: `${COMPARATOR_COMMAND} [sourceRevision=${comparatorSource.revision}]`,
-    generatorCommand: `${GENERATOR_COMMAND} [sourceRevision=${generatorSource.revision}]`,
-  }, candidateRevision))}\n`);
+  await runBreakingInventory(previousPath, currentPath);
+}
+
+function defaultSha256(content: Buffer): string {
+  return createHash('sha256').update(content).digest('hex');
 }
 
 function latestRevision(relativePath: string): string {
