@@ -13,6 +13,7 @@ const forbiddenMarkers = [
   '00000000-0000-4000-8000-000000000201',
   '00000000-0000-4000-8000-000000000301',
   'SO-NEW',
+  'fixture-next',
 ];
 
 async function listFiles(directory) {

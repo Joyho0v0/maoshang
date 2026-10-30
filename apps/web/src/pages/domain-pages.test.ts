@@ -4,7 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router';
 import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query';
 
 import { DOMAIN_API_KEY } from '../core/domain-api';
-import type { DomainApi } from '../core/domain-api';
+import type { Customer, DomainApi, ResourceResult } from '../core/domain-api';
 import { createFixtureDomainApi } from '../core/domain-fixtures';
 import CustomersPage from './CustomersPage.vue';
 import CustomerDetailPage from './CustomerDetailPage.vue';
@@ -13,15 +13,25 @@ import CatalogFormPage from './CatalogFormPage.vue';
 import OrdersPage from './OrdersPage.vue';
 import OrderFormPage from './OrderFormPage.vue';
 
+function withoutEtag<T>(result: ResourceResult<T>): Omit<ResourceResult<T>, 'etag'> {
+  const resultWithoutEtag = { ...result };
+  delete resultWithoutEtag.etag;
+  return resultWithoutEtag;
+}
+
 async function mountPage(component: Component, path: string, api: DomainApi = createFixtureDomainApi()) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: '/customers/new', component },
       { path: '/customers/:id', component },
+      { path: '/customers/:id/edit', component },
       { path: '/catalog/skus/new', component },
+      { path: '/catalog/skus/:id/edit', component },
+      { path: '/catalog/products/:id/edit', component },
       { path: '/orders/new', component },
       { path: '/orders/:id', component },
+      { path: '/orders/:id/edit', component },
       { path: '/:pathMatch(.*)*', component },
     ],
   });
@@ -144,5 +154,127 @@ describe('domain vertical-slice pages', () => {
     expect(wrapper.get('[role="alert"]').text()).toContain('稳定失败');
     expect(wrapper.find('[data-testid="recover-pending"]').exists()).toBe(false);
     expect(wrapper.vm.$router.currentRoute.value.fullPath).toBe('/customers/new');
+  });
+
+  it.each([
+    {
+      action: 'REJECT' as const,
+      customerId: '00000000-0000-4000-8000-000000000101',
+      trigger: '[data-testid="customer-reject"]',
+      field: '#customer-reject-reason',
+      value: '请补充收货主体。',
+    },
+    {
+      action: 'REASSIGN' as const,
+      customerId: '00000000-0000-4000-8000-000000000102',
+      trigger: '[data-testid="customer-reassign"]',
+      field: '#customer-reassign-assignee',
+      value: '00000000-0000-4000-8000-000000000003',
+    },
+  ])('sends a $action dialog command only once while the API is deferred', async ({ action, customerId, trigger, field, value }) => {
+    const api = Object.create(createFixtureDomainApi()) as DomainApi;
+    const deferred = new Promise<Awaited<ReturnType<DomainApi['commandCustomer']>>>(() => undefined);
+    const commandCustomer = vi.fn<DomainApi['commandCustomer']>(() => deferred);
+    api.commandCustomer = commandCustomer;
+
+    const wrapper = await mountPage(CustomerDetailPage, `/customers/${customerId}`, api);
+    await wrapper.get(trigger).trigger('click');
+    await wrapper.get(field).setValue(value);
+    const form = wrapper.get('#customer-command-form');
+    await form.trigger('submit');
+    await form.trigger('submit');
+
+    expect(commandCustomer).toHaveBeenCalledTimes(1);
+    expect(commandCustomer.mock.calls[0]?.[1]).toMatchObject({ action });
+  });
+
+  it('treats a direct opaque cursor as opaque and resets history when the filter changes', async () => {
+    const api = Object.create(createFixtureDomainApi()) as DomainApi;
+    const base = createFixtureDomainApi();
+    const firstPage = await base.listCustomers();
+    const listCustomers = vi.fn<DomainApi['listCustomers']>(async (options) => {
+      if (options?.cursor === 'opaque-page-2') return { ...firstPage, page: { ...firstPage.page, nextCursor: null, hasNext: false } };
+      return { ...firstPage, page: { ...firstPage.page, nextCursor: 'opaque-page-2', hasNext: true } };
+    });
+    api.listCustomers = listCustomers;
+
+    const wrapper = await mountPage(CustomersPage, '/customers?cursor=opaque-page-2', api);
+    expect(listCustomers).toHaveBeenCalledWith(expect.objectContaining({ cursor: 'opaque-page-2' }));
+    const previous = wrapper.get('nav[aria-label="客户列表分页"] button');
+    expect((previous.element as HTMLButtonElement).disabled).toBe(true);
+
+    await wrapper.get('#customer-status').setValue('DRAFT');
+    await flushPromises();
+    expect((wrapper.get('nav[aria-label="客户列表分页"] button').element as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it.each([
+    { label: 'customer', component: CustomerFormPage, path: '/customers/00000000-0000-4000-8000-000000000101/edit' },
+    { label: 'product', component: CatalogFormPage, path: '/catalog/products/00000000-0000-4000-8000-000000000201/edit' },
+    { label: 'sku', component: CatalogFormPage, path: '/catalog/skus/00000000-0000-4000-8000-000000000301/edit' },
+    { label: 'order', component: OrderFormPage, path: '/orders/00000000-0000-4000-8000-000000000401/edit' },
+  ])('disables the $label edit save when the resource has no ETag', async ({ label, component, path }) => {
+    const api = Object.create(createFixtureDomainApi()) as DomainApi;
+    const fixture = createFixtureDomainApi();
+    let updateCalled = false;
+    if (label === 'customer') {
+      const current = await fixture.getCustomer('00000000-0000-4000-8000-000000000101');
+      api.getCustomer = async () => withoutEtag(current);
+      api.updateCustomer = async () => { updateCalled = true; return current; };
+    } else if (label === 'product') {
+      const current = await fixture.getProduct('00000000-0000-4000-8000-000000000201');
+      api.getProduct = async () => withoutEtag(current);
+      api.updateProduct = async () => { updateCalled = true; return current; };
+    } else if (label === 'sku') {
+      const current = await fixture.getSku('00000000-0000-4000-8000-000000000301');
+      api.getSku = async () => withoutEtag(current);
+      api.updateSku = async () => { updateCalled = true; return current; };
+    } else {
+      const current = await fixture.getOrder('00000000-0000-4000-8000-000000000401');
+      api.getOrder = async () => withoutEtag(current);
+      api.updateOrder = async () => { updateCalled = true; return current; };
+    }
+
+    const wrapper = await mountPage(component, path, api);
+    const save = wrapper.get('button[type="submit"]');
+    expect((save.element as HTMLButtonElement).disabled).toBe(true);
+    expect(wrapper.text()).toContain('服务端未返回 ETag');
+    await wrapper.get('form').trigger('submit');
+    expect(updateCalled).toBe(false);
+  });
+
+  it('shows conflict Problem metadata instead of relabeling the stale query ETag as current', async () => {
+    const api = Object.create(createFixtureDomainApi()) as DomainApi;
+    const fixture = createFixtureDomainApi();
+    const current = await fixture.getCustomer('00000000-0000-4000-8000-000000000101');
+    const stale: ResourceResult<Customer> = { ...current, etag: 'W/"stale"' };
+    const updateCustomer = vi.fn<DomainApi['updateCustomer']>(async () => {
+      throw {
+        problem: {
+          type: 'urn:autoflow:problem:version-conflict',
+          title: '内容已被其他人更新，请刷新后重做。',
+          status: 409,
+          code: 'VERSION_CONFLICT',
+          meta: { currentVersion: 9, currentEtag: 'W/"new"' },
+        },
+      };
+    });
+    api.getCustomer = async () => stale;
+    api.updateCustomer = updateCustomer;
+
+    const wrapper = await mountPage(CustomerFormPage, '/customers/00000000-0000-4000-8000-000000000101/edit', api);
+    await wrapper.get('#customer-name').setValue('冲突后的名称');
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+
+    const dialog = wrapper.get('[role="dialog"]');
+    expect(dialog.text()).toContain('当前版本：9');
+    expect(dialog.text()).toContain('当前 ETag：W/"new"');
+    expect(dialog.text()).not.toContain('W/"stale"');
+    expect(updateCustomer).toHaveBeenCalledWith(
+      '00000000-0000-4000-8000-000000000101',
+      expect.anything(),
+      'W/"stale"',
+    );
   });
 });

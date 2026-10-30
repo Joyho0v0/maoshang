@@ -12,6 +12,7 @@ import {
   pageStateMessage,
   problemRequestId,
   queryFromRoute,
+  rememberCursor,
   routeStatus,
   useDomainApi,
 } from './domain-page-helpers';
@@ -46,6 +47,7 @@ const columns = [
 
 function updateStatus(event: globalThis.Event): void {
   const value = (event.target as globalThis.HTMLSelectElement).value;
+  cursorHistory.value = [];
   void router.replace({ path: '/customers', query: queryFromRoute(value || undefined, sort.value, undefined) });
 }
 
@@ -58,7 +60,7 @@ function updateSort(event: globalThis.Event): void {
 function nextPage(): void {
   const nextCursor = customersQuery.data.value?.page.nextCursor;
   if (nextCursor) {
-    cursorHistory.value.push(cursor.value);
+    rememberCursor(cursorHistory.value, cursor.value);
     void router.replace({ path: '/customers', query: queryFromRoute(status.value, sort.value, nextCursor) });
   }
 }
@@ -195,7 +197,7 @@ function retry(): void {
       <button
         class="button button--quiet"
         type="button"
-        :disabled="cursor === undefined || (cursorHistory.length === 0 && cursor !== 'fixture-next')"
+        :disabled="cursor === undefined || cursorHistory.length === 0"
         @click="previousPage"
       >
         上一页

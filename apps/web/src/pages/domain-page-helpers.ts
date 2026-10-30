@@ -45,6 +45,20 @@ export function problemRequestId(error: unknown): string {
   return toDomainApiError(error).problem.requestId ?? '';
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function problemCurrentVersion(error: unknown): number | undefined {
+  const meta = toDomainApiError(error).problem.meta;
+  return isRecord(meta) && typeof meta.currentVersion === 'number' ? meta.currentVersion : undefined;
+}
+
+export function problemCurrentEtag(error: unknown): string | undefined {
+  const meta = toDomainApiError(error).problem.meta;
+  return isRecord(meta) && typeof meta.currentEtag === 'string' ? meta.currentEtag : undefined;
+}
+
 export function pendingRecoveryFeedback(error: unknown): { stable: boolean; message: string } {
   const problem = toDomainApiError(error).problem;
   const remainsUnknown = problem.retryable === true || problem.status === 408 || problem.status === 502 || problem.status === 503;
@@ -71,6 +85,13 @@ export function queryFromRoute(status: string | undefined, sort: string | undefi
     ...(status ? { filter: { status } } : {}),
   });
   return Object.fromEntries(params.entries());
+}
+
+export const MAX_CURSOR_HISTORY = 8;
+
+export function rememberCursor(history: Array<string | undefined>, cursor: string | undefined): void {
+  history.push(cursor);
+  if (history.length > MAX_CURSOR_HISTORY) history.splice(0, history.length - MAX_CURSOR_HISTORY);
 }
 
 export function isPendingMutation<T>(result: DomainMutationResult<T>): result is Extract<DomainMutationResult<T>, { kind: 'pending' }> {

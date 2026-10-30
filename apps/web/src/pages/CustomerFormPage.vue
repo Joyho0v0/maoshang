@@ -9,7 +9,7 @@ import { formErrorId } from '../ui/form-error';
 import ConflictDialog from '../ui/ConflictDialog.vue';
 import FormErrorSummary from '../ui/FormErrorSummary.vue';
 import PageState from '../ui/PageState.vue';
-import { listState, pageStateMessage, pendingRecoveryFeedback, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
+import { listState, pageStateMessage, pendingRecoveryFeedback, problemCurrentEtag, problemCurrentVersion, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
 
 interface FormError { readonly field: string; readonly message: string }
 
@@ -62,6 +62,7 @@ const saveMutation = useMutation({
   },
 });
 const isSaving = computed(() => saveMutation.isPending.value);
+const canSave = computed(() => !isSaving.value && (!isEdit.value || Boolean(customerQuery.data.value?.etag)));
 
 async function complete<T>(result: DomainMutationResult<T>): Promise<void> {
   let current = result;
@@ -87,6 +88,7 @@ async function complete<T>(result: DomainMutationResult<T>): Promise<void> {
 }
 
 function submit(): void {
+  if (!canSave.value) return;
   errors.value = [];
   if (name.value.trim().length === 0) errors.value.push({ field: 'customer-name', message: '请填写客户名称。' });
   if (!isEdit.value && ownerUserId.value.trim().length === 0) errors.value.push({ field: 'customer-owner', message: '请填写负责人。' });
@@ -162,11 +164,18 @@ function retry(): void { void customerQuery.refetch(); }
           <button
             class="button"
             type="submit"
-            :disabled="isSaving"
+            :disabled="!canSave"
           >
             保存客户
           </button>
         </div>
+        <p
+          v-if="isEdit && customerQuery.data.value && !customerQuery.data.value.etag"
+          class="inline-error"
+          role="alert"
+        >
+          服务端未返回 ETag，请刷新后再保存。
+        </p>
         <p
           v-if="feedback || pendingFeedback"
           class="inline-error"
@@ -188,8 +197,8 @@ function retry(): void { void customerQuery.refetch(); }
     </template>
     <ConflictDialog
       :open="conflictOpen"
-      :current-version="customerQuery.data.value?.data.version ?? 0"
-      :current-etag="customerQuery.data.value?.etag ?? ''"
+      :current-version="problemCurrentVersion(saveMutation.error.value)"
+      :current-etag="problemCurrentEtag(saveMutation.error.value)"
       :request-id="problemRequestId(saveMutation.error.value)"
       @close="conflictOpen = false"
       @refresh="conflictOpen = false; void customerQuery.refetch()"

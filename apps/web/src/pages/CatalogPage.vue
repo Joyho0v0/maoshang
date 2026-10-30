@@ -7,7 +7,7 @@ import DataTable from '../ui/DataTable.vue';
 import MoneyText from '../ui/MoneyText.vue';
 import PageState from '../ui/PageState.vue';
 import { asDecimalString } from '../core/formatters';
-import { canUsePageCapability, displayStatus, listState, pageStateMessage, problemRequestId, routeString, routeStatus, useDomainApi } from './domain-page-helpers';
+import { canUsePageCapability, displayStatus, listState, pageStateMessage, problemRequestId, rememberCursor, routeString, routeStatus, useDomainApi } from './domain-page-helpers';
 import type { Product, ResourcePage, Sku } from '../core/domain-api';
 
 const route = useRoute();
@@ -60,7 +60,7 @@ function updateSort(event: globalThis.Event): void {
 function nextPage(): void {
   const nextCursor = catalogQuery.data.value?.page.nextCursor;
   if (nextCursor) {
-    cursorHistory.value.push(cursor.value);
+    rememberCursor(cursorHistory.value, cursor.value);
     void router.replace({ path: '/catalog', query: { tab: view.value === 'skus' ? 'catalog-skus' : 'catalog-products', ...(status.value ? { 'filter[status]': status.value } : {}), ...(sort.value ? { sort: sort.value } : {}), cursor: nextCursor } });
   }
 }
@@ -215,7 +215,7 @@ function retry(): void {
       <button
         class="button button--quiet"
         type="button"
-        :disabled="cursor === undefined"
+        :disabled="cursor === undefined || cursorHistory.length === 0"
         @click="previousPage"
       >
         上一页

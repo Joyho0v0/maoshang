@@ -7,7 +7,7 @@ import DataTable from '../ui/DataTable.vue';
 import MoneyText from '../ui/MoneyText.vue';
 import PageState from '../ui/PageState.vue';
 import { asDecimalString } from '../core/formatters';
-import { canUsePageCapability, displayStatus, listState, pageStateMessage, problemRequestId, queryFromRoute, routeStatus, useDomainApi } from './domain-page-helpers';
+import { canUsePageCapability, displayStatus, listState, pageStateMessage, problemRequestId, queryFromRoute, rememberCursor, routeStatus, useDomainApi } from './domain-page-helpers';
 
 const route = useRoute();
 const router = useRouter();
@@ -39,6 +39,7 @@ function retry(): void {
 
 function updateStatus(event: globalThis.Event): void {
   const value = (event.target as globalThis.HTMLSelectElement).value;
+  cursorHistory.value = [];
   void router.replace({ path: '/orders', query: queryFromRoute(value || undefined, sort.value, undefined) });
 }
 
@@ -51,7 +52,7 @@ function updateSort(event: globalThis.Event): void {
 function nextPage(): void {
   const nextCursor = ordersQuery.data.value?.page.nextCursor;
   if (nextCursor) {
-    cursorHistory.value.push(cursor.value);
+    rememberCursor(cursorHistory.value, cursor.value);
     void router.replace({ path: '/orders', query: queryFromRoute(status.value, sort.value, nextCursor) });
   }
 }
@@ -182,7 +183,7 @@ function previousPage(): void {
       <button
         class="button button--quiet"
         type="button"
-        :disabled="cursor === undefined || (cursorHistory.length === 0 && cursor !== 'fixture-next')"
+        :disabled="cursor === undefined || cursorHistory.length === 0"
         @click="previousPage"
       >
         上一页

@@ -10,7 +10,7 @@ import ConflictDialog from '../ui/ConflictDialog.vue';
 import Dialog from '../ui/Dialog.vue';
 import PageState from '../ui/PageState.vue';
 import { formErrorId } from '../ui/form-error';
-import { canUsePageCapability, listState, pageStateMessage, pendingRecoveryFeedback, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
+import { canUsePageCapability, listState, pageStateMessage, pendingRecoveryFeedback, problemCurrentEtag, problemCurrentVersion, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
 
 const route = useRoute();
 const api = useDomainApi();
@@ -32,6 +32,7 @@ const dialogMode = ref<'reject' | 'reassign' | undefined>();
 const reason = ref('');
 const assigneeUserId = ref('');
 const dialogError = ref('');
+const commandSubmitLocked = ref(false);
 const commandMutation = useMutation({
   mutationFn: (input: CustomerCommandInput): Promise<DomainMutationResult<unknown>> => {
     if (!customer.value) throw new Error('Customer is not loaded.');
@@ -41,6 +42,7 @@ const commandMutation = useMutation({
   },
   onSuccess: (result) => complete(result),
   onError: (error) => {
+    commandSubmitLocked.value = false;
     commandError.value = isConflictError(error) ? '内容已变化，请刷新后重做。' : '操作没有完成，请检查服务端返回。';
     if (isConflictError(error)) conflictOpen.value = true;
   },
@@ -60,12 +62,16 @@ async function complete<T>(result: DomainMutationResult<T>): Promise<void> {
     }
     pendingResult.value = undefined;
     pendingFeedback.value = '';
+    commandSubmitLocked.value = false;
     dialogMode.value = undefined;
     await queryClient.invalidateQueries({ queryKey: ['customer', id.value] });
     await customerQuery.refetch();
   } catch (error) {
     const recovery = pendingRecoveryFeedback(error);
-    if (recovery.stable) pendingResult.value = undefined;
+    if (recovery.stable) {
+      pendingResult.value = undefined;
+      commandSubmitLocked.value = false;
+    }
     pendingFeedback.value = recovery.message;
   }
 }
@@ -73,8 +79,16 @@ async function complete<T>(result: DomainMutationResult<T>): Promise<void> {
 function hasTransition(action: string): boolean { return customer.value?.allowedTransitions?.includes(action) ?? false; }
 function hasEtag(): boolean { return Boolean(customerQuery.data.value?.etag); }
 
+const isCommandBlocked = computed(() => commandSubmitLocked.value || isCommandPending.value || pendingResult.value !== undefined);
+
+function startCommand(input: CustomerCommandInput): void {
+  if (isCommandBlocked.value) return;
+  commandSubmitLocked.value = true;
+  commandMutation.mutate(input);
+}
+
 function execute(action: CustomerCommandInput['action']): void {
-  if (!hasEtag() || !hasTransition(action)) return;
+  if (isCommandBlocked.value || !hasEtag() || !hasTransition(action)) return;
   if (action === 'REJECT') {
     dialogMode.value = 'reject';
     reason.value = '';
@@ -87,19 +101,20 @@ function execute(action: CustomerCommandInput['action']): void {
     dialogError.value = '';
     return;
   }
-  commandMutation.mutate({ action });
+  startCommand({ action });
 }
 
 function submitDialog(): void {
+  if (isCommandBlocked.value) return;
   if (dialogMode.value === 'reject') {
     if (!reason.value.trim()) { dialogError.value = '请填写驳回原因。'; return; }
-    commandMutation.mutate({ action: 'REJECT', reason: reason.value.trim() });
+    startCommand({ action: 'REJECT', reason: reason.value.trim() });
     return;
   }
   if (dialogMode.value === 'reassign') {
     if (!assigneeUserId.value.trim()) { dialogError.value = '请选择新的负责人。'; return; }
     if (assigneeUserId.value === customer.value?.ownerUserId) { dialogError.value = '交接负责人必须不同于当前负责人。'; return; }
-    commandMutation.mutate({ action: 'REASSIGN', assigneeUserId: assigneeUserId.value.trim() });
+    startCommand({ action: 'REASSIGN', assigneeUserId: assigneeUserId.value.trim() });
   }
 }
 
@@ -191,7 +206,7 @@ function retry(): void { void customerQuery.refetch(); }
                 class="button"
                 type="button"
                 data-testid="customer-submit-approval"
-                :disabled="slotProps.disabled || !hasTransition('SUBMIT_APPROVAL') || !hasEtag() || isCommandPending"
+                :disabled="slotProps.disabled || !hasTransition('SUBMIT_APPROVAL') || !hasEtag() || isCommandBlocked"
                 @click="execute('SUBMIT_APPROVAL')"
               >
                 提交审核
@@ -209,7 +224,7 @@ function retry(): void { void customerQuery.refetch(); }
                 class="button"
                 type="button"
                 data-testid="customer-approve"
-                :disabled="slotProps.disabled || !hasTransition('APPROVE') || !hasEtag() || isCommandPending"
+                :disabled="slotProps.disabled || !hasTransition('APPROVE') || !hasEtag() || isCommandBlocked"
                 @click="execute('APPROVE')"
               >
                 批准
@@ -227,7 +242,7 @@ function retry(): void { void customerQuery.refetch(); }
                 class="button button--quiet"
                 type="button"
                 data-testid="customer-reject"
-                :disabled="slotProps.disabled || !hasTransition('REJECT') || !hasEtag() || isCommandPending"
+                :disabled="slotProps.disabled || !hasTransition('REJECT') || !hasEtag() || isCommandBlocked"
                 @click="execute('REJECT')"
               >
                 驳回
@@ -245,7 +260,7 @@ function retry(): void { void customerQuery.refetch(); }
                 class="button button--quiet"
                 type="button"
                 data-testid="customer-reassign"
-                :disabled="slotProps.disabled || !hasTransition('REASSIGN') || !hasEtag() || isCommandPending"
+                :disabled="slotProps.disabled || !hasTransition('REASSIGN') || !hasEtag() || isCommandBlocked"
                 @click="execute('REASSIGN')"
               >
                 交接
@@ -281,7 +296,7 @@ function retry(): void { void customerQuery.refetch(); }
     <Dialog
       :open="dialogMode !== undefined"
       :title="dialogMode === 'reject' ? '驳回原因' : '选择交接负责人'"
-      :busy="isCommandPending"
+      :busy="isCommandBlocked"
       @close="dialogMode = undefined"
     >
       <form
@@ -326,6 +341,7 @@ function retry(): void { void customerQuery.refetch(); }
           class="button"
           type="submit"
           form="customer-command-form"
+          :disabled="isCommandBlocked"
         >
           提交
         </button>
@@ -333,8 +349,8 @@ function retry(): void { void customerQuery.refetch(); }
     </Dialog>
     <ConflictDialog
       :open="conflictOpen"
-      :current-version="customerQuery.data.value?.data.version ?? 0"
-      :current-etag="customerQuery.data.value?.etag ?? ''"
+      :current-version="problemCurrentVersion(commandMutation.error.value)"
+      :current-etag="problemCurrentEtag(commandMutation.error.value)"
       :request-id="problemRequestId(commandMutation.error.value)"
       @close="conflictOpen = false"
       @refresh="conflictOpen = false; void customerQuery.refetch()"

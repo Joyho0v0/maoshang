@@ -4,9 +4,9 @@ import Dialog from './Dialog.vue';
 interface Props {
   open: boolean;
   title?: string;
-  currentVersion?: number;
-  currentEtag?: string;
-  requestId?: string;
+  currentVersion?: number | undefined;
+  currentEtag?: string | undefined;
+  requestId?: string | undefined;
 }
 
 const props = withDefaults(defineProps<Props>(), {

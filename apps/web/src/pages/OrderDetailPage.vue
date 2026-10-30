@@ -11,7 +11,7 @@ import MoneyText from '../ui/MoneyText.vue';
 import PageState from '../ui/PageState.vue';
 import QuantityText from '../ui/QuantityText.vue';
 import { asDecimalString } from '../core/formatters';
-import { canUsePageCapability, listState, pageStateMessage, pendingRecoveryFeedback, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
+import { canUsePageCapability, listState, pageStateMessage, pendingRecoveryFeedback, problemCurrentEtag, problemCurrentVersion, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
 
 const route = useRoute();
 const api = useDomainApi();
@@ -250,8 +250,8 @@ function recoverPending(): void {
     </template>
     <ConflictDialog
       :open="conflictOpen"
-      :current-version="orderQuery.data.value?.data.version ?? 0"
-      :current-etag="orderQuery.data.value?.etag ?? ''"
+      :current-version="problemCurrentVersion(transitionMutation.error.value)"
+      :current-etag="problemCurrentEtag(transitionMutation.error.value)"
       :request-id="problemRequestId(transitionMutation.error.value)"
       @close="conflictOpen = false"
       @refresh="conflictOpen = false; void orderQuery.refetch()"
