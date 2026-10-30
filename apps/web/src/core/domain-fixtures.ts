@@ -16,7 +16,7 @@ import type {
 } from './domain-api';
 import { DomainApiError } from './domain-api';
 
-export type FixtureScenario = 'ready' | 'empty' | 'empty-group' | 'forbidden' | 'offline' | 'error' | 'conflict' | 'precondition';
+export type FixtureScenario = 'ready' | 'reference-pages' | 'empty' | 'empty-group' | 'forbidden' | 'offline' | 'error' | 'conflict' | 'precondition';
 
 export interface FixtureDomainApiOptions {
   readonly scenario?: FixtureScenario;
@@ -131,6 +131,31 @@ export function createFixtureDomainApi(options: FixtureDomainApiOptions = {}): D
     itemSnapshots: [{ skuId: SKU_ID, quantity: '120.000', unitPrice: '18.50', skuName: '不锈钢连接件 01', productName: '不锈钢连接件' }],
     history: [{ action: 'CREATED', at: now, status: 'DRAFT' }],
   }];
+
+  if (scenario === 'reference-pages') {
+    const customerTemplate = customers[0];
+    const productTemplate = products[0];
+    const skuTemplate = skus[0];
+    if (customerTemplate && productTemplate && skuTemplate) {
+      customers.push(...Array.from({ length: 20 }, (_, index) => ({
+        ...customerTemplate,
+        id: `00000000-0000-4000-8000-${String(600 + index).padStart(12, '0')}`,
+        name: `授权客户 ${index + 2}`,
+      })));
+      products.push(...Array.from({ length: 20 }, (_, index) => ({
+        ...productTemplate,
+        id: `00000000-0000-4000-8000-${String(700 + index).padStart(12, '0')}`,
+        name: `授权商品 ${index + 2}`,
+        productCode: `AUTH-${String(index + 2).padStart(2, '0')}`,
+      })));
+      skus.push(...Array.from({ length: 20 }, (_, index) => ({
+        ...skuTemplate,
+        id: `00000000-0000-4000-8000-${String(800 + index).padStart(12, '0')}`,
+        name: `授权 SKU ${index + 2}`,
+        skuCode: `AUTH-SKU-${String(index + 2).padStart(2, '0')}`,
+      })));
+    }
+  }
 
   const api: DomainApi = {
     get scopeNotice() {
@@ -300,9 +325,11 @@ export function createFixtureDomainApi(options: FixtureDomainApiOptions = {}): D
 }
 
 function page<T>(items: readonly T[], options: ListOptions | undefined): ResourcePage<T> {
-  const start = options?.cursor === 'fixture-next' ? 1 : 0;
-  const data = items.slice(start);
-  return { data, page: { nextCursor: start === 0 && data.length > 1 ? 'fixture-next' : null, hasNext: start === 0 && data.length > 1 } };
+  const pageSize = 20;
+  const start = options?.cursor === 'fixture-next' ? pageSize : 0;
+  const data = items.slice(start, start + pageSize);
+  const hasNext = start + data.length < items.length;
+  return { data, page: { nextCursor: hasNext ? 'fixture-next' : null, hasNext } };
 }
 
 function filterByStatus<T extends { status: string }>(items: readonly T[], options: ListOptions | undefined): readonly T[] {

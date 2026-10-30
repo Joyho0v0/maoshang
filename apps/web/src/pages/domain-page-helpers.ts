@@ -78,6 +78,17 @@ export function pageStateMessage(state: DomainPageState): { heading: string; mes
   }
 }
 
+export function referenceStateMessage(resource: string, state: DomainPageState): { heading: string; message: string } {
+  switch (state) {
+    case 'loading': return { heading: `正在加载授权${resource}`, message: `正在读取可选择的${resource}，完成前不能提交创建。` };
+    case 'empty': return { heading: `没有可选择的${resource}`, message: `当前授权范围没有可用${resource}，请确认范围后重试。` };
+    case 'forbidden': return { heading: `无权读取${resource}`, message: `服务端没有授予读取${resource}的权限，创建入口已禁用。` };
+    case 'offline': return { heading: `${resource}服务暂时不可用`, message: `无法读取授权${resource}，请重试；创建入口在恢复前保持禁用。` };
+    case 'error': return { heading: `${resource}读取失败`, message: `服务端没有完成授权${resource}读取，请重试后再创建。` };
+    default: return { heading: '', message: '' };
+  }
+}
+
 export function queryFromRoute(status: string | undefined, sort: string | undefined, cursor: string | undefined): Record<string, string> {
   const params = serializeUrlState({
     ...(sort ? { sort } : {}),

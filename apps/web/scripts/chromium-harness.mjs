@@ -31,6 +31,10 @@ const scenarios = [
   { path: '/catalog/products/new', requiredSelectors: ['main', 'h1', 'form', '#catalog-name'], interaction: 'form' },
   { path: '/catalog/skus/new', requiredSelectors: ['main', 'h1', 'form', '#catalog-product'], interaction: 'form' },
   { path: '/orders/new', requiredSelectors: ['main', 'h1', 'form', '#order-no'], interaction: 'form' },
+  { path: '/catalog/skus/new?fixture=reference-pages', requiredSelectors: ['main', 'h1', 'form', '#catalog-product'], interaction: 'catalog-reference-pagination' },
+  { path: '/orders/new?fixture=reference-pages', requiredSelectors: ['main', 'h1', 'form', '#order-customer', '#order-sku'], interaction: 'order-reference-pagination' },
+  { path: '/catalog/skus/new?fixture=offline', requiredSelectors: ['main', 'form', '#catalog-product', '[data-testid="catalog-product-reference-state"] .state-panel--offline'], interaction: 'reference-blocked' },
+  { path: '/orders/new?fixture=forbidden', requiredSelectors: ['main', 'form', '#order-customer', '#order-sku', '[data-testid="order-customers-reference-state"] .state-panel--forbidden', '[data-testid="order-skus-reference-state"] .state-panel--forbidden'], interaction: 'reference-blocked' },
   { path: '/customers/00000000-0000-4000-8000-000000000101?fixture=ready&exercise=reject', requiredSelectors: ['main', 'h1', '[data-testid="customer-reject"]'], interaction: 'customer-reject' },
   { path: '/loading', requiredSelectors: ['main', '[role="status"]', 'h1'] },
   { path: '/empty', requiredSelectors: ['main', '[role="status"]', 'h1'] },
@@ -117,6 +121,12 @@ try {
       inspection.interactions = await exerciseBusinessForm(socket, context);
     } else if (scenario.interaction === 'customer-reject') {
       inspection.interactions = await exerciseCustomerReject(socket, context);
+    } else if (scenario.interaction === 'catalog-reference-pagination') {
+      inspection.interactions = await exerciseCatalogReferencePagination(socket, context);
+    } else if (scenario.interaction === 'order-reference-pagination') {
+      inspection.interactions = await exerciseOrderReferencePagination(socket, context);
+    } else if (scenario.interaction === 'reference-blocked') {
+      inspection.interactions = await exerciseBlockedReferenceState(socket, context);
     }
     if (screenshotDirectory) {
       const screenshot = await socket.command('Page.captureScreenshot', { format: 'png' });
@@ -267,6 +277,77 @@ async function exerciseCustomerReject(cdp, context) {
       pass: field?.getAttribute('aria-invalid') === 'true'
         && field?.getAttribute('aria-describedby') === 'customer-reject-reason-error',
       name: 'customer reject reason validation',
+    };
+  })()` )];
+}
+
+async function exerciseCatalogReferencePagination(cdp, context) {
+  await waitForSelectors(cdp, ['[data-testid="catalog-products-load-more"]', '#catalog-product option:nth-child(21)'], context);
+  await evaluate(cdp, `document.querySelector('[data-testid="catalog-products-load-more"]')?.click()`);
+  await waitForSelectors(cdp, ['#catalog-product option:nth-child(22)'], context);
+  return [await evaluate(cdp, `(() => {
+    const select = document.querySelector('#catalog-product');
+    const submit = document.querySelector('form button[type="submit"]');
+    if (!(select instanceof HTMLSelectElement)) return { pass: false, name: 'catalog reference pagination and selection' };
+    const last = select.options[select.options.length - 1];
+    select.value = last?.value ?? '';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    return {
+      pass: select.options.length === 22
+        && select.value === last?.value
+        && submit instanceof HTMLButtonElement
+        && !submit.disabled,
+      name: 'catalog reference pagination and selection',
+    };
+  })()` )];
+}
+
+async function exerciseOrderReferencePagination(cdp, context) {
+  await waitForSelectors(cdp, [
+    '[data-testid="order-customers-load-more"]',
+    '[data-testid="order-skus-load-more"]',
+    '#order-customer option:nth-child(21)',
+    '#order-sku option:nth-child(21)',
+  ], context);
+  await evaluate(cdp, `document.querySelector('[data-testid="order-customers-load-more"]')?.click(); document.querySelector('[data-testid="order-skus-load-more"]')?.click()`);
+  await waitForSelectors(cdp, ['#order-customer option:nth-child(22)', '#order-sku option:nth-child(22)'], context);
+  return [await evaluate(cdp, `(() => {
+    const customer = document.querySelector('#order-customer');
+    const sku = document.querySelector('#order-sku');
+    const submit = document.querySelector('form button[type="submit"]');
+    if (!(customer instanceof HTMLSelectElement) || !(sku instanceof HTMLSelectElement)) return { pass: false, name: 'order reference pagination and selection' };
+    const customerLast = customer.options[customer.options.length - 1];
+    const skuLast = sku.options[sku.options.length - 1];
+    customer.value = customerLast?.value ?? '';
+    sku.value = skuLast?.value ?? '';
+    customer.dispatchEvent(new Event('change', { bubbles: true }));
+    sku.dispatchEvent(new Event('change', { bubbles: true }));
+    for (const [selector, value] of [['#order-no', 'SO-REFERENCE-21'], ['#order-quantity', '1'], ['#order-unit-price', '10.00']]) {
+      const field = document.querySelector(selector);
+      if (field instanceof HTMLInputElement) {
+        field.value = value;
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+    return {
+      pass: customer.options.length > 21
+        && sku.options.length > 21
+        && customer.value === customerLast?.value
+        && sku.value === skuLast?.value
+        && submit instanceof HTMLButtonElement
+        && !submit.disabled,
+      name: 'order reference pagination and selection',
+    };
+  })()` )];
+}
+
+async function exerciseBlockedReferenceState(cdp) {
+  return [await evaluate(cdp, `(() => {
+    const submit = document.querySelector('form button[type="submit"]');
+    const panels = document.querySelectorAll('[data-testid$="reference-state"] .state-panel');
+    return {
+      pass: submit instanceof HTMLButtonElement && submit.disabled && panels.length > 0,
+      name: 'reference dependency state blocks submit',
     };
   })()` )];
 }

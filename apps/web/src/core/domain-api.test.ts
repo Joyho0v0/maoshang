@@ -195,6 +195,18 @@ describe('Customers, Catalog and Orders contract seam', () => {
     await expect(api.commandCustomer(activeCustomerId, { action: 'REJECT', reason: '缺少最新版本' }, '')).rejects.toMatchObject({ status: 428 });
     await expect(createFixtureDomainApi({ actorUserId: '00000000-0000-4000-8000-000000000002' }).commandCustomer(activeCustomerId, { action: 'APPROVE' }, '"v4"')).rejects.toMatchObject({ status: 403 });
   });
+
+  it('provides 21 authorized references through two opaque fixture pages', async () => {
+    const api = createFixtureDomainApi({ scenario: 'reference-pages' });
+
+    const firstProducts = await api.listProducts();
+    const secondProducts = await api.listProducts({ cursor: firstProducts.page.nextCursor ?? undefined });
+
+    expect(firstProducts.data).toHaveLength(20);
+    expect(firstProducts.page.nextCursor).toBeTruthy();
+    expect(secondProducts.data).toHaveLength(1);
+    expect(secondProducts.page.nextCursor).toBeNull();
+  });
 });
 
 function createAuthenticatedAdapter(

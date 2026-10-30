@@ -37,7 +37,7 @@ async function start(): Promise<void> {
 
 function fixtureScenario(): FixtureScenario {
   const value = new URLSearchParams(globalThis.location.search).get('fixture');
-  return ['ready', 'empty', 'empty-group', 'forbidden', 'offline', 'error', 'conflict', 'precondition'].includes(value ?? '')
+  return ['ready', 'reference-pages', 'empty', 'empty-group', 'forbidden', 'offline', 'error', 'conflict', 'precondition'].includes(value ?? '')
     ? value as FixtureScenario
     : 'ready';
 }

@@ -3,14 +3,14 @@ import { computed, ref, watch } from 'vue';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 
-import type { Product, ProductCreateInput, ProductUpdateInput, DomainMutationResult, PendingMutation, ResourceResult, Sku, SkuCreateInput, SkuUpdateInput } from '../core/domain-api';
+import type { DomainPageState, DomainMutationResult, PendingMutation, Product, ProductCreateInput, ProductUpdateInput, ResourceResult, Sku, SkuCreateInput, SkuUpdateInput } from '../core/domain-api';
 import { isConflictError } from '../core/domain-api';
 import { asDecimalString } from '../core/formatters';
 import ConflictDialog from '../ui/ConflictDialog.vue';
 import FormErrorSummary from '../ui/FormErrorSummary.vue';
 import { formErrorId } from '../ui/form-error';
 import PageState from '../ui/PageState.vue';
-import { listState, pageStateMessage, pendingRecoveryFeedback, problemCurrentEtag, problemCurrentVersion, problemRequestId, routeString, useDomainApi } from './domain-page-helpers';
+import { listState, pageStateMessage, pendingRecoveryFeedback, problemCurrentEtag, problemCurrentVersion, problemRequestId, referenceStateMessage, routeString, useDomainApi } from './domain-page-helpers';
 
 interface FormError { readonly field: string; readonly message: string }
 
@@ -26,9 +26,12 @@ const itemQuery = useQuery<ResourceResult<Product> | ResourceResult<Sku>>({
   queryFn: () => isSku.value ? api.getSku(id.value ?? '') : api.getProduct(id.value ?? ''),
   enabled: computed(() => isEdit.value),
 });
+const productCursor = ref<string>();
+const productOptions = ref<Product[]>([]);
+const productNextCursor = ref<string>();
 const productsQuery = useQuery({
-  queryKey: ['catalog-form-products'],
-  queryFn: () => api.listProducts(),
+  queryKey: computed(() => ['catalog-form-products', productCursor.value]),
+  queryFn: () => api.listProducts({ cursor: productCursor.value }),
   enabled: computed(() => isSku.value && !isEdit.value),
 });
 const name = ref('');
@@ -42,6 +45,13 @@ const feedback = ref('');
 const pendingFeedback = ref('');
 const pendingResult = ref<PendingMutation<unknown>>();
 const conflictOpen = ref(false);
+watch(() => productsQuery.data.value, (page) => {
+  if (!page) return;
+  const existingIds = new Set(productOptions.value.map((product) => product.id));
+  const incoming = page.data.filter((product) => !existingIds.has(product.id));
+  productOptions.value = productCursor.value === undefined ? [...page.data] : [...productOptions.value, ...incoming];
+  productNextCursor.value = page.page.nextCursor ?? undefined;
+}, { immediate: true });
 watch(() => itemQuery.data.value?.data, (item) => {
   if (!item) return;
   name.value = item.name;
@@ -59,6 +69,13 @@ watch(() => itemQuery.data.value?.data, (item) => {
 }, { immediate: true });
 const state = computed(() => isEdit.value ? listState(itemQuery.isPending.value, itemQuery.data.value ? 1 : 0, itemQuery.error.value) : 'ready');
 const copy = computed(() => pageStateMessage(state.value));
+const productReferenceState = computed<DomainPageState>(() => {
+  if (!isSku.value || isEdit.value) return 'ready';
+  return listState(productsQuery.isPending.value, productOptions.value.length, productsQuery.error.value);
+});
+const productReferenceCopy = computed(() => referenceStateMessage('商品', productReferenceState.value));
+const productReferencesReady = computed(() => productReferenceState.value === 'ready');
+const isLoadingProducts = computed(() => productsQuery.isFetching.value);
 const saveMutation = useMutation({
   mutationFn: async (): Promise<DomainMutationResult<unknown>> => {
     if (isSku.value) {
@@ -87,7 +104,9 @@ const saveMutation = useMutation({
   },
 });
 const isSaving = computed(() => saveMutation.isPending.value);
-const canSave = computed(() => !isSaving.value && (!isEdit.value || Boolean(itemQuery.data.value?.etag)));
+const canSave = computed(() => !isSaving.value
+  && (!isEdit.value || Boolean(itemQuery.data.value?.etag))
+  && (isEdit.value || !isSku.value || productReferencesReady.value));
 
 async function complete<T>(result: DomainMutationResult<T>): Promise<void> {
   let current = result;
@@ -121,6 +140,15 @@ function submit(): void {
   if (!isEdit.value && isSku.value && !productId.value.trim()) errors.value.push({ field: 'catalog-product', message: '请选择真实商品。' });
   if (isSku.value && price.value && !/^(-?\d+)(\.\d+)?$/.test(price.value)) errors.value.push({ field: 'catalog-price', message: '价格必须是 DecimalString。' });
   if (errors.value.length === 0) saveMutation.mutate();
+}
+
+function retryProducts(): void {
+  void productsQuery.refetch();
+}
+
+function loadMoreProducts(): void {
+  if (!productNextCursor.value || isLoadingProducts.value) return;
+  productCursor.value = productNextCursor.value;
 }
 
 function recoverPending(): void {
@@ -182,12 +210,27 @@ function recoverPending(): void {
         >
         <template v-if="isSku">
           <label for="catalog-product">商品</label>
+          <div
+            v-if="!isEdit"
+            data-testid="catalog-product-reference-state"
+          >
+            <PageState
+              v-if="productReferenceState !== 'ready'"
+              :state="productReferenceState"
+              :heading="productReferenceCopy.heading"
+              :message="productReferenceCopy.message"
+              :request-id="problemRequestId(productsQuery.error.value)"
+              action-label="重新加载商品"
+              @action="retryProducts"
+            />
+          </div>
           <select
             v-if="!isEdit"
             id="catalog-product"
             v-model="productId"
             name="productId"
             autocomplete="off"
+            :disabled="productReferenceState !== 'ready' || isLoadingProducts"
             :aria-invalid="errors.some((error) => error.field === 'catalog-product')"
             :aria-describedby="errors.some((error) => error.field === 'catalog-product') ? formErrorId('catalog-product') : undefined"
           >
@@ -195,13 +238,23 @@ function recoverPending(): void {
               请选择已授权商品
             </option>
             <option
-              v-for="product in productsQuery.data.value?.data ?? []"
+              v-for="product in productOptions"
               :key="product.id"
               :value="product.id"
             >
               {{ product.name }}（{{ product.productCode }}）
             </option>
           </select>
+          <button
+            v-if="!isEdit && productReferenceState === 'ready' && productNextCursor"
+            class="button button--quiet"
+            type="button"
+            data-testid="catalog-products-load-more"
+            :disabled="isLoadingProducts"
+            @click="loadMoreProducts"
+          >
+            {{ isLoadingProducts ? '正在加载商品…' : '加载更多商品' }}
+          </button>
           <input
             v-else
             id="catalog-product"

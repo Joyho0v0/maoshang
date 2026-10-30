@@ -4,7 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router';
 import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query';
 
 import { DOMAIN_API_KEY } from '../core/domain-api';
-import type { Customer, DomainApi, ResourceResult } from '../core/domain-api';
+import type { Customer, DomainApi, Product, ResourcePage, ResourceResult, Sku } from '../core/domain-api';
 import { createFixtureDomainApi } from '../core/domain-fixtures';
 import CustomersPage from './CustomersPage.vue';
 import CustomerDetailPage from './CustomerDetailPage.vue';
@@ -17,6 +17,10 @@ function withoutEtag<T>(result: ResourceResult<T>): Omit<ResourceResult<T>, 'eta
   const resultWithoutEtag = { ...result };
   delete resultWithoutEtag.etag;
   return resultWithoutEtag;
+}
+
+function resourcePage<T>(data: readonly T[], nextCursor: string | null = null): ResourcePage<T> {
+  return { data, page: { nextCursor, hasNext: nextCursor !== null } };
 }
 
 async function mountPage(component: Component, path: string, api: DomainApi = createFixtureDomainApi()) {
@@ -276,5 +280,133 @@ describe('domain vertical-slice pages', () => {
       expect.anything(),
       'W/"stale"',
     );
+  });
+
+  it('loads the second page of authorized Product references without losing the first page', async () => {
+    const api = Object.create(createFixtureDomainApi()) as DomainApi;
+    const fixture = createFixtureDomainApi();
+    const template = await fixture.getProduct('00000000-0000-4000-8000-000000000201');
+    const products: Product[] = Array.from({ length: 21 }, (_, index) => ({
+      ...template.data,
+      id: `00000000-0000-4000-8000-${String(201 + index).padStart(12, '0')}`,
+      name: `授权商品 ${index + 1}`,
+      productCode: `AUTH-${String(index + 1).padStart(2, '0')}`,
+    }));
+    const listProducts = vi.fn<DomainApi['listProducts']>(async (options) => (
+      options?.cursor ? resourcePage(products.slice(20)) : resourcePage(products.slice(0, 20), 'opaque-products-next')
+    ));
+    api.listProducts = listProducts;
+
+    const wrapper = await mountPage(CatalogFormPage, '/catalog/skus/new', api);
+    expect(wrapper.findAll('#catalog-product option')).toHaveLength(21);
+    await wrapper.get('[data-testid="catalog-products-load-more"]').trigger('click');
+    await flushPromises();
+
+    expect(listProducts).toHaveBeenLastCalledWith({ cursor: 'opaque-products-next' });
+    expect(wrapper.findAll('#catalog-product option')).toHaveLength(22);
+    await wrapper.get('#catalog-product').setValue(products[20]?.id ?? '');
+    expect((wrapper.get('#catalog-product').element as HTMLSelectElement).value).toBe(products[20]?.id);
+  });
+
+  it('loads both paginated Customer and SKU references for order creation', async () => {
+    const api = Object.create(createFixtureDomainApi()) as DomainApi;
+    const fixture = createFixtureDomainApi();
+    const customerTemplate = await fixture.getCustomer('00000000-0000-4000-8000-000000000101');
+    const skuTemplate = await fixture.getSku('00000000-0000-4000-8000-000000000301');
+    const customers: Customer[] = Array.from({ length: 21 }, (_, index) => ({
+      ...customerTemplate.data,
+      id: `00000000-0000-4000-8000-${String(101 + index).padStart(12, '0')}`,
+      name: `授权客户 ${index + 1}`,
+    }));
+    const skus: Sku[] = Array.from({ length: 21 }, (_, index) => ({
+      ...skuTemplate.data,
+      id: `00000000-0000-4000-8000-${String(301 + index).padStart(12, '0')}`,
+      skuCode: `AUTH-SKU-${String(index + 1).padStart(2, '0')}`,
+      name: `授权 SKU ${index + 1}`,
+    }));
+    const listCustomers = vi.fn<DomainApi['listCustomers']>(async (options) => (
+      options?.cursor ? resourcePage(customers.slice(20)) : resourcePage(customers.slice(0, 20), 'opaque-customers-next')
+    ));
+    const listSkus = vi.fn<DomainApi['listSkus']>(async (options) => (
+      options?.cursor ? resourcePage(skus.slice(20)) : resourcePage(skus.slice(0, 20), 'opaque-skus-next')
+    ));
+    api.listCustomers = listCustomers;
+    api.listSkus = listSkus;
+
+    const wrapper = await mountPage(OrderFormPage, '/orders/new', api);
+    expect(wrapper.findAll('#order-customer option')).toHaveLength(21);
+    expect(wrapper.findAll('#order-sku option')).toHaveLength(21);
+    await wrapper.get('[data-testid="order-customers-load-more"]').trigger('click');
+    await wrapper.get('[data-testid="order-skus-load-more"]').trigger('click');
+    await flushPromises();
+
+    expect(listCustomers).toHaveBeenLastCalledWith({ cursor: 'opaque-customers-next' });
+    expect(listSkus).toHaveBeenLastCalledWith({ cursor: 'opaque-skus-next' });
+    expect(wrapper.findAll('#order-customer option')).toHaveLength(22);
+    expect(wrapper.findAll('#order-sku option')).toHaveLength(22);
+    await wrapper.get('#order-customer').setValue(customers[20]?.id ?? '');
+    await wrapper.get('#order-sku').setValue(skus[20]?.id ?? '');
+    expect((wrapper.get('#order-customer').element as HTMLSelectElement).value).toBe(customers[20]?.id);
+    expect((wrapper.get('#order-sku').element as HTMLSelectElement).value).toBe(skus[20]?.id);
+  });
+
+  it('shows loading for an unresolved SKU Product reference and blocks create', async () => {
+    const api = Object.create(createFixtureDomainApi()) as DomainApi;
+    let resolveProducts: (value: ResourcePage<Product>) => void = () => undefined;
+    api.listProducts = () => new Promise<ResourcePage<Product>>((resolve) => { resolveProducts = resolve; });
+
+    const wrapper = await mountPage(CatalogFormPage, '/catalog/skus/new', api);
+    expect(wrapper.find('[data-testid="catalog-product-reference-state"] .state-panel--loading').exists()).toBe(true);
+    expect((wrapper.get('button[type="submit"]').element as HTMLButtonElement).disabled).toBe(true);
+
+    resolveProducts(resourcePage([]));
+    await flushPromises();
+  });
+
+  it.each([
+    { scenario: 'empty-group' as const, stateClass: 'state-panel--empty' },
+    { scenario: 'forbidden' as const, stateClass: 'state-panel--forbidden' },
+    { scenario: 'offline' as const, stateClass: 'state-panel--offline' },
+    { scenario: 'error' as const, stateClass: 'state-panel--error' },
+  ])('blocks SKU create when Product references are $scenario', async ({ scenario, stateClass }) => {
+    const wrapper = await mountPage(CatalogFormPage, '/catalog/skus/new', createFixtureDomainApi({ scenario }));
+
+    expect(wrapper.find(`[data-testid="catalog-product-reference-state"] .${stateClass}`).exists()).toBe(true);
+    expect((wrapper.get('button[type="submit"]').element as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('retries a failed Product reference query and exposes the selection once ready', async () => {
+    const api = Object.create(createFixtureDomainApi()) as DomainApi;
+    const fixture = createFixtureDomainApi();
+    const product = await fixture.getProduct('00000000-0000-4000-8000-000000000201');
+    let attempts = 0;
+    api.listProducts = async () => {
+      attempts += 1;
+      if (attempts === 1) throw { problem: { type: 'about:blank', title: '目录服务不可用', status: 503, code: 'DEPENDENCY_UNAVAILABLE' } };
+      return resourcePage([product.data]);
+    };
+
+    const wrapper = await mountPage(CatalogFormPage, '/catalog/skus/new', api);
+    expect(wrapper.find('[data-testid="catalog-product-reference-state"] .state-panel--offline').exists()).toBe(true);
+    await wrapper.get('[data-testid="catalog-product-reference-state"] button').trigger('click');
+    await flushPromises();
+
+    expect(attempts).toBe(2);
+    expect(wrapper.find('[data-testid="catalog-product-reference-state"] .state-panel--offline').exists()).toBe(false);
+    expect(wrapper.findAll('#catalog-product option')).toHaveLength(2);
+    expect((wrapper.get('button[type="submit"]').element as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it.each(['customers', 'skus'] as const)('keeps Order create blocked when the %s reference query is forbidden', async (failedReference) => {
+    const api = Object.create(createFixtureDomainApi()) as DomainApi;
+    if (failedReference === 'customers') {
+      api.listCustomers = async () => { throw { problem: { type: 'about:blank', title: '客户范围受限', status: 403, code: 'PERMISSION_DENIED' } }; };
+    } else {
+      api.listSkus = async () => { throw { problem: { type: 'about:blank', title: 'SKU 范围受限', status: 403, code: 'PERMISSION_DENIED' } }; };
+    }
+
+    const wrapper = await mountPage(OrderFormPage, '/orders/new', api);
+    expect(wrapper.find(`[data-testid="order-${failedReference}-reference-state"] .state-panel--forbidden`).exists()).toBe(true);
+    expect((wrapper.get('button[type="submit"]').element as HTMLButtonElement).disabled).toBe(true);
   });
 });
