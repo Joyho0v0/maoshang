@@ -1,59 +1,62 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
+import {
+  createUiId,
+  focusFirst,
+  restoreFocus,
+  trapFocus,
+} from './focus-management';
+
 interface Props {
   open: boolean;
   title: string;
   closeLabel?: string;
+  description?: string;
+  busy?: boolean;
 }
 
-const props = withDefaults(defineProps<Props>(), { closeLabel: '关闭' });
+const props = withDefaults(defineProps<Props>(), {
+  closeLabel: '关闭',
+  description: '',
+  busy: false,
+});
 const emit = defineEmits<{ close: [] }>();
 type HtmlElement = InstanceType<typeof globalThis.HTMLElement>;
 const dialog = ref<HtmlElement>();
 let opener: HtmlElement | null = null;
+const titleId = createUiId('dialog-title');
+const descriptionId = createUiId('dialog-description');
 
 watch(() => props.open, (open) => {
   if (open) {
     opener = globalThis.document.activeElement instanceof globalThis.HTMLElement
       ? globalThis.document.activeElement
       : null;
-    void nextTick(() => focusFirst());
+    void nextTick(() => {
+      if (dialog.value) focusFirst(dialog.value);
+    });
   } else {
-    opener?.focus();
+    restoreFocus(opener);
     opener = null;
   }
 }, { immediate: true });
 
 onBeforeUnmount(() => {
-  if (props.open) opener?.focus();
+  if (props.open) restoreFocus(opener);
 });
 
-function focusFirst(): void {
-  const first = dialog.value?.querySelector<HtmlElement>(
-    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-  );
-  (first ?? dialog.value)?.focus();
+function requestClose(): void {
+  if (!props.busy) emit('close');
 }
 
 function onKeydown(event: globalThis.KeyboardEvent): void {
   if (event.key === 'Escape') {
     event.preventDefault();
-    emit('close');
+    requestClose();
     return;
   }
-  if (event.key !== 'Tab') return;
-  const focusable = [...(dialog.value?.querySelectorAll<HtmlElement>(
-    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-  ) ?? [])];
-  if (focusable.length === 0) return;
-  const current = globalThis.document.activeElement;
-  const index = focusable.indexOf(current as HtmlElement);
-  const next = event.shiftKey
-    ? focusable[index <= 0 ? focusable.length - 1 : index - 1]
-    : focusable[index === focusable.length - 1 ? 0 : index + 1];
-  event.preventDefault();
-  next?.focus();
+  if (dialog.value) trapFocus(dialog.value, event);
 }
 </script>
 
@@ -61,30 +64,40 @@ function onKeydown(event: globalThis.KeyboardEvent): void {
   <div
     v-if="open"
     class="dialog-backdrop"
-    @click.self="emit('close')"
+    @click.self="requestClose"
   >
     <section
       ref="dialog"
       class="dialog"
       role="dialog"
       aria-modal="true"
-      :aria-labelledby="`dialog-title-${title.replace(/[^a-z0-9]+/gi, '-')}`"
+      :aria-labelledby="titleId"
+      :aria-describedby="description ? descriptionId : undefined"
+      :aria-busy="busy ? 'true' : undefined"
       tabindex="-1"
       @keydown="onKeydown"
     >
       <header class="dialog__header">
-        <h2 :id="`dialog-title-${title.replace(/[^a-z0-9]+/gi, '-')}`">
+        <h2 :id="titleId">
           {{ title }}
         </h2>
         <button
           class="icon-button"
           type="button"
           :aria-label="closeLabel"
-          @click="emit('close')"
+          :disabled="busy"
+          @click="requestClose"
         >
           ×
         </button>
       </header>
+      <p
+        v-if="description"
+        :id="descriptionId"
+        class="dialog__description"
+      >
+        {{ description }}
+      </p>
       <div class="dialog__body">
         <slot />
       </div>

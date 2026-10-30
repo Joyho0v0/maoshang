@@ -24,15 +24,87 @@ describe('interactive primitives', () => {
     wrapper.unmount();
   });
 
-  it('provides dialog semantics and Escape handling for a drawer', async () => {
+  it('traps drawer focus, restores the opener, and handles Escape', async () => {
+    const opener = document.createElement('button');
+    document.body.append(opener);
+    opener.focus();
     const wrapper = mount(Drawer, {
       props: { open: true, title: '筛选' },
-      slots: { default: '<button>应用筛选</button>' },
+      slots: {
+        default: '<button data-testid="first">第一项</button><button data-testid="last">最后一项</button>',
+      },
+      attachTo: document.body,
     });
 
-    expect(wrapper.get('[role="dialog"]').attributes('aria-modal')).toBe('true');
-    await wrapper.get('[role="dialog"]').trigger('keydown.esc');
+    await wrapper.vm.$nextTick();
+    const drawer = wrapper.get('[role="dialog"]');
+    expect(drawer.attributes('aria-modal')).toBe('true');
+    expect(document.activeElement).toBe(wrapper.get('button[aria-label="关闭"]').element);
+
+    await drawer.trigger('keydown', { key: 'Tab' });
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="first"]').element);
+    await drawer.trigger('keydown', { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(wrapper.get('button[aria-label="关闭"]').element);
+
+    await drawer.trigger('keydown', { key: 'Escape' });
     expect(wrapper.emitted('close')).toHaveLength(1);
+    await wrapper.setProps({ open: false });
+    expect(document.activeElement).toBe(opener);
+    wrapper.unmount();
+  });
+
+  it('associates unique title and description ids and blocks close while busy', async () => {
+    const wrapper = mount(Dialog, {
+      props: { open: true, title: '同步', description: '请等待当前请求完成。', busy: true },
+    });
+
+    const dialog = wrapper.get('[role="dialog"]');
+    const titleId = dialog.attributes('aria-labelledby');
+    const descriptionId = dialog.attributes('aria-describedby');
+    expect(titleId).toBeTruthy();
+    expect(descriptionId).toBeTruthy();
+    expect(wrapper.get(`#${titleId}`).text()).toBe('同步');
+    expect(wrapper.get(`#${descriptionId}`).text()).toContain('请等待');
+    expect(dialog.attributes('aria-busy')).toBe('true');
+    await dialog.trigger('keydown', { key: 'Escape' });
+    await wrapper.get('button[aria-label="关闭"]').trigger('click');
+    expect(wrapper.emitted('close')).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('restores drawer focus on unmount and blocks busy close paths', async () => {
+    const opener = document.createElement('button');
+    document.body.append(opener);
+    opener.focus();
+    const wrapper = mount(Drawer, {
+      props: { open: true, title: '提交中', description: '请等待。', busy: true },
+      slots: { default: '<button>完成</button>' },
+      attachTo: document.body,
+    });
+
+    await wrapper.vm.$nextTick();
+    const drawer = wrapper.get('[role="dialog"]');
+    expect(drawer.attributes('aria-describedby')).toBeTruthy();
+    expect(drawer.attributes('aria-busy')).toBe('true');
+    await drawer.trigger('keydown', { key: 'Escape' });
+    await wrapper.get('button[aria-label="关闭"]').trigger('click');
+    await drawer.trigger('click', { self: true });
+    expect(wrapper.emitted('close')).toBeUndefined();
+
+    wrapper.unmount();
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
+
+  it('gives separate instances unique accessible ids', () => {
+    const first = mount(Dialog, { props: { open: true, title: '相同标题' }, attachTo: document.body });
+    const second = mount(Dialog, { props: { open: true, title: '相同标题' }, attachTo: document.body });
+
+    expect(first.get('[role="dialog"]').attributes('aria-labelledby')).not.toBe(
+      second.get('[role="dialog"]').attributes('aria-labelledby'),
+    );
+    first.unmount();
+    second.unmount();
   });
 
   it('announces toast messages without storing them', () => {

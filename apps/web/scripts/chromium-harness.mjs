@@ -1,0 +1,261 @@
+/* global Buffer, WebSocket, clearTimeout, console, fetch, process, setTimeout */
+
+import { spawn } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const baseUrl = process.argv[2] ?? 'http://127.0.0.1:5173';
+const screenshotDirectory = process.env.AUTOFLOW_HARNESS_SCREENSHOTS;
+const chromePath = process.env.CHROMIUM_PATH ?? '/usr/bin/google-chrome';
+const scenarios = [
+  { path: '/workspace', requiredSelectors: ['main', 'h1', '.state-panel'] },
+  { path: '/loading', requiredSelectors: ['main', '[role="status"]', 'h1'] },
+  { path: '/empty', requiredSelectors: ['main', '[role="status"]', 'h1'] },
+  { path: '/error', requiredSelectors: ['main', '[role="alert"]', 'button'] },
+  {
+    path: '/__ui-harness',
+    requiredSelectors: ['main', '[data-testid="open-dialog"]', '[data-testid="open-drawer"]', '[data-testid="submit-form"]'],
+  },
+];
+const viewports = [
+  { name: 'narrow', width: 320, zoom: 1 },
+  { name: 'mobile', width: 390, zoom: 1 },
+  { name: 'tablet', width: 720, zoom: 1 },
+  { name: 'zoom-200', width: 640, zoom: 2 },
+];
+
+const userDataDirectory = await mkdtemp(join(tmpdir(), 'autoflow-chromium-'));
+const chrome = spawn(chromePath, [
+  '--headless=new',
+  '--no-sandbox',
+  '--disable-gpu',
+  '--disable-dev-shm-usage',
+  '--remote-debugging-port=0',
+  `--user-data-dir=${userDataDirectory}`,
+  'about:blank',
+], { stdio: 'ignore' });
+
+let socket;
+try {
+  const [debugPort] = (await waitForFile(join(userDataDirectory, 'DevToolsActivePort'))).trim().split('\n');
+  const targets = await fetch(`http://127.0.0.1:${debugPort}/json/list`).then((response) => response.json());
+  const target = targets.find((item) => item.type === 'page');
+  if (!target?.webSocketDebuggerUrl) throw new Error('Chromium page target was not available.');
+
+  socket = await connect(target.webSocketDebuggerUrl);
+  const errors = { console: [], page: [], network: [] };
+  socket.onEvent = (message) => {
+    if (message.method === 'Runtime.consoleAPICalled' && ['error', 'assert'].includes(message.params.type)) {
+      errors.console.push(message.params.type);
+    }
+    if (message.method === 'Runtime.exceptionThrown') errors.page.push(message.params.exceptionDetails?.text ?? 'exception');
+    if (message.method === 'Network.loadingFailed') errors.network.push(message.params.errorText ?? 'network failure');
+    if (message.method === 'Fetch.requestPaused') void handleRequest(socket, message.params);
+  };
+
+  await socket.command('Runtime.enable');
+  await socket.command('Log.enable');
+  await socket.command('Network.enable');
+  await socket.command('Page.enable');
+  await socket.command('Fetch.enable', { patterns: [{ urlPattern: '*://*/api/v1/*', requestStage: 'Request' }] });
+
+  const results = [];
+  for (const scenario of scenarios.flatMap((route) => viewports.map((viewport) => ({ ...route, ...viewport })))) {
+    await socket.command('Emulation.setDeviceMetricsOverride', {
+      width: scenario.width,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    await socket.command('Emulation.setPageScaleFactor', { pageScaleFactor: scenario.zoom });
+    const loaded = socket.waitForEvent('Page.loadEventFired');
+    await socket.command('Page.navigate', { url: `${baseUrl}${scenario.path}` });
+    await loaded;
+    await delay(250);
+    const inspection = await evaluate(socket, `(() => {
+      const required = ${JSON.stringify(scenario.requiredSelectors)};
+      const missing = required.filter((selector) => document.querySelector(selector) === null);
+      return {
+        missing,
+        horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1
+          || document.body.scrollWidth > window.innerWidth + 1,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+      };
+    })()`);
+    if (scenario.path === '/__ui-harness') {
+      inspection.interactions = await exerciseHarness(socket);
+    }
+    if (screenshotDirectory) {
+      const screenshot = await socket.command('Page.captureScreenshot', { format: 'png' });
+      await writeFile(join(screenshotDirectory, `${scenario.path.slice(1).replaceAll('/', '-')}-${scenario.name}.png`), Buffer.from(screenshot.result.data, 'base64'));
+    }
+    results.push({ path: scenario.path, viewport: scenario.name, ...inspection });
+  }
+
+  const failures = results.filter((result) => result.missing.length > 0 || result.horizontalOverflow || result.interactions?.some((item) => !item.pass));
+  const summary = {
+    scenarios: results.length,
+    failures: failures.length,
+    consoleErrors: errors.console,
+    pageErrors: errors.page,
+    networkErrors: errors.network,
+    results,
+  };
+  console.log(JSON.stringify(summary, null, 2));
+  if (failures.length > 0 || errors.console.length > 0 || errors.page.length > 0 || errors.network.length > 0) process.exitCode = 1;
+} finally {
+  socket?.close();
+  if (chrome.exitCode === null) {
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, 2_000);
+      chrome.once('exit', () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      chrome.kill('SIGTERM');
+    });
+  }
+  await rm(userDataDirectory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+}
+
+async function handleRequest(cdp, params) {
+  const url = params.request.url;
+  if (url.endsWith('/api/v1/auth/csrf')) {
+    await cdp.command('Fetch.fulfillRequest', {
+      requestId: params.requestId,
+      responseCode: 200,
+      responseHeaders: [
+        { name: 'Content-Type', value: 'application/json' },
+        { name: 'X-Request-ID', value: '00000000-0000-4000-8000-000000000001' },
+        { name: 'Cache-Control', value: 'no-store' },
+      ],
+      body: Buffer.from(JSON.stringify({ csrfToken: 'c'.repeat(32), expiresAt: '2030-01-01T00:00:00.000Z' })).toString('base64'),
+    });
+    return;
+  }
+  if (url.endsWith('/api/v1/auth/sessions/current')) {
+    await cdp.command('Fetch.fulfillRequest', {
+      requestId: params.requestId,
+      responseCode: 401,
+      responseHeaders: [
+        { name: 'Content-Type', value: 'application/problem+json' },
+        { name: 'X-Request-ID', value: '00000000-0000-4000-8000-000000000002' },
+      ],
+      body: Buffer.from(JSON.stringify({
+        type: 'urn:autoflow:problem:unauthorized',
+        title: '未登录',
+        status: 401,
+        code: 'UNAUTHORIZED',
+        requestId: '00000000-0000-4000-8000-000000000002',
+        retryable: false,
+      })).toString('base64'),
+    });
+    return;
+  }
+  await cdp.command('Fetch.continueRequest', { requestId: params.requestId });
+}
+
+async function exerciseHarness(cdp) {
+  const interactions = [];
+  await evaluate(cdp, `document.querySelector('[data-testid="open-dialog"]')?.click()`);
+  await delay(50);
+  interactions.push(await evaluate(cdp, `(() => {
+    const dialog = document.querySelector('[role="dialog"]');
+    return { pass: dialog?.getAttribute('aria-labelledby') === dialog?.querySelector('h2')?.id
+      && document.activeElement?.getAttribute('aria-label') === '关闭', name: 'dialog focus and labelledby' };
+  })()`));
+  await evaluate(cdp, `document.querySelector('[role="dialog"] button[aria-label="关闭"]')?.click()`);
+  await delay(50);
+  await evaluate(cdp, `document.querySelector('[data-testid="open-drawer"]')?.click()`);
+  await delay(50);
+  interactions.push(await evaluate(cdp, `(() => {
+    const drawer = document.querySelector('[role="dialog"]');
+    return { pass: drawer?.getAttribute('aria-labelledby') === drawer?.querySelector('h2')?.id
+      && document.activeElement?.getAttribute('aria-label') === '关闭', name: 'drawer focus and labelledby' };
+  })()`));
+  await evaluate(cdp, `document.querySelector('[role="dialog"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+  await delay(50);
+  await evaluate(cdp, `document.querySelector('[data-testid="submit-form"]')?.click()`);
+  await delay(50);
+  interactions.push(await evaluate(cdp, `(() => {
+    const summary = document.querySelector('[role="alert"]');
+    const field = document.querySelector('#customer-name');
+    const errorLink = summary?.querySelector('a');
+    return { pass: document.activeElement === summary
+      && field?.getAttribute('aria-describedby') === 'customer-name-error'
+      && errorLink?.getAttribute('href') === '#customer-name', name: 'form error focus and association' };
+  })()`));
+  return interactions;
+}
+
+async function evaluate(cdp, expression) {
+  const result = await cdp.command('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+  return result.result.result.value;
+}
+
+function connect(url) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    const pending = new Map();
+    const eventWaiters = new Map();
+    let nextId = 0;
+    ws.addEventListener('open', () => resolve({
+      command(method, params = {}) {
+        const id = ++nextId;
+        return new Promise((commandResolve, commandReject) => {
+          const timer = setTimeout(() => {
+            pending.delete(id);
+            commandReject(new Error(`Timed out waiting for ${method}`));
+          }, 10_000);
+          pending.set(id, { commandResolve, commandReject, timer });
+          ws.send(JSON.stringify({ id, method, params }));
+        });
+      },
+      waitForEvent(method) {
+        return new Promise((eventResolve) => {
+          const list = eventWaiters.get(method) ?? [];
+          list.push(eventResolve);
+          eventWaiters.set(method, list);
+          setTimeout(() => eventResolve(), 10_000);
+        });
+      },
+      close() { ws.close(); },
+      set onEvent(listener) { ws.onEvent = listener; },
+    }));
+    ws.addEventListener('message', (event) => {
+      const message = JSON.parse(event.data);
+      if (message.id !== undefined) {
+        const request = pending.get(message.id);
+        if (!request) return;
+        clearTimeout(request.timer);
+        pending.delete(message.id);
+        if (message.error) request.commandReject(new Error(message.error.message));
+        else request.commandResolve(message);
+        return;
+      }
+      const waiters = eventWaiters.get(message.method);
+      if (waiters) {
+        eventWaiters.delete(message.method);
+        for (const waiter of waiters) waiter(message);
+      }
+      ws.onEvent?.(message);
+    });
+    ws.addEventListener('error', reject);
+  });
+}
+
+async function waitForFile(path) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      return await readFile(path, 'utf8');
+    } catch {
+      await delay(50);
+    }
+  }
+  throw new Error(`Timed out waiting for ${path}`);
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}

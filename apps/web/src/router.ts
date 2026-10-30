@@ -22,6 +22,11 @@ export function createAppRouter(history: RouterHistory) {
         component: () => import('./pages/ErrorPage.vue'),
       },
       {
+        path: '/__ui-harness',
+        name: 'ui-harness',
+        component: () => import('./pages/UiHarnessPage.vue'),
+      },
+      {
         path: '/empty',
         name: 'empty',
         component: () => import('./pages/EmptyPage.vue'),

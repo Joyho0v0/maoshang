@@ -24,6 +24,41 @@ describe('table and filter primitives', () => {
     expect(wrapper.findAll('input[type="number"]')).toHaveLength(0);
   });
 
+  it('exposes loading and error states plus controlled cell/action slots', () => {
+    const wrapper = mount(DataTable, {
+      props: {
+        rows: [{ id: '1', name: 'Acme' }],
+        columns: [{ key: 'name', label: '名称' }],
+        rowKey: 'id',
+        state: 'ready',
+      },
+      slots: {
+        'cell-name': '<strong data-testid="custom-cell">{{ value }}</strong>',
+        actions: '<button data-testid="row-action">打开</button>',
+      },
+    });
+
+    expect(wrapper.get('[data-testid="custom-cell"]').text()).toBe('Acme');
+    expect(wrapper.get('[data-testid="row-action"]')).toBeTruthy();
+  });
+
+  it('renders a retryable error state without pretending rows are available', async () => {
+    const wrapper = mount(DataTable, {
+      props: {
+        rows: [],
+        columns: [{ key: 'name', label: '名称' }],
+        rowKey: 'id',
+        state: 'error',
+        errorMessage: '列表暂时不可用',
+        retryLabel: '重新加载',
+      },
+    });
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('列表暂时不可用');
+    await wrapper.get('button').trigger('click');
+    expect(wrapper.emitted('retry')).toHaveLength(1);
+  });
+
   it('emits cursor navigation and keeps filter input out of URL semantics', async () => {
     const pager = mount(CursorPager, {
       props: { nextCursor: 'next-2' },
@@ -36,5 +71,24 @@ describe('table and filter primitives', () => {
     });
     expect(filter.findAll('input[name="filter[q]"]')).toHaveLength(0);
     expect(filter.findAll('select[name="filter[status]"]')).toHaveLength(1);
+  });
+
+  it('accepts endpoint-provided public filter options instead of hardcoded values', async () => {
+    const wrapper = mount(FilterBar, {
+      props: {
+        modelValue: { type: 'export' },
+        options: [
+          { key: 'type', label: '类型', values: [{ value: 'export', label: '出口' }] },
+          { key: 'state', label: '流程', values: [{ value: 'OPEN', label: '开放' }] },
+          { key: 'ownerId', label: '负责人', values: [{ value: 'u-1', label: '李明' }] },
+        ],
+      },
+    });
+
+    expect(wrapper.findAll('select[name="filter[type]"]')).toHaveLength(1);
+    expect(wrapper.findAll('select[name="filter[state]"]')).toHaveLength(1);
+    expect(wrapper.findAll('select[name="filter[ownerId]"]')).toHaveLength(1);
+    await wrapper.get('select[name="filter[state]"]').setValue('OPEN');
+    expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toMatchObject({ type: 'export', state: 'OPEN' });
   });
 });

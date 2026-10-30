@@ -4,6 +4,10 @@ import {
   formatQuantity,
   isDecimalString,
 } from './formatters';
+import { mount } from '@vue/test-utils';
+
+import MoneyText from '../ui/MoneyText.vue';
+import QuantityText from '../ui/QuantityText.vue';
 
 describe('DecimalString formatters', () => {
   it('accepts contract decimals without converting them to floating point', () => {
@@ -27,5 +31,13 @@ describe('DecimalString formatters', () => {
 
   it('formats quantities without arithmetic', () => {
     expect(formatQuantity(asDecimalString('12.500'), 'kg')).toBe('12.500 kg');
+  });
+
+  it('provides reusable text components for contract decimals', () => {
+    const money = mount(MoneyText, { props: { value: asDecimalString('12.50'), currency: 'USD' } });
+    const quantity = mount(QuantityText, { props: { value: asDecimalString('12.500'), unit: 'kg' } });
+
+    expect(money.text()).toBe('USD 12.50');
+    expect(quantity.text()).toBe('12.500 kg');
   });
 });

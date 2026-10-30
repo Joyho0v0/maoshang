@@ -1,48 +1,103 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue';
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
+
+import {
+  createUiId,
+  focusFirst,
+  restoreFocus,
+  trapFocus,
+} from './focus-management';
 
 interface Props {
   open: boolean;
   title: string;
   closeLabel?: string;
+  description?: string;
+  busy?: boolean;
 }
 
-const props = withDefaults(defineProps<Props>(), { closeLabel: '关闭' });
+const props = withDefaults(defineProps<Props>(), {
+  closeLabel: '关闭',
+  description: '',
+  busy: false,
+});
 const emit = defineEmits<{ close: [] }>();
 type HtmlElement = InstanceType<typeof globalThis.HTMLElement>;
 const drawer = ref<HtmlElement>();
+let opener: HtmlElement | null = null;
+const titleId = createUiId('drawer-title');
+const descriptionId = createUiId('drawer-description');
 
 watch(() => props.open, (open) => {
-  if (open) void nextTick(() => drawer.value?.querySelector<HtmlElement>('button, [href], input, select')?.focus());
+  if (open) {
+    opener = globalThis.document.activeElement instanceof globalThis.HTMLElement
+      ? globalThis.document.activeElement
+      : null;
+    void nextTick(() => {
+      if (drawer.value) focusFirst(drawer.value);
+    });
+  } else {
+    restoreFocus(opener);
+    opener = null;
+  }
 }, { immediate: true });
+
+onBeforeUnmount(() => {
+  if (props.open) restoreFocus(opener);
+});
+
+function requestClose(): void {
+  if (!props.busy) emit('close');
+}
+
+function onKeydown(event: globalThis.KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    requestClose();
+    return;
+  }
+  if (drawer.value) trapFocus(drawer.value, event);
+}
 </script>
 
 <template>
   <div
     v-if="open"
     class="drawer-backdrop"
-    @click.self="emit('close')"
+    @click.self="requestClose"
   >
     <aside
       ref="drawer"
       class="drawer"
       role="dialog"
       aria-modal="true"
-      :aria-label="title"
+      :aria-labelledby="titleId"
+      :aria-describedby="description ? descriptionId : undefined"
+      :aria-busy="busy ? 'true' : undefined"
       tabindex="-1"
-      @keydown.esc.prevent="emit('close')"
+      @keydown="onKeydown"
     >
       <header class="drawer__header">
-        <h2>{{ title }}</h2>
+        <h2 :id="titleId">
+          {{ title }}
+        </h2>
         <button
           class="icon-button"
           type="button"
           :aria-label="closeLabel"
-          @click="emit('close')"
+          :disabled="busy"
+          @click="requestClose"
         >
           ×
         </button>
       </header>
+      <p
+        v-if="description"
+        :id="descriptionId"
+        class="drawer__description"
+      >
+        {{ description }}
+      </p>
       <div class="drawer__body">
         <slot />
       </div>

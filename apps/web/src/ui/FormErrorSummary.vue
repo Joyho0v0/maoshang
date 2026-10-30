@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { nextTick, ref, watch } from 'vue';
+
+import { formErrorId } from './form-error';
+
 interface FormError {
   readonly field: string;
   readonly message: string;
@@ -9,12 +13,22 @@ interface Props {
   heading?: string;
 }
 
-withDefaults(defineProps<Props>(), { heading: '请检查以下内容' });
+const props = withDefaults(defineProps<Props>(), { heading: '请检查以下内容' });
+type HtmlElement = InstanceType<typeof globalThis.HTMLElement>;
+const summary = ref<HtmlElement>();
+
+watch(() => props.errors.length, (length, previousLength) => {
+  if (previousLength === 0 && length > 0) {
+    void nextTick(() => summary.value?.focus());
+  }
+});
+
 </script>
 
 <template>
   <section
     v-if="errors.length > 0"
+    ref="summary"
     class="form-error-summary"
     role="alert"
     aria-live="assertive"
@@ -26,7 +40,12 @@ withDefaults(defineProps<Props>(), { heading: '请检查以下内容' });
         v-for="error in errors"
         :key="error.field"
       >
-        <a :href="`#${error.field}`">{{ error.message }}</a>
+        <a
+          :id="formErrorId(error.field)"
+          :href="`#${error.field}`"
+        >
+          {{ error.message }}
+        </a>
       </li>
     </ul>
   </section>

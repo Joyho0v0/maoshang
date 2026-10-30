@@ -20,6 +20,23 @@ describe('capability and conflict primitives', () => {
     expect(wrapper.text()).not.toContain('编辑');
   });
 
+  it('supports server transition checks and an explicit disabled reason', () => {
+    const wrapper = mount(CapabilityGate, {
+      props: {
+        capabilities: ['order.update'],
+        capability: 'order.update',
+        transition: 'CONFIRM',
+        allowedTransitions: [],
+        display: 'disable',
+        reason: '当前订单不能确认',
+      },
+      slots: { default: '<button>确认订单</button>' },
+    });
+
+    expect(wrapper.get('[aria-disabled="true"]').text()).toContain('确认订单');
+    expect(wrapper.get('[aria-disabled="true"]').get('[role="note"]').text()).toContain('当前订单不能确认');
+  });
+
   it('allows a server transition and never offers last-write-wins override', async () => {
     const wrapper = mount(ConflictDialog, {
       props: {

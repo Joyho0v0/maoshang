@@ -9,6 +9,8 @@ interface Props {
   mode?: 'all' | 'any';
   allowedTransitions?: readonly string[];
   transition?: string;
+  display?: 'hide' | 'disable';
+  reason?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -16,6 +18,8 @@ const props = withDefaults(defineProps<Props>(), {
   mode: 'all',
   allowedTransitions: () => [],
   transition: '',
+  display: 'hide',
+  reason: '当前身份或资源状态不允许此操作。',
 });
 const allowed = computed(() => canUseCapability({
   capabilities: props.capabilities,
@@ -28,6 +32,22 @@ const allowed = computed(() => canUseCapability({
 
 <template>
   <slot v-if="allowed" />
+  <span
+    v-else-if="display === 'disable'"
+    class="capability-gate capability-gate--disabled"
+    role="group"
+    aria-disabled="true"
+    :aria-label="reason"
+    inert
+  >
+    <slot />
+    <span
+      class="capability-gate__reason"
+      role="note"
+    >
+      {{ reason }}
+    </span>
+  </span>
   <slot
     v-else
     name="forbidden"
