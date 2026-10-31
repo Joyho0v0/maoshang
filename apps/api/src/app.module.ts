@@ -21,6 +21,15 @@ import { FilesService } from './modules/files/application/files.service.js';
 import { PostgresFilesStore } from './modules/files/infrastructure/postgres-files.store.js';
 import { ControlledFakeObjectStorageAdapter } from './modules/files/infrastructure/file-adapters.js';
 import type { ObjectStorageAdapter } from './modules/files/infrastructure/file-adapters.js';
+import { CrmController } from './modules/crm/transport/crm.controller.js';
+import { CrmService } from './modules/crm/application/crm.service.js';
+import { PostgresCrmStore } from './modules/crm/infrastructure/postgres-crm.store.js';
+import { CatalogController } from './modules/catalog/transport/catalog.controller.js';
+import { CatalogService } from './modules/catalog/application/catalog.service.js';
+import { PostgresCatalogStore } from './modules/catalog/infrastructure/postgres-catalog.store.js';
+import { OrdersController } from './modules/orders/transport/orders.controller.js';
+import { OrdersService } from './modules/orders/application/orders.service.js';
+import { PostgresOrdersStore } from './modules/orders/infrastructure/postgres-orders.store.js';
 
 @Injectable()
 class DatabasePoolProvider implements OnModuleDestroy {
@@ -36,7 +45,7 @@ class DatabasePoolProvider implements OnModuleDestroy {
 }
 
 @Module({
-  controllers: [CsrfController, SessionController, CommandStatusController, IdentityController, FilesController],
+  controllers: [CsrfController, SessionController, CommandStatusController, IdentityController, FilesController, CrmController, CatalogController, OrdersController],
   providers: [
     CsrfService,
     {
@@ -81,8 +90,38 @@ class DatabasePoolProvider implements OnModuleDestroy {
       useFactory: (store: PostgresFilesStore, objectStorage: ObjectStorageAdapter) => new FilesService(store, objectStorage),
       inject: [PostgresFilesStore, 'OBJECT_STORAGE_ADAPTER'],
     },
+    {
+      provide: PostgresCrmStore,
+      useFactory: (database: DatabasePoolProvider) => new PostgresCrmStore(database.pool),
+      inject: [DatabasePoolProvider],
+    },
+    {
+      provide: CrmService,
+      useFactory: (store: PostgresCrmStore) => new CrmService(store),
+      inject: [PostgresCrmStore],
+    },
+    {
+      provide: PostgresCatalogStore,
+      useFactory: (database: DatabasePoolProvider) => new PostgresCatalogStore(database.pool),
+      inject: [DatabasePoolProvider],
+    },
+    {
+      provide: CatalogService,
+      useFactory: (store: PostgresCatalogStore) => new CatalogService(store),
+      inject: [PostgresCatalogStore],
+    },
+    {
+      provide: PostgresOrdersStore,
+      useFactory: (database: DatabasePoolProvider) => new PostgresOrdersStore(database.pool),
+      inject: [DatabasePoolProvider],
+    },
+    {
+      provide: OrdersService,
+      useFactory: (store: PostgresOrdersStore) => new OrdersService(store),
+      inject: [PostgresOrdersStore],
+    },
   ],
-  exports: [CsrfService, InMemoryIdempotencyStore, CommandStatusService, IDEMPOTENCY_REPOSITORY, FilesService, PostgresFilesStore, 'OBJECT_STORAGE_ADAPTER'],
+  exports: [CsrfService, InMemoryIdempotencyStore, CommandStatusService, IDEMPOTENCY_REPOSITORY, FilesService, PostgresFilesStore, 'OBJECT_STORAGE_ADAPTER', CrmService, CatalogService, OrdersService],
 })
 export class AppModule {
   static register(config: RuntimeConfig, validator: ContractValidator, authenticationProvider?: AuthenticationProvider): DynamicModule {
