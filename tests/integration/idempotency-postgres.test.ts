@@ -16,6 +16,7 @@ import { IdempotencyExecutionInterceptor } from '../../apps/api/src/common/secur
 import { ContractResponseValidationInterceptor } from '../../apps/api/src/common/http/contract-response.interceptor.js';
 import { ProblemExceptionFilter } from '../../apps/api/src/common/http/problem.filter.js';
 import { problemForBackend } from '../../apps/api/src/common/http/backend-controller.js';
+import { buildProblem, ProblemError } from '../../apps/api/src/common/http/problem.js';
 import { requireIdempotencyTransaction } from '../../apps/api/src/common/security/idempotency-transaction-context.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
@@ -27,12 +28,27 @@ class PostgresCustomerController {
   static backendPids: number[] = [];
   static invalidResponse = false;
   static temporaryFailure = false;
+  static dependencyFailure: 502 | 503 | undefined;
   static ownerBarrier: { started: () => void; released: Promise<void> } | undefined;
 
   @Post()
   @HttpCode(201)
   async create(@Req() request: FastifyRequest & { user?: { userId: string; organizationId: string } }, @Res({ passthrough: true }) response: FastifyReply): Promise<Record<string, unknown>> {
-    if (PostgresCustomerController.temporaryFailure) throw problemForBackend(new Error('temporary database disconnect'), request);
+    if (PostgresCustomerController.temporaryFailure) {
+      await this.writeOutboxSideEffect(request);
+      throw problemForBackend(new Error('temporary database disconnect'), request);
+    }
+    if (PostgresCustomerController.dependencyFailure !== undefined) {
+      const status = PostgresCustomerController.dependencyFailure;
+      await this.writeOutboxSideEffect(request);
+      throw new ProblemError(buildProblem({
+        status,
+        code: status === 502 ? 'DEPENDENCY_FAILURE' : 'DEPENDENCY_UNAVAILABLE',
+        title: status === 502 ? 'Dependency failure' : 'Dependency unavailable',
+        requestId: 'f8b6e3a9-3a0a-4c1c-b3f3-5d65d08c17e2',
+        retryable: false,
+      }));
+    }
     PostgresCustomerController.executions += 1;
     const { client } = requireIdempotencyTransaction(request);
     const pid = await client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
@@ -51,6 +67,14 @@ class PostgresCustomerController {
     if (PostgresCustomerController.invalidResponse) return { id };
     const now = new Date().toISOString();
     return { id, organizationId: request.user?.organizationId, version: 1, createdAt: now, updatedAt: now, status: 'DRAFT', capabilities: [] };
+  }
+
+  private async writeOutboxSideEffect(request: FastifyRequest & { user?: { userId: string; organizationId: string } }): Promise<void> {
+    const { client } = requireIdempotencyTransaction(request);
+    await client.query(
+      "INSERT INTO integration.outbox_event (id, organization_id, aggregate_type, aggregate_id, event_type, payload) VALUES ($1, $2, 'Customer', $3, 'CustomerCreated', $4)",
+      [randomUUID(), request.user?.organizationId, randomUUID(), { testFailureSideEffect: true }],
+    );
   }
 }
 
@@ -346,6 +370,7 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
     const idempotencyKey = `http-postgres-unknown-500-${randomUUID()}`;
     const request = { method: 'POST' as const, url: '/api/v1/customers', headers: { 'idempotency-key': idempotencyKey, 'x-csrf-token': 'csrf-token-value' }, payload: { name: 'Recoverable customer' } };
     try {
+      const before = await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM integration.outbox_event WHERE organization_id = $1', [organizationId]);
       const first = await app.getHttpAdapter().getInstance().inject(request);
       expect(first.statusCode).toBe(500);
       await expect(recoveryRepository.withTransaction((client) => recoveryRepository.statusByKey(client, { actorId, organizationId, operationId: 'createCustomer', idempotencyKey }))).resolves.toMatchObject({ state: 'RECOVERY_REQUIRED', httpStatus: null });
@@ -354,12 +379,51 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
       const recovered = await app.getHttpAdapter().getInstance().inject(request);
       expect(recovered.statusCode).toBe(201);
       expect(PostgresCustomerController.executions).toBe(1);
+      const after = await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM integration.outbox_event WHERE organization_id = $1', [organizationId]);
+      expect(after.rows[0]?.count).toBe((before.rows[0]?.count ?? 0) + 1);
       await expect(recoveryRepository.withTransaction((client) => recoveryRepository.statusByKey(client, { actorId, organizationId, operationId: 'createCustomer', idempotencyKey }))).resolves.toMatchObject({ state: 'SUCCEEDED', httpStatus: 201 });
       const conflict = await app.getHttpAdapter().getInstance().inject({ ...request, payload: { name: 'Different body' } });
       expect(conflict.statusCode).toBe(409);
       expect(conflict.json()).toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
     } finally {
       PostgresCustomerController.temporaryFailure = false;
+      await app.close();
+    }
+  });
+
+  it.each([502, 503] as const)('keeps controller dependency HTTP %s recoverable until a later owner can complete the command', async (status) => {
+    PostgresCustomerController.executions = 0;
+    PostgresCustomerController.dependencyFailure = status;
+    const recoveryRepository = new PostgresIdempotencyRepository(pool, { leaseDurationMs: 5 });
+    const contract = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const validator = createContractValidator(contract);
+    const app = await NestFactory.create<NestFastifyApplication>(PostgresCustomerModule, new FastifyAdapter({ logger: false }));
+    app.setGlobalPrefix('api/v1');
+    app.useGlobalGuards(new PostgresPrincipalGuard(actorId, organizationId));
+    app.useGlobalFilters(new ProblemExceptionFilter(validator));
+    app.useGlobalInterceptors(new ContractResponseValidationInterceptor(validator), new IdempotencyExecutionInterceptor(recoveryRepository, validator));
+    await app.init();
+    const idempotencyKey = `http-postgres-dependency-${status}-${randomUUID()}`;
+    const request = { method: 'POST' as const, url: '/api/v1/customers', headers: { 'idempotency-key': idempotencyKey, 'x-csrf-token': 'csrf-token-value' }, payload: { name: `Dependency ${status}` } };
+    try {
+      const before = await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM integration.outbox_event WHERE organization_id = $1', [organizationId]);
+      const first = await app.getHttpAdapter().getInstance().inject(request);
+      expect(first.statusCode).toBe(status);
+      expect(first.json()).toMatchObject({ status, code: status === 502 ? 'DEPENDENCY_FAILURE' : 'DEPENDENCY_UNAVAILABLE', retryable: true });
+      await expect(recoveryRepository.withTransaction((client) => recoveryRepository.statusByKey(client, { actorId, organizationId, operationId: 'createCustomer', idempotencyKey }))).resolves.toMatchObject({ state: 'RECOVERY_REQUIRED', httpStatus: null });
+
+      await pool.query("UPDATE integration.idempotency_record SET lease_expires_at = now() - interval '1 second' WHERE organization_id = $1 AND actor_user_id = $2 AND operation_id = 'createCustomer' AND state = 'IN_PROGRESS'", [organizationId, actorId]);
+      PostgresCustomerController.dependencyFailure = undefined;
+      const recovered = await app.getHttpAdapter().getInstance().inject(request);
+      expect(recovered.statusCode).toBe(201);
+      expect(PostgresCustomerController.executions).toBe(1);
+      const after = await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM integration.outbox_event WHERE organization_id = $1', [organizationId]);
+      expect(after.rows[0]?.count).toBe((before.rows[0]?.count ?? 0) + 1);
+      const conflict = await app.getHttpAdapter().getInstance().inject({ ...request, payload: { name: 'Different body' } });
+      expect(conflict.statusCode).toBe(409);
+      expect(conflict.json()).toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
+    } finally {
+      PostgresCustomerController.dependencyFailure = undefined;
       await app.close();
     }
   });

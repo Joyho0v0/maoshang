@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Req, Res } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { requireIdempotencyTransaction } from '../../../common/security/idempotency-transaction-context.js';
 import { buildProblem, normalizeRequestId, ProblemError } from '../../../common/http/problem.js';
+import { problemForBackend } from '../../../common/http/backend-controller.js';
 import { formatEtag } from '../../../common/http/etag.js';
 import type { AuthenticatedRequest } from '../../identity/transport/authentication.guard.js';
 import { FilesService, problemForFileError, toApiFile, type FileCommandRequest, type FileCreateRequest } from '../application/files.service.js';
@@ -61,8 +62,7 @@ export class FilesController {
     const requestId = normalizeRequestId(request.headers['x-request-id']);
     const known = problemForFileError(error, requestId, fileId);
     if (known !== undefined) return new ProblemError(known);
-    if (error instanceof ProblemError) return error;
-    return this.problem(500, 'INTERNAL_ERROR', 'Internal server error', request);
+    return problemForBackend(error, request);
   }
 
   private problem(status: number, code: 'AUTHENTICATION_REQUIRED' | 'INTERNAL_ERROR', title: string, request: FastifyRequest): ProblemError {

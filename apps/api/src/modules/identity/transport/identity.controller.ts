@@ -4,6 +4,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { PoolClient } from 'pg';
 import type { components } from '../../../../../../packages/contracts/openapi/generated.js';
 import { buildProblem, normalizeRequestId, ProblemError } from '../../../common/http/problem.js';
+import { problemForBackend } from '../../../common/http/backend-controller.js';
 import {
   IdentityCommandService,
   IdentityCursorError,
@@ -183,7 +184,7 @@ export class IdentityController {
       }));
     }
     if (isUniqueViolation(error)) return new ProblemError(buildProblem({ status: 409, code: 'DUPLICATE_BUSINESS_KEY', title: 'Identity already exists', requestId, retryable: false }));
-    return new ProblemError(buildProblem({ status: 500, code: 'INTERNAL_ERROR', title: 'Internal server error', requestId, retryable: false }));
+    return problemForBackend(error, request);
   }
 }
 

@@ -71,7 +71,7 @@ export function problemForBackend(error: unknown, request: FastifyRequest, resou
   if (error instanceof Error && ['INVALID_CURSOR', 'UNKNOWN_SORT', 'INVALID_PAGE_SIZE'].includes(error.message)) {
     return new ProblemError(buildProblem({ status: 400, code: 'VALIDATION_FAILED', title: 'Validation failed', requestId, retryable: false, meta: { violations: [{ field: 'query', code: error.message, message: 'The pagination query is invalid.' }] } }));
   }
-  return new RecoverableProblemError(buildProblem({ status: 500, code: 'INTERNAL_ERROR', title: 'Internal server error', requestId, retryable: false }));
+  return new RecoverableProblemError(buildProblem({ status: 500, code: 'INTERNAL_ERROR', title: 'Internal server error', requestId, retryable: true }));
 }
 
 function titleFor(code: string): string {

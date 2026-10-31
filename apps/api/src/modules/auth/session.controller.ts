@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Inject, Post, Req, Res } from '@nestjs/c
 import type { FastifyRequest } from 'fastify';
 import type { FastifyReply } from 'fastify';
 import { buildProblem, normalizeRequestId, ProblemError } from '../../common/http/problem.js';
+import { problemForBackend } from '../../common/http/backend-controller.js';
 import { AuthenticationProviderUnavailableError, InvalidCredentialsError, LoginAttemptLimiter, SessionExpiredError, SessionService, type LoginAttemptKeys } from '../identity/application/session.service.js';
 import type { SessionCredentials, SessionDocument } from '../identity/application/types.js';
 import type { RuntimeConfig } from '../../config/runtime-config.js';
@@ -70,7 +71,7 @@ export class SessionController {
     if (error instanceof LoginRateLimitedError) return new ProblemError(buildProblem({ status: 429, code: 'RATE_LIMITED', title: 'Too many authentication attempts', requestId, retryable: true }));
     if (error instanceof InvalidCredentialsError) return new ProblemError(buildProblem({ status: 401, code: 'INVALID_CREDENTIALS', title: 'Invalid credentials', requestId, retryable: false }));
     if (error instanceof SessionExpiredError) return new ProblemError(buildProblem({ status: 401, code: 'SESSION_EXPIRED', title: 'Session expired', requestId, retryable: false }));
-    return new ProblemError(buildProblem({ status: 500, code: 'INTERNAL_ERROR', title: 'Internal server error', requestId, retryable: false }));
+    return problemForBackend(error, request);
   }
 }
 

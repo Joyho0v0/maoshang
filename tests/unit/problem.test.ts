@@ -3,8 +3,40 @@ import {
   ProblemError,
   validateProblemMeta,
 } from '../../apps/api/src/common/http/problem.js';
+import { problemForBackend } from '../../apps/api/src/common/http/backend-controller.js';
 
 describe('RFC 9457 problem foundation', () => {
+  const request = { headers: {} } as never;
+
+  it('uses one explicit outcome classification for dependency and unknown failures', () => {
+    for (const [status, code] of [[502, 'DEPENDENCY_FAILURE'], [503, 'DEPENDENCY_UNAVAILABLE']] as const) {
+      const dependency = buildProblem({
+        status,
+        code,
+        title: 'Dependency unavailable',
+        requestId: 'f8b6e3a9-3a0a-4c1c-b3f3-5d65d08c17e2',
+        retryable: false,
+      });
+      const dependencyError = new ProblemError(dependency, 'TERMINAL');
+      expect(dependencyError.disposition).toBe('RECOVERABLE');
+      expect(dependency.retryable).toBe(true);
+    }
+
+    const unknownError = problemForBackend(new Error('temporary database disconnect'), request);
+    expect(unknownError.disposition).toBe('RECOVERABLE');
+    expect(unknownError.problem).toMatchObject({ status: 500, code: 'INTERNAL_ERROR', retryable: true });
+
+    const responseContractError = new ProblemError(buildProblem({
+      status: 500,
+      code: 'INTERNAL_ERROR',
+      title: 'Response contract validation failed',
+      requestId: 'f8b6e3a9-3a0a-4c1c-b3f3-5d65d08c17e2',
+      retryable: false,
+    }));
+    expect(responseContractError.disposition).toBe('TERMINAL');
+    expect(responseContractError.problem.retryable).toBe(false);
+  });
+
   it('builds a safe typed inventory problem without leaking implementation details', () => {
     const problem = buildProblem({
       status: 409,

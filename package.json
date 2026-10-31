@@ -33,7 +33,7 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:contract": "vitest run tests/contract",
-    "test:integration": "vitest run tests/integration",
+    "test:integration": "tsx tests/integration/run-isolated.ts",
     "test:migration": "vitest run tests/migration",
     "lint:openapi": "tsx packages/contracts/openapi/lint.ts",
     "generate:client": "tsx packages/contracts/openapi/generate-client.ts",

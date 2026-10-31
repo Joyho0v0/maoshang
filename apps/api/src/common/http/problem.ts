@@ -82,15 +82,29 @@ const EXPECTED_STATUS: Record<string, number | readonly number[]> = {
 
 export type ProblemDisposition = 'TERMINAL' | 'RECOVERABLE';
 
+const RECOVERABLE_PROBLEM_CODES = new Set(['DEPENDENCY_FAILURE', 'DEPENDENCY_UNAVAILABLE']);
+
+/**
+ * Classifies known client-visible outcomes once, at the common ProblemError
+ * boundary. Unknown internal failures must use RecoverableProblemError because
+ * INTERNAL_ERROR alone cannot tell an unknown result from a deterministic
+ * response-contract violation.
+ */
+export function problemDispositionFor(problem: Pick<ProblemDocument, 'code'>): ProblemDisposition {
+  return RECOVERABLE_PROBLEM_CODES.has(problem.code) ? 'RECOVERABLE' : 'TERMINAL';
+}
+
 export class ProblemError extends Error {
   readonly problem: ProblemDocument;
   readonly disposition: ProblemDisposition;
 
-  constructor(problem: ProblemDocument, disposition: ProblemDisposition = 'TERMINAL') {
+  constructor(problem: ProblemDocument, disposition: ProblemDisposition = problemDispositionFor(problem)) {
     super(problem.title);
     this.name = 'ProblemError';
-    this.problem = problem;
-    this.disposition = disposition;
+    this.problem = RECOVERABLE_PROBLEM_CODES.has(problem.code)
+      ? { ...problem, retryable: true }
+      : problem;
+    this.disposition = RECOVERABLE_PROBLEM_CODES.has(problem.code) ? 'RECOVERABLE' : disposition;
   }
 
   get status(): number {
@@ -167,7 +181,7 @@ export function buildProblem(input: BuildProblemInput): ProblemDocument {
     code: input.code,
     requestId: input.requestId,
     ...(input.traceId === undefined ? {} : { traceId: input.traceId }),
-    retryable: input.retryable ?? input.status >= 500,
+    retryable: RECOVERABLE_PROBLEM_CODES.has(input.code) ? true : input.retryable ?? input.status >= 500,
     ...(violations === undefined ? {} : { violations }),
     ...(meta === undefined ? {} : { meta }),
   };
