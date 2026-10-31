@@ -10,7 +10,9 @@ parse and validate the candidate without promotion:
 
 - `openapi.yaml` is a complete OpenAPI 3.1 document with explicit operations,
   request bodies, parameters, headers, responses, schemas, discriminators and
-  typed Problem branches. The candidate contains 17 operations across 11 paths.
+  typed Problem branches. The candidate contains 18 operations across 12 paths,
+  including the Files-owned `GET /api/v2/files/{fileId}` and
+  `POST /api/v2/files/{fileId}/download-intents` support surface.
 - `validate.ts` performs parser, dereference, independent contract checks, AJV
   schema compilation, fixture validation, and in-memory TypeScript/client dry
   generation. It writes no generated artifact.
@@ -43,18 +45,25 @@ The exact package/tool version and exit code used for review must be recorded
 by the caller. No command in this package targets a database or the v1
 artifact.
 
-## Pending system decision
+## Files support boundary
 
-`GET /api/v2/orders/{orderId}/files/{fileId}/status` is the current candidate
-for the R7 status link because the Files-owned `/api/v2/files/{id}` alias has
-not been approved. It is intentionally marked `x-candidate-system-boundary`.
-The Chief Web Systems Architect must choose one owner before promotion. The
-candidate does not claim that Files has been changed or that this endpoint
-exists at runtime.
+The Chief Web Systems Architect's decision is incorporated: the canonical
+Files-owned status/read href is `/api/v2/files/{fileId}`. The v2 candidate
+declares `GET /api/v2/files/{fileId}` (`getFileStatusV2`) and
+`POST /api/v2/files/{fileId}/download-intents`
+(`createFileDownloadIntentV2`). Upload-intent and complete-upload remain v1
+operations, while v2 status and final download never fall back to v1. Orders
+only consumes the Files schema/href and does not own a Files endpoint.
+
+The candidate does not claim that these Files operations have been implemented
+at runtime; promotion remains pending Files-owner and backend/frontend narrow
+review.
 
 ## R8 compatibility
 
 `standardizationMode` is the only new required SKU-create input. `baseUnit`,
-`trackingMode`, and `lowStockThreshold` remain optional request inputs and keep
-their existing server-default semantics. The response preserves those v1
-fields for compatibility; v2 does not infer standardization from tracking.
+`trackingMode`, and `lowStockThreshold` remain optional request inputs. Their
+explicit defaults are `baseUnit = unit`, `trackingMode = NONE`, and decimal
+`lowStockThreshold = "0"`; omission and explicit-value fixtures are separate.
+These defaults never infer standardization and never apply to legacy backfill.
+The response preserves those v1 fields for compatibility.

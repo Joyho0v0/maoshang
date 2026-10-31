@@ -115,8 +115,10 @@ The validation matrix must prove:
    immutable snapshots, and the exact risk buffer formula.
 5. A policy change after order creation cannot change an existing snapshot;
    concurrent policy change is caught by version recheck.
-6. Files link, read, download, not-ready replay, parent reassign and concurrent
-   reassign use live Order authorization and hidden 404.
+6. Files-owned status/read and download-intent operations use live parent
+   authorization when a file is linked to an Order; unlinked owner polling,
+   not-ready replay, parent reassign and concurrent reassign use hidden 404 and
+   the canonical `/api/v2/files/{fileId}` href.
 7. 4xx terminal replay, 500/502/503 recovery/takeover, cross-operation ledger
    isolation, audit/outbox rollback and same-key body conflict are all tested.
 8. 005/006/007 up/up, fresh down, and forward-fix preserve the immutable v1

@@ -315,13 +315,12 @@ paths:
         '500': { $ref: '#/components/responses/Problem500' }
         '502': { $ref: '#/components/responses/Problem502' }
         '503': { $ref: '#/components/responses/Problem503' }
-  /orders/{orderId}/files/{fileId}/status:
+  /files/{fileId}:
     get:
-      tags: [orders]
-      operationId: getOrderFileStatusV2
-      description: Candidate Order-scoped status resource for R7; system-architect approval is required before promotion.
+      tags: [files]
+      operationId: getFileStatusV2
+      description: Files-owned status/read support surface. This is not a download endpoint.
       parameters:
-        - { $ref: '#/components/parameters/OrderId' }
         - { $ref: '#/components/parameters/FileId' }
         - { $ref: '#/components/parameters/RequestIdHeader' }
       responses:
@@ -329,6 +328,27 @@ paths:
         '401': { $ref: '#/components/responses/Problem401' }
         '403': { $ref: '#/components/responses/Problem403' }
         '404': { $ref: '#/components/responses/Problem404' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+  /files/{fileId}/download-intents:
+    post:
+      tags: [files]
+      operationId: createFileDownloadIntentV2
+      description: Files-owned short-lived download intent. Upload and complete-upload remain v1 operations.
+      x-safety: { csrf: required, idempotency: exempt, ifMatch: exempt }
+      parameters:
+        - { $ref: '#/components/parameters/FileId' }
+        - { $ref: '#/components/parameters/CsrfHeader' }
+        - { $ref: '#/components/parameters/RequestIdHeader' }
+      responses:
+        '200': { $ref: '#/components/responses/FileDownloadIntent' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '403': { $ref: '#/components/responses/Problem403' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '409': { $ref: '#/components/responses/Problem409' }
         '429': { $ref: '#/components/responses/Problem429' }
         '500': { $ref: '#/components/responses/Problem500' }
         '502': { $ref: '#/components/responses/Problem502' }
@@ -379,7 +399,8 @@ components:
     SkuCreated: { description: Created SKU, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/SkuV2' } } } }
     Order: { description: Order, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderV2' } } } }
     OrderCreated: { description: Created order, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderV2' } } } }
-    FileStatus: { description: Order-scoped file status candidate, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/json: { schema: { $ref: '#/components/schemas/FileStatusV2' } } } }
+    FileStatus: { description: Files-owned file status, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/FileStatusV2' } } } }
+    FileDownloadIntent: { description: Short-lived Files-owned download intent, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/FileDownloadIntentV2' } } } }
     CommandStatus: { description: Command status, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/CommandStatus' } } } }
     CommandStatusInProgress: { description: Command accepted, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Content-Location: { $ref: '#/components/headers/ContentLocation' }, Retry-After: { $ref: '#/components/headers/RetryAfter' } }, content: { application/json: { schema: { $ref: '#/components/schemas/CommandStatusInProgressV2' } } } }
     Problem400: { description: Validation problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem400' } } } }
@@ -429,7 +450,7 @@ components:
     SkuCreateRequestV2:
       type: object
       required: [productId, skuCode, name, unit, standardizationMode]
-      properties: { productId: { $ref: '#/components/schemas/Uuid' }, skuCode: { type: string, minLength: 1, maxLength: 64 }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, baseUnit: { type: string, minLength: 1, maxLength: 32 }, trackingMode: { $ref: '#/components/schemas/TrackingMode' }, standardizationMode: { $ref: '#/components/schemas/StandardizationMode' }, lowStockThreshold: { $ref: '#/components/schemas/DecimalAmount' }, metadata: { type: object, additionalProperties: true } }
+      properties: { productId: { $ref: '#/components/schemas/Uuid' }, skuCode: { type: string, minLength: 1, maxLength: 64 }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, baseUnit: { type: string, description: 'Optional; defaults to unit when omitted.', x-default: unit, minLength: 1, maxLength: 32 }, trackingMode: { $ref: '#/components/schemas/TrackingMode', description: 'Optional; defaults to NONE when omitted.', default: NONE }, standardizationMode: { $ref: '#/components/schemas/StandardizationMode', description: 'Required policy; no default and never inferred from trackingMode.' }, lowStockThreshold: { allOf: [{ $ref: '#/components/schemas/DecimalAmount' }], description: 'Optional; defaults to DecimalString 0 when omitted.', default: '0' }, metadata: { type: object, additionalProperties: true } }
       additionalProperties: false
     SkuUpdateRequestV2:
       type: object
@@ -530,8 +551,24 @@ components:
       additionalProperties: false
     FileStatusV2:
       type: object
-      required: [fileId, orderId, status, statusHref]
-      properties: { fileId: { $ref: '#/components/schemas/Uuid' }, orderId: { $ref: '#/components/schemas/Uuid' }, status: { type: string, enum: [PENDING_UPLOAD, UPLOADED, SCANNING, AVAILABLE, REJECTED, QUARANTINED] }, statusHref: { type: string, pattern: '^/api/v2/orders/[0-9a-f-]+/files/[0-9a-f-]+/status$' } }
+      required: [id, version, status, updatedAt, href]
+      properties: { id: { $ref: '#/components/schemas/Uuid' }, version: { type: integer, minimum: 1 }, status: { type: string, enum: [PENDING_UPLOAD, UPLOADED, SCANNING, AVAILABLE, REJECTED, QUARANTINED] }, updatedAt: { $ref: '#/components/schemas/DateTime' }, href: { $ref: '#/components/schemas/FileHrefV2' }, metadata: { type: object, additionalProperties: true } }
+      additionalProperties: false
+    FileHrefV2: { type: string, pattern: '^/api/v2/files/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' }
+    FileDownloadIntentFileV2:
+      type: object
+      required: [id, version, status, updatedAt]
+      properties: { id: { $ref: '#/components/schemas/Uuid' }, version: { type: integer, minimum: 1 }, status: { const: AVAILABLE }, updatedAt: { $ref: '#/components/schemas/DateTime' }, metadata: { type: object, additionalProperties: true } }
+      additionalProperties: false
+    DownloadTransferV2:
+      type: object
+      required: [kind, method, locator, expiresAt, headers]
+      properties: { kind: { const: HTTP_GET }, method: { const: GET }, locator: { type: string, format: uri }, expiresAt: { $ref: '#/components/schemas/DateTime' }, headers: { type: object, additionalProperties: { type: string } } }
+      additionalProperties: false
+    FileDownloadIntentV2:
+      type: object
+      required: [file, href, transfer]
+      properties: { file: { $ref: '#/components/schemas/FileDownloadIntentFileV2' }, href: { $ref: '#/components/schemas/FileHrefV2' }, transfer: { $ref: '#/components/schemas/DownloadTransferV2' } }
       additionalProperties: false
     CommandStatusInProgressV2:
       type: object
@@ -593,7 +630,7 @@ components:
     FileNotReadyMeta:
       type: object
       required: [kind, fileId, state, statusHref]
-      properties: { kind: { const: FILE_NOT_READY }, fileId: { $ref: '#/components/schemas/Uuid' }, state: { type: string, minLength: 1 }, statusHref: { type: string, pattern: '^/api/v2/orders/[0-9a-f-]+/files/[0-9a-f-]+/status$' } }
+      properties: { kind: { const: FILE_NOT_READY }, fileId: { $ref: '#/components/schemas/Uuid' }, state: { type: string, minLength: 1 }, statusHref: { $ref: '#/components/schemas/FileHrefV2' } }
       additionalProperties: false
     CsrfFailedMeta:
       type: object

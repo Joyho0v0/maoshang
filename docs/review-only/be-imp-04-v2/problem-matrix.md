@@ -17,7 +17,7 @@ array and all other branches prohibit it by their branch schema semantics.
 | 409 | `VERSION_CONFLICT` | false | terminal replay | `resourceType`, `resourceId`, `currentVersion`, `providedVersion` |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | false | terminal replay | `operationId`, `commandStatusHref` |
 | 409 | `DUPLICATE_BUSINESS_KEY` | false | terminal replay | no internal constraint name |
-| 409 | `FILE_NOT_READY` | true | `FAILED` terminal replay | `fileId`, `state`, `statusHref`; retry with a new key after AVAILABLE |
+| 409 | `FILE_NOT_READY` | true | `FAILED` terminal replay | `fileId`, `state`, `statusHref=/api/v2/files/{fileId}`; retry with a new key after AVAILABLE |
 | 428 | `PRECONDITION_REQUIRED` | false | terminal replay | no meta; only operations that require an absent precondition expose it |
 | 429 | `RATE_LIMITED` | true | terminal replay | `Retry-After` response header |
 | 500 | `INTERNAL_ERROR` terminal branch | false | terminal replay | only deterministic response-contract failure |
@@ -51,3 +51,6 @@ requires the header and receives none returns the explicitly declared
 
 `FILE_NOT_READY` is deterministic despite `retryable=true`: the current key
 replays 409, and the caller creates a new key after the file is AVAILABLE.
+The status href remains independently valid after an Order transaction rolls
+back because Files owns `GET /api/v2/files/{fileId}`; it never contains an
+Order-scoped path.

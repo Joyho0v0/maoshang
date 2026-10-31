@@ -4,7 +4,7 @@
   "artifactNamespace": "catalog-orders-v2-review",
   "generatedTypesNamespace": "@autoflow/contracts-v2-review/types",
   "generatedClientNamespace": "@autoflow/contracts-v2-review/client",
-  "operationCount": 17,
+  "operationCount": 18,
   "operationIds": [
     "getCsrfTokenV2",
     "getCurrentSessionV2",
@@ -22,7 +22,8 @@
     "getOrderV2",
     "updateOrderV2",
     "transitionOrderV2",
-    "getOrderFileStatusV2"
+    "getFileStatusV2",
+    "createFileDownloadIntentV2"
   ],
   "v1Digests": {
     "openapi": "a3e5168ac3346ac72d3d06aa9d67b4c52f893398c64ed80da71973e923be843c",
@@ -30,9 +31,9 @@
     "generatedClient": "b4a017cef65a11018f70321f624e3456708d55fdea638b9683a57fb610b5712c"
   },
   "candidateDigests": {
-    "openapi": "49da29f5a9e21149c5f0ede75b87fd77832c1e2372e7b7ebbc09ecdc702049e3",
-    "generatedTypes": "d7224a8c368b40b1dc8955bc2ddb259a6701306f5cc444cc97c1de8912649339",
-    "generatedClient": "9743ce8c72d2f65562e1db6f7044311316b7bb0d1e95f9fb4595ac130e2403af"
+    "openapi": "544fc001c45cecf8b89a457ac2ac38adce1202060a9037146e634fd9d765b7e8",
+    "generatedTypes": "1265937a64ed6bc9ebafb0c61ef4d7d716ab1fe21649fc30f739d8968d62414b",
+    "generatedClient": "295401ce8653bce44a7ed82a7ec687b052ab9322b278a61dd3ada301591b0519"
   },
   "promotionRules": [
     "Do not overwrite v1 artifact or generated files.",

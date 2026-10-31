@@ -57,25 +57,29 @@ function propertyFromSchema(candidate, property) {
 
 function independentLint(document, dereferenced) {
   const operations = operationsOf(document);
-  assert(operations.length === 17, `expected 17 operations, got ${operations.length}`);
+  assert(operations.length === 18, `expected 18 operations, got ${operations.length}`);
   const ids = operations.map(({ operation }) => operation.operationId);
   assert(ids.every((id) => typeof id === 'string' && id.endsWith('V2')), 'every operation must have a versioned operationId');
   assert(new Set(ids).size === ids.length, 'operationId values must be unique');
   assert(Object.keys(document.paths).every((path) => path.startsWith('/api/v1/') === false && path.startsWith('/v1/') === false), 'v1 path leaked into v2 candidate');
 
-  for (const { method, operation } of operations) {
+  for (const { path, method, operation } of operations) {
     const statuses = Object.keys(operation.responses ?? {});
     for (const required of ['500', '502', '503']) assert(statuses.includes(required), `${operation.operationId} lacks ${required}`);
     if (method === 'post' || method === 'patch') {
       const safety = operation['x-safety'];
-      assert(safety?.csrf === 'required' && safety?.idempotency === 'required', `${operation.operationId} lacks CSRF/idempotency safety declaration`);
+      assert(safety?.csrf === 'required' && (safety?.idempotency === 'required' || safety?.idempotency === 'exempt'), `${operation.operationId} lacks explicit CSRF/idempotency safety declaration`);
       const parameterRefs = (operation.parameters ?? []).map((parameter) => parameter.$ref ?? '');
       assert(parameterRefs.includes('#/components/parameters/CsrfHeader'), `${operation.operationId} lacks CSRF header`);
-      assert(parameterRefs.includes('#/components/parameters/IdempotencyHeader'), `${operation.operationId} lacks idempotency header`);
+      if (safety.idempotency === 'required') assert(parameterRefs.includes('#/components/parameters/IdempotencyHeader'), `${operation.operationId} lacks idempotency header`);
+      else assert(!parameterRefs.includes('#/components/parameters/IdempotencyHeader'), `${operation.operationId} must not require idempotency header`);
       assert(safety.ifMatch === 'required' ? parameterRefs.includes('#/components/parameters/IfMatchHeader') : safety.ifMatch === 'exempt', `${operation.operationId} has inconsistent If-Match declaration`);
-      assert(statuses.includes('428'), `${operation.operationId} must declare the missing idempotency/precondition response`);
+      if (safety.idempotency === 'required') assert(statuses.includes('428'), `${operation.operationId} must declare the missing idempotency/precondition response`);
+      else assert(!statuses.includes('428'), `${operation.operationId} must not declare an irrelevant precondition response`);
     }
     for (const response of Object.values(operation.responses ?? {})) assert(response.$ref?.startsWith('#/components/responses/'), `${operation.operationId} response is not an explicit response ref`);
+    if (operation.operationId === 'getFileStatusV2') assert(path === '/files/{fileId}', `${operation.operationId} is not Files-owned`);
+    if (operation.operationId === 'createFileDownloadIntentV2') assert(path === '/files/{fileId}/download-intents', `${operation.operationId} is not Files-owned`);
   }
 
   const requestLine = schema(dereferenced, 'OrderLineRequestV2');
@@ -99,7 +103,16 @@ function independentLint(document, dereferenced) {
   assert(propertyFromSchema(schema(dereferenced, 'ProblemInternalRecoverable'), 'retryable').const === true, 'recoverable 500 is not retryable');
   assert(propertyFromSchema(schema(dereferenced, 'ProblemInternalTerminal'), 'retryable').const === false, 'terminal 500 is retryable');
   assert(propertyFromSchema(schema(dereferenced, 'Problem502'), 'retryable').const === true && propertyFromSchema(schema(dereferenced, 'Problem503'), 'retryable').const === true, 'dependency failures are not recoverable');
-  assert(document.paths['/orders/{orderId}/files/{fileId}/status'] !== undefined, 'R7 status resource is undeclared');
+  assert(document.paths['/files/{fileId}'] !== undefined, 'Files v2 support surface is undeclared');
+  assert(document.paths['/files/{fileId}'].get.operationId === 'getFileStatusV2', 'Files status operationId is not canonical');
+  assert(document.paths['/files/{fileId}/download-intents']?.post.operationId === 'createFileDownloadIntentV2', 'Files download operationId is not canonical');
+  assert(schema(dereferenced, 'FileStatusV2').required.join(',') === 'id,version,status,updatedAt,href', 'FileStatusV2 required fields are incomplete');
+  assert(schema(dereferenced, 'FileDownloadIntentV2').required.join(',') === 'file,href,transfer', 'FileDownloadIntentV2 required fields are incomplete');
+  assert(schema(dereferenced, 'FileHrefV2').pattern === '^/api/v2/files/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', 'Files href validator is not strict and canonical');
+  const skuRequired = schema(dereferenced, 'SkuCreateRequestV2').required;
+  assert(skuRequired.includes('standardizationMode') && !skuRequired.includes('baseUnit') && !skuRequired.includes('trackingMode') && !skuRequired.includes('lowStockThreshold'), 'SKU create expanded unrelated required fields');
+  const skuProperties = schema(dereferenced, 'SkuCreateRequestV2').properties;
+  assert(skuProperties.baseUnit['x-default'] === 'unit' && skuProperties.trackingMode.default === 'NONE' && skuProperties.lowStockThreshold.default === '0', 'SKU omission defaults are not explicit');
   assert(document.info?.['x-contract-status'] === 'PENDING_REVIEW', 'candidate was accidentally promoted');
 }
 
@@ -110,18 +123,28 @@ function compileFixtures(dereferenced) {
   for (const name of Object.keys(dereferenced.components.schemas)) validators.set(name, ajv.compile(dereferenced.components.schemas[name]));
   const fixtures = JSON.parse(awaitReadFixtures);
   const orderValidator = validators.get('OrderCreateRequestV2');
+  let validCount = 0;
   for (const [name, value] of Object.entries(fixtures.valid)) {
-    if (name === 'problemFileNotReady') {
-      const validator = validators.get('Problem409');
-      assert(validator(value), `${name} should validate: ${JSON.stringify(validator.errors)}`);
-    }
-    else assert(orderValidator(value), `${name} should validate: ${JSON.stringify(orderValidator.errors)}`);
+    const validator = name === 'problemFileNotReady' ? validators.get('Problem409')
+      : name === 'fileStatus' ? validators.get('FileStatusV2')
+        : name === 'fileDownloadIntent' ? validators.get('FileDownloadIntentV2')
+          : name.startsWith('sku') ? validators.get('SkuCreateRequestV2')
+            : orderValidator;
+    assert(validator(value), `${name} should validate: ${JSON.stringify(validator.errors)}`);
+    validCount += 1;
   }
+  let invalidCount = 0;
   for (const [name, value] of Object.entries(fixtures.invalid)) {
-    const validator = name === 'rateTooPrecise' ? validators.get('DecimalRate') : name.startsWith('problemWrongRecoverability') ? validators.get('Problem503') : name.startsWith('problemWrongMeta') ? validators.get('Problem409') : orderValidator;
+    const validator = name === 'rateTooPrecise' ? validators.get('DecimalRate')
+      : name.startsWith('problemWrongRecoverability') ? validators.get('Problem503')
+        : name.startsWith('problemWrongMeta') ? validators.get('Problem409')
+          : name === 'fileBadHref' ? validators.get('FileStatusV2')
+            : name === 'skuMissingStandardization' ? validators.get('SkuCreateRequestV2')
+              : orderValidator;
     assert(!validator(value), `${name} unexpectedly validated`);
+    invalidCount += 1;
   }
-  return validators.size;
+  return { schemaCount: validators.size, validCount, invalidCount };
 }
 
 const awaitReadFixtures = await readFile(fixturesPath, 'utf8');
@@ -137,11 +160,11 @@ const clientSource = [
   `export const operationIds = ${JSON.stringify(operationIds)} as const;`,
   ...operationIds.map((id) => `export type ${id}Operation = typeof operationIds[number];`),
 ].join('\n');
-const schemaCount = compileFixtures(dereferenced);
+const fixtureStats = compileFixtures(dereferenced);
 const hash = (source) => createHash('sha256').update(source).digest('hex');
 console.log(`V2_REVIEW_PARSE exit=0 operations=${operationIds.length} paths=${Object.keys(parsed.paths).length}`);
 console.log(`V2_REVIEW_DEREFERENCE exit=0 unresolvedRefs=${unresolvedRefs}`);
 console.log(`V2_REVIEW_LINT exit=0 checks=R1,R2,R3,R7,R8`);
 console.log(`V2_REVIEW_TYPES_DRY_GENERATION exit=0 bytes=${Buffer.byteLength(typesSource)} sha256=${hash(typesSource)}`);
 console.log(`V2_REVIEW_CLIENT_DRY_GENERATION exit=0 operations=${operationIds.length} bytes=${Buffer.byteLength(clientSource)} sha256=${hash(clientSource)}`);
-console.log(`V2_REVIEW_VALIDATOR_DRY_GENERATION exit=0 schemas=${schemaCount} fixtures=9-valid/7-invalid`);
+console.log(`V2_REVIEW_VALIDATOR_DRY_GENERATION exit=0 schemas=${fixtureStats.schemaCount} fixtures=${fixtureStats.validCount}-valid/${fixtureStats.invalidCount}-invalid`);
