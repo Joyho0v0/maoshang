@@ -1,0 +1,731 @@
+openapi: 3.1.0
+info:
+  title: Autoflow Catalog and Orders API v2 (review-only)
+  version: 2.0.0-review
+  description: Complete parseable review-only v2 candidate. It is not promoted and must not be consumed by runtime code.
+  x-contract-status: PENDING_REVIEW
+  x-v1-artifact-unchanged: true
+servers:
+  - url: /api/v2
+    description: Isolated v2 base path.
+security:
+  - CookieSession: []
+tags:
+  - { name: auth }
+  - { name: commands }
+  - { name: catalog }
+  - { name: orders }
+paths:
+  /auth/csrf:
+    get:
+      tags: [auth]
+      security: []
+      operationId: getCsrfTokenV2
+      responses:
+        '200': { $ref: '#/components/responses/CsrfToken' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+  /auth/sessions/current:
+    get:
+      tags: [auth]
+      operationId: getCurrentSessionV2
+      responses:
+        '200': { $ref: '#/components/responses/Session' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+  /commands/status:
+    get:
+      tags: [commands]
+      operationId: getCommandStatusV2
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyHeader' }
+        - { $ref: '#/components/parameters/CommandOperationHeader' }
+        - { $ref: '#/components/parameters/RequestIdHeader' }
+      responses:
+        '200': { $ref: '#/components/responses/CommandStatus' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+  /products:
+    get:
+      tags: [catalog]
+      operationId: listProductsV2
+      parameters:
+        - { $ref: '#/components/parameters/PageAfter' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/ProductStatusFilter' }
+        - { $ref: '#/components/parameters/Sort' }
+        - { $ref: '#/components/parameters/RequestIdHeader' }
+      responses:
+        '200': { $ref: '#/components/responses/ProductPage' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '403': { $ref: '#/components/responses/Problem403' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+    post:
+      tags: [catalog]
+      operationId: createProductV2
+      x-safety: { csrf: required, idempotency: required, ifMatch: exempt }
+      parameters:
+        - { $ref: '#/components/parameters/CsrfHeader' }
+        - { $ref: '#/components/parameters/IdempotencyHeader' }
+        - { $ref: '#/components/parameters/RequestIdHeader' }
+      requestBody: { $ref: '#/components/requestBodies/ProductCreateRequestV2' }
+      responses:
+        '201': { $ref: '#/components/responses/ProductCreated' }
+        '202': { $ref: '#/components/responses/CommandStatusInProgress' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '403': { $ref: '#/components/responses/Problem403' }
+        '409': { $ref: '#/components/responses/Problem409' }
+        '428': { $ref: '#/components/responses/Problem428' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+  /products/{id}:
+    parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+    get:
+      tags: [catalog]
+      operationId: getProductV2
+      parameters: [{ $ref: '#/components/parameters/RequestIdHeader' }]
+      responses:
+        '200': { $ref: '#/components/responses/Product' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '403': { $ref: '#/components/responses/Problem403' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+    patch:
+      tags: [catalog]
+      operationId: updateProductV2
+      x-safety: { csrf: required, idempotency: required, ifMatch: required }
+      parameters:
+        - { $ref: '#/components/parameters/CsrfHeader' }
+        - { $ref: '#/components/parameters/IdempotencyHeader' }
+        - { $ref: '#/components/parameters/IfMatchHeader' }
+        - { $ref: '#/components/parameters/RequestIdHeader' }
+      requestBody: { $ref: '#/components/requestBodies/ProductUpdateRequestV2' }
+      responses:
+        '200': { $ref: '#/components/responses/Product' }
+        '202': { $ref: '#/components/responses/CommandStatusInProgress' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '403': { $ref: '#/components/responses/Problem403' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '409': { $ref: '#/components/responses/Problem409' }
+        '428': { $ref: '#/components/responses/Problem428' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+  /skus:
+    get:
+      tags: [catalog]
+      operationId: listSkusV2
+      parameters:
+        - { $ref: '#/components/parameters/PageAfter' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/SkuStatusFilter' }
+        - { $ref: '#/components/parameters/Sort' }
+        - { $ref: '#/components/parameters/RequestIdHeader' }
+      responses:
+        '200': { $ref: '#/components/responses/SkuPage' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '403': { $ref: '#/components/responses/Problem403' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+    post:
+      tags: [catalog]
+      operationId: createSkuV2
+      x-safety: { csrf: required, idempotency: required, ifMatch: exempt }
+      parameters:
+        - { $ref: '#/components/parameters/CsrfHeader' }
+        - { $ref: '#/components/parameters/IdempotencyHeader' }
+        - { $ref: '#/components/parameters/RequestIdHeader' }
+      requestBody: { $ref: '#/components/requestBodies/SkuCreateRequestV2' }
+      responses:
+        '201': { $ref: '#/components/responses/SkuCreated' }
+        '202': { $ref: '#/components/responses/CommandStatusInProgress' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '403': { $ref: '#/components/responses/Problem403' }
+        '409': { $ref: '#/components/responses/Problem409' }
+        '428': { $ref: '#/components/responses/Problem428' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+  /skus/{id}:
+    parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+    get:
+      tags: [catalog]
+      operationId: getSkuV2
+      parameters: [{ $ref: '#/components/parameters/RequestIdHeader' }]
+      responses:
+        '200': { $ref: '#/components/responses/Sku' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '403': { $ref: '#/components/responses/Problem403' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+    patch:
+      tags: [catalog]
+      operationId: updateSkuV2
+      x-safety: { csrf: required, idempotency: required, ifMatch: required }
+      parameters:
+        - { $ref: '#/components/parameters/CsrfHeader' }
+        - { $ref: '#/components/parameters/IdempotencyHeader' }
+        - { $ref: '#/components/parameters/IfMatchHeader' }
+        - { $ref: '#/components/parameters/RequestIdHeader' }
+      requestBody: { $ref: '#/components/requestBodies/SkuUpdateRequestV2' }
+      responses:
+        '200': { $ref: '#/components/responses/Sku' }
+        '202': { $ref: '#/components/responses/CommandStatusInProgress' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '403': { $ref: '#/components/responses/Problem403' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '409': { $ref: '#/components/responses/Problem409' }
+        '428': { $ref: '#/components/responses/Problem428' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+  /orders:
+    get:
+      tags: [orders]
+      operationId: listOrdersV2
+      parameters:
+        - { $ref: '#/components/parameters/PageAfter' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/OrderStatusFilter' }
+        - { $ref: '#/components/parameters/Sort' }
+        - { $ref: '#/components/parameters/RequestIdHeader' }
+      responses:
+        '200': { $ref: '#/components/responses/OrderPage' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '403': { $ref: '#/components/responses/Problem403' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+    post:
+      tags: [orders]
+      operationId: createOrderV2
+      x-safety: { csrf: required, idempotency: required, ifMatch: exempt }
+      parameters:
+        - { $ref: '#/components/parameters/CsrfHeader' }
+        - { $ref: '#/components/parameters/IdempotencyHeader' }
+        - { $ref: '#/components/parameters/RequestIdHeader' }
+      requestBody: { $ref: '#/components/requestBodies/OrderCreateRequestV2' }
+      responses:
+        '201': { $ref: '#/components/responses/OrderCreated' }
+        '202': { $ref: '#/components/responses/CommandStatusInProgress' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '403': { $ref: '#/components/responses/Problem403' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '409': { $ref: '#/components/responses/Problem409' }
+        '428': { $ref: '#/components/responses/Problem428' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+  /orders/{id}:
+    parameters: [{ $ref: '#/components/parameters/ResourceId' }]
+    get:
+      tags: [orders]
+      operationId: getOrderV2
+      parameters: [{ $ref: '#/components/parameters/RequestIdHeader' }]
+      responses:
+        '200': { $ref: '#/components/responses/Order' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '403': { $ref: '#/components/responses/Problem403' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+    patch:
+      tags: [orders]
+      operationId: updateOrderV2
+      x-safety: { csrf: required, idempotency: required, ifMatch: required }
+      parameters:
+        - { $ref: '#/components/parameters/CsrfHeader' }
+        - { $ref: '#/components/parameters/IdempotencyHeader' }
+        - { $ref: '#/components/parameters/IfMatchHeader' }
+        - { $ref: '#/components/parameters/RequestIdHeader' }
+      requestBody: { $ref: '#/components/requestBodies/OrderUpdateRequestV2' }
+      responses:
+        '200': { $ref: '#/components/responses/Order' }
+        '202': { $ref: '#/components/responses/CommandStatusInProgress' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '403': { $ref: '#/components/responses/Problem403' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '409': { $ref: '#/components/responses/Problem409' }
+        '428': { $ref: '#/components/responses/Problem428' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+  /orders/{id}/transitions:
+    post:
+      tags: [orders]
+      operationId: transitionOrderV2
+      x-safety: { csrf: required, idempotency: required, ifMatch: required }
+      parameters:
+        - { $ref: '#/components/parameters/ResourceId' }
+        - { $ref: '#/components/parameters/CsrfHeader' }
+        - { $ref: '#/components/parameters/IdempotencyHeader' }
+        - { $ref: '#/components/parameters/IfMatchHeader' }
+        - { $ref: '#/components/parameters/RequestIdHeader' }
+      requestBody: { $ref: '#/components/requestBodies/OrderTransitionRequestV2' }
+      responses:
+        '200': { $ref: '#/components/responses/Order' }
+        '202': { $ref: '#/components/responses/CommandStatusInProgress' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '403': { $ref: '#/components/responses/Problem403' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '409': { $ref: '#/components/responses/Problem409' }
+        '428': { $ref: '#/components/responses/Problem428' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+  /orders/{orderId}/files/{fileId}/status:
+    get:
+      tags: [orders]
+      operationId: getOrderFileStatusV2
+      description: Candidate Order-scoped status resource for R7; system-architect approval is required before promotion.
+      parameters:
+        - { $ref: '#/components/parameters/OrderId' }
+        - { $ref: '#/components/parameters/FileId' }
+        - { $ref: '#/components/parameters/RequestIdHeader' }
+      responses:
+        '200': { $ref: '#/components/responses/FileStatus' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '403': { $ref: '#/components/responses/Problem403' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '429': { $ref: '#/components/responses/Problem429' }
+        '500': { $ref: '#/components/responses/Problem500' }
+        '502': { $ref: '#/components/responses/Problem502' }
+        '503': { $ref: '#/components/responses/Problem503' }
+components:
+  securitySchemes:
+    CookieSession: { type: apiKey, in: cookie, name: session_id }
+  parameters:
+    ResourceId: { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    OrderId: { name: orderId, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    FileId: { name: fileId, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    CsrfHeader: { name: X-CSRF-Token, in: header, required: true, schema: { type: string, minLength: 16, maxLength: 512 } }
+    IdempotencyHeader: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 1, maxLength: 128, pattern: '^[\\x21-\\x7E]+$' } }
+    IfMatchHeader: { name: If-Match, in: header, required: true, schema: { type: string, pattern: '^"v[1-9][0-9]*"$' } }
+    RequestIdHeader: { name: X-Request-ID, in: header, required: false, schema: { $ref: '#/components/schemas/Uuid' } }
+    CommandOperationHeader: { name: X-Command-Operation, in: header, required: true, schema: { type: string, pattern: '^(create|update|transition)(Product|Sku|Order)V2$' } }
+    PageAfter: { name: 'page[after]', in: query, required: false, schema: { type: string, minLength: 1, maxLength: 1024 } }
+    PageSize: { name: 'page[size]', in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+    Sort: { name: sort, in: query, required: false, schema: { type: string, enum: [createdAt, '-createdAt', updatedAt, '-updatedAt'] } }
+    ProductStatusFilter: { name: 'filter[status]', in: query, required: false, schema: { type: string, enum: [ACTIVE, INACTIVE] } }
+    SkuStatusFilter: { name: 'filter[status]', in: query, required: false, schema: { type: string, enum: [ACTIVE, INACTIVE] } }
+    OrderStatusFilter: { name: 'filter[status]', in: query, required: false, schema: { type: string, enum: [DRAFT, CONFIRMED, FULFILLED, CANCELLED] } }
+  requestBodies:
+    ProductCreateRequestV2: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProductCreateRequestV2' } } } }
+    ProductUpdateRequestV2: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProductUpdateRequestV2' } } } }
+    SkuCreateRequestV2: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SkuCreateRequestV2' } } } }
+    SkuUpdateRequestV2: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SkuUpdateRequestV2' } } } }
+    OrderCreateRequestV2: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/OrderCreateRequestV2' } } } }
+    OrderUpdateRequestV2: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/OrderUpdateRequestV2' } } } }
+    OrderTransitionRequestV2: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/OrderTransitionRequestV2' } } } }
+  headers:
+    RequestId: { required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    ETag: { required: true, schema: { type: string, pattern: '^"v[1-9][0-9]*"$' } }
+    Location: { required: true, schema: { type: string, pattern: '^/api/v2/' } }
+    ContentLocation: { required: false, schema: { type: string, pattern: '^/api/v2/' } }
+    CacheControl: { required: true, schema: { type: string, const: no-store } }
+    IdempotentReplay: { required: false, schema: { type: string, enum: ['true'] } }
+    RetryAfter: { required: true, schema: { type: string, pattern: '^[1-9][0-9]*$' } }
+  responses:
+    CsrfToken: { description: CSRF token, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/CsrfToken' } } } }
+    Session: { description: Current session, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
+    ProductPage: { description: Product page, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProductPage' } } } }
+    SkuPage: { description: SKU page, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/json: { schema: { $ref: '#/components/schemas/SkuPage' } } } }
+    OrderPage: { description: Order page, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderPage' } } } }
+    Product: { description: Product, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProductV2' } } } }
+    ProductCreated: { description: Created product, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProductV2' } } } }
+    Sku: { description: SKU, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/SkuV2' } } } }
+    SkuCreated: { description: Created SKU, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/SkuV2' } } } }
+    Order: { description: Order, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderV2' } } } }
+    OrderCreated: { description: Created order, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderV2' } } } }
+    FileStatus: { description: Order-scoped file status candidate, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/json: { schema: { $ref: '#/components/schemas/FileStatusV2' } } } }
+    CommandStatus: { description: Command status, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/CommandStatus' } } } }
+    CommandStatusInProgress: { description: Command accepted, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Content-Location: { $ref: '#/components/headers/ContentLocation' }, Retry-After: { $ref: '#/components/headers/RetryAfter' } }, content: { application/json: { schema: { $ref: '#/components/schemas/CommandStatusInProgressV2' } } } }
+    Problem400: { description: Validation problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem400' } } } }
+    Problem401: { description: Authentication problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem401' } } } }
+    Problem403: { description: Authorization or CSRF problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem403' } } } }
+    Problem404: { description: Hidden resource problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem404' } } } }
+    Problem409: { description: Conflict problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem409' } } } }
+    Problem428: { description: Missing required precondition, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem428' } } } }
+    Problem429: { description: Rate limit problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Retry-After: { $ref: '#/components/headers/RetryAfter' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem429' } } } }
+    Problem500: { description: Internal problem; terminal response validation and recoverable unknown result are separate typed branches, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem500' } } } }
+    Problem502: { description: Recoverable dependency failure, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem502' } } } }
+    Problem503: { description: Recoverable dependency unavailable, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem503' } } } }
+  schemas:
+    Uuid: { type: string, format: uuid }
+    Currency: { type: string, pattern: '^[A-Z]{3}$' }
+    DateTime: { type: string, format: date-time }
+    DecimalQuantity: { type: string, description: Positive numeric(18,6), pattern: '^(?:[1-9][0-9]{0,11}(?:\.[0-9]{1,6})?|0\.(?:0{0,5}[1-9][0-9]{0,5}))$' }
+    DecimalAmount: { type: string, description: Non-negative numeric(19,4), pattern: '^(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,4})?$' }
+    DecimalRate: { type: string, description: Positive numeric(24,12), pattern: '^(?:[1-9][0-9]{0,11}(?:\.[0-9]{1,12})?|0\.(?:0{0,11}[1-9][0-9]{0,11}))$' }
+    RiskBufferBps: { type: integer, minimum: 0, maximum: 2000 }
+    StandardizationMode: { type: string, enum: [STRICT, SIMPLE, NONE] }
+    TrackingMode: { type: string, enum: [NONE, LOT, SERIAL] }
+    ProductStatus: { type: string, enum: [ACTIVE, INACTIVE] }
+    SkuStatus: { type: string, enum: [ACTIVE, INACTIVE] }
+    OrderStatus: { type: string, enum: [DRAFT, CONFIRMED, FULFILLED, CANCELLED] }
+    OrderStage: { type: string, enum: [INITIAL_CONTACT, QUOTING, QUOTE_FOLLOW_UP, DEPOSIT_PENDING, DEPOSIT_CONFIRMED, FULFILLMENT, FOB_COMPLETED, CLOSED] }
+    CsrfToken:
+      type: object
+      required: [token]
+      properties: { token: { type: string, minLength: 16, maxLength: 512 } }
+      additionalProperties: false
+    Session:
+      type: object
+      required: [userId, organizationId, expiresAt]
+      properties: { userId: { $ref: '#/components/schemas/Uuid' }, organizationId: { $ref: '#/components/schemas/Uuid' }, expiresAt: { $ref: '#/components/schemas/DateTime' } }
+      additionalProperties: false
+    ProductCreateRequestV2:
+      type: object
+      required: [name, productCode, unit]
+      properties: { name: { type: string, minLength: 1, maxLength: 256 }, productCode: { type: string, minLength: 1, maxLength: 64 }, unit: { type: string, minLength: 1, maxLength: 32 }, description: { type: string, maxLength: 2048 }, categoryId: { $ref: '#/components/schemas/Uuid' }, metadata: { type: object, additionalProperties: true } }
+      additionalProperties: false
+    ProductUpdateRequestV2:
+      type: object
+      minProperties: 1
+      properties: { name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, description: { type: string, maxLength: 2048 }, categoryId: { $ref: '#/components/schemas/Uuid' }, metadata: { type: object, additionalProperties: true } }
+      additionalProperties: false
+    SkuCreateRequestV2:
+      type: object
+      required: [productId, skuCode, name, unit, standardizationMode]
+      properties: { productId: { $ref: '#/components/schemas/Uuid' }, skuCode: { type: string, minLength: 1, maxLength: 64 }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, baseUnit: { type: string, minLength: 1, maxLength: 32 }, trackingMode: { $ref: '#/components/schemas/TrackingMode' }, standardizationMode: { $ref: '#/components/schemas/StandardizationMode' }, lowStockThreshold: { $ref: '#/components/schemas/DecimalAmount' }, metadata: { type: object, additionalProperties: true } }
+      additionalProperties: false
+    SkuUpdateRequestV2:
+      type: object
+      minProperties: 1
+      properties: { name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, baseUnit: { type: string, minLength: 1, maxLength: 32 }, trackingMode: { $ref: '#/components/schemas/TrackingMode' }, standardizationMode: { $ref: '#/components/schemas/StandardizationMode' }, lowStockThreshold: { $ref: '#/components/schemas/DecimalAmount' }, metadata: { type: object, additionalProperties: true } }
+      additionalProperties: false
+    OrderStandardLineRequestV2:
+      type: object
+      required: [itemKind, skuId, quantity]
+      properties: { itemKind: { const: STANDARD }, skuId: { $ref: '#/components/schemas/Uuid' }, quantity: { $ref: '#/components/schemas/DecimalQuantity' }, imageFileId: { $ref: '#/components/schemas/Uuid' } }
+      additionalProperties: false
+    OrderNonStandardLineRequestV2:
+      type: object
+      required: [itemKind, name, unit, quantity, quotedUnitPrice, standardizationMode]
+      properties: { itemKind: { const: NON_STANDARD }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, quantity: { $ref: '#/components/schemas/DecimalQuantity' }, quotedUnitPrice: { $ref: '#/components/schemas/DecimalAmount' }, standardizationMode: { type: string, enum: [SIMPLE, NONE] }, imageFileId: { $ref: '#/components/schemas/Uuid' } }
+      additionalProperties: false
+    OrderLineRequestV2:
+      oneOf:
+        - { $ref: '#/components/schemas/OrderStandardLineRequestV2' }
+        - { $ref: '#/components/schemas/OrderNonStandardLineRequestV2' }
+      discriminator: { propertyName: itemKind, mapping: { STANDARD: '#/components/schemas/OrderStandardLineRequestV2', NON_STANDARD: '#/components/schemas/OrderNonStandardLineRequestV2' } }
+    OrderCreateRequestV2:
+      type: object
+      required: [customerId, orderNo, currency, lines]
+      properties: { customerId: { $ref: '#/components/schemas/Uuid' }, orderNo: { type: string, minLength: 1, maxLength: 64 }, currency: { $ref: '#/components/schemas/Currency' }, lines: { type: array, minItems: 1, maxItems: 1000, items: { $ref: '#/components/schemas/OrderLineRequestV2' } }, metadata: { type: object, additionalProperties: true } }
+      additionalProperties: false
+    OrderUpdateRequestV2:
+      type: object
+      minProperties: 1
+      properties: { metadata: { type: object, additionalProperties: true } }
+      additionalProperties: false
+    OrderTransitionRequestV2:
+      type: object
+      required: [toStage]
+      properties: { toStage: { $ref: '#/components/schemas/OrderStage' }, reason: { type: string, minLength: 1, maxLength: 2048 } }
+      additionalProperties: false
+    PriceSnapshotV2:
+      type: object
+      required: [sourceKind, sourceCurrency, sourceUnitPrice, capturedAt]
+      properties: { sourceKind: { type: string, enum: [CATALOG_POLICY, MANUAL_QUOTE] }, sourceCurrency: { $ref: '#/components/schemas/Currency' }, sourceUnitPrice: { $ref: '#/components/schemas/DecimalAmount' }, capturedAt: { $ref: '#/components/schemas/DateTime' } }
+      additionalProperties: false
+    FxSnapshotV2:
+      anyOf:
+        - { type: 'null' }
+        - type: object
+          required: [baseCurrency, quoteCurrency, rawMarketRate, riskBufferBps, effectiveRate, source, capturedAt]
+          properties: { baseCurrency: { $ref: '#/components/schemas/Currency' }, quoteCurrency: { $ref: '#/components/schemas/Currency' }, rawMarketRate: { $ref: '#/components/schemas/DecimalRate' }, riskBufferBps: { $ref: '#/components/schemas/RiskBufferBps' }, effectiveRate: { $ref: '#/components/schemas/DecimalRate' }, source: { type: string, minLength: 1, maxLength: 128 }, capturedAt: { $ref: '#/components/schemas/DateTime' } }
+          additionalProperties: false
+    OrderStandardLineV2:
+      type: object
+      required: [lineId, itemKind, skuId, standardizationMode, name, unit, quantity, effectiveUnitPrice, lineAmount, currency, priceSnapshot, fxSnapshot, imageFileId]
+      properties: { lineId: { $ref: '#/components/schemas/Uuid' }, itemKind: { const: STANDARD }, skuId: { $ref: '#/components/schemas/Uuid' }, standardizationMode: { $ref: '#/components/schemas/StandardizationMode' }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, quantity: { $ref: '#/components/schemas/DecimalQuantity' }, effectiveUnitPrice: { $ref: '#/components/schemas/DecimalAmount' }, lineAmount: { $ref: '#/components/schemas/DecimalAmount' }, currency: { $ref: '#/components/schemas/Currency' }, priceSnapshot: { $ref: '#/components/schemas/PriceSnapshotV2' }, fxSnapshot: { $ref: '#/components/schemas/FxSnapshotV2' }, imageFileId: { anyOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] } }
+      additionalProperties: false
+    OrderNonStandardLineV2:
+      type: object
+      required: [lineId, itemKind, standardizationMode, name, unit, quantity, effectiveUnitPrice, lineAmount, currency, priceSnapshot, fxSnapshot, imageFileId]
+      properties: { lineId: { $ref: '#/components/schemas/Uuid' }, itemKind: { const: NON_STANDARD }, standardizationMode: { type: string, enum: [SIMPLE, NONE] }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, quantity: { $ref: '#/components/schemas/DecimalQuantity' }, effectiveUnitPrice: { $ref: '#/components/schemas/DecimalAmount' }, lineAmount: { $ref: '#/components/schemas/DecimalAmount' }, currency: { $ref: '#/components/schemas/Currency' }, priceSnapshot: { $ref: '#/components/schemas/PriceSnapshotV2' }, fxSnapshot: { $ref: '#/components/schemas/FxSnapshotV2' }, imageFileId: { anyOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] } }
+      additionalProperties: false
+    OrderLineV2:
+      oneOf:
+        - { $ref: '#/components/schemas/OrderStandardLineV2' }
+        - { $ref: '#/components/schemas/OrderNonStandardLineV2' }
+      discriminator: { propertyName: itemKind, mapping: { STANDARD: '#/components/schemas/OrderStandardLineV2', NON_STANDARD: '#/components/schemas/OrderNonStandardLineV2' } }
+    ProductV2:
+      type: object
+      required: [id, organizationId, version, createdAt, updatedAt, productCode, name, unit, status]
+      properties: { id: { $ref: '#/components/schemas/Uuid' }, organizationId: { $ref: '#/components/schemas/Uuid' }, version: { type: integer, minimum: 1 }, createdAt: { $ref: '#/components/schemas/DateTime' }, updatedAt: { $ref: '#/components/schemas/DateTime' }, productCode: { type: string, minLength: 1, maxLength: 64 }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, description: { type: string, maxLength: 2048 }, categoryId: { anyOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] }, status: { $ref: '#/components/schemas/ProductStatus' }, metadata: { type: object, additionalProperties: true } }
+      additionalProperties: false
+    SkuV2:
+      type: object
+      required: [id, organizationId, version, createdAt, updatedAt, productId, skuCode, name, unit, baseUnit, trackingMode, standardizationMode, lowStockThreshold, status]
+      properties: { id: { $ref: '#/components/schemas/Uuid' }, organizationId: { $ref: '#/components/schemas/Uuid' }, version: { type: integer, minimum: 1 }, createdAt: { $ref: '#/components/schemas/DateTime' }, updatedAt: { $ref: '#/components/schemas/DateTime' }, productId: { $ref: '#/components/schemas/Uuid' }, skuCode: { type: string, minLength: 1, maxLength: 64 }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, baseUnit: { type: string, minLength: 1, maxLength: 32 }, trackingMode: { $ref: '#/components/schemas/TrackingMode' }, standardizationMode: { anyOf: [{ $ref: '#/components/schemas/StandardizationMode' }, { type: 'null' }] }, lowStockThreshold: { $ref: '#/components/schemas/DecimalAmount' }, status: { $ref: '#/components/schemas/SkuStatus' }, metadata: { type: object, additionalProperties: true } }
+      additionalProperties: false
+    OrderV2:
+      type: object
+      required: [id, organizationId, version, createdAt, updatedAt, customerId, orderNo, currency, status, stage, lines, totalAmount, allowedTransitions]
+      properties: { id: { $ref: '#/components/schemas/Uuid' }, organizationId: { $ref: '#/components/schemas/Uuid' }, version: { type: integer, minimum: 1 }, createdAt: { $ref: '#/components/schemas/DateTime' }, updatedAt: { $ref: '#/components/schemas/DateTime' }, customerId: { $ref: '#/components/schemas/Uuid' }, orderNo: { type: string, minLength: 1, maxLength: 64 }, currency: { $ref: '#/components/schemas/Currency' }, status: { $ref: '#/components/schemas/OrderStatus' }, stage: { $ref: '#/components/schemas/OrderStage' }, lines: { type: array, minItems: 1, maxItems: 1000, items: { $ref: '#/components/schemas/OrderLineV2' } }, totalAmount: { $ref: '#/components/schemas/DecimalAmount' }, allowedTransitions: { type: array, items: { $ref: '#/components/schemas/OrderStage' }, uniqueItems: true }, capabilities: { type: array, items: { type: string, pattern: '^[a-z][a-z0-9.:-]{1,127}$' }, uniqueItems: true }, metadata: { type: object, additionalProperties: true } }
+      additionalProperties: false
+    PageMeta:
+      type: object
+      required: [nextCursor, hasNext]
+      properties: { nextCursor: { anyOf: [{ type: string, minLength: 1 }, { type: 'null' }] }, hasNext: { type: boolean } }
+      additionalProperties: false
+    ProductPage:
+      type: object
+      required: [data, page]
+      properties: { data: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/ProductV2' } }, page: { $ref: '#/components/schemas/PageMeta' } }
+      additionalProperties: false
+    SkuPage:
+      type: object
+      required: [data, page]
+      properties: { data: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/SkuV2' } }, page: { $ref: '#/components/schemas/PageMeta' } }
+      additionalProperties: false
+    OrderPage:
+      type: object
+      required: [data, page]
+      properties: { data: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/OrderV2' } }, page: { $ref: '#/components/schemas/PageMeta' } }
+      additionalProperties: false
+    FileStatusV2:
+      type: object
+      required: [fileId, orderId, status, statusHref]
+      properties: { fileId: { $ref: '#/components/schemas/Uuid' }, orderId: { $ref: '#/components/schemas/Uuid' }, status: { type: string, enum: [PENDING_UPLOAD, UPLOADED, SCANNING, AVAILABLE, REJECTED, QUARANTINED] }, statusHref: { type: string, pattern: '^/api/v2/orders/[0-9a-f-]+/files/[0-9a-f-]+/status$' } }
+      additionalProperties: false
+    CommandStatusInProgressV2:
+      type: object
+      required: [commandId, operationId, state, startedAt, expiresAt, retryAfterMs, completedAt, httpStatus, resource, resultHref, problem]
+      properties: { commandId: { $ref: '#/components/schemas/Uuid' }, operationId: { type: string, pattern: '^(create|update|transition)(Product|Sku|Order)V2$' }, state: { const: IN_PROGRESS }, startedAt: { $ref: '#/components/schemas/DateTime' }, expiresAt: { $ref: '#/components/schemas/DateTime' }, retryAfterMs: { type: integer, minimum: 1 }, completedAt: { type: 'null' }, httpStatus: { type: 'null' }, resource: { type: 'null' }, resultHref: { type: 'null' }, problem: { type: 'null' } }
+      additionalProperties: false
+    CommandResourceV2:
+      type: object
+      required: [resourceType, resourceId, href]
+      properties: { resourceType: { type: string, enum: [PRODUCT, SKU, ORDER] }, resourceId: { $ref: '#/components/schemas/Uuid' }, href: { type: string, pattern: '^/api/v2/' } }
+      additionalProperties: false
+    CommandStatusSucceededV2:
+      type: object
+      required: [commandId, operationId, state, startedAt, expiresAt, retryAfterMs, completedAt, httpStatus, resource, resultHref, problem]
+      properties: { commandId: { $ref: '#/components/schemas/Uuid' }, operationId: { type: string }, state: { const: SUCCEEDED }, startedAt: { $ref: '#/components/schemas/DateTime' }, expiresAt: { $ref: '#/components/schemas/DateTime' }, retryAfterMs: { type: integer, minimum: 1 }, completedAt: { $ref: '#/components/schemas/DateTime' }, httpStatus: { type: integer, minimum: 200, maximum: 299 }, resource: { $ref: '#/components/schemas/CommandResourceV2' }, resultHref: { type: string, pattern: '^/api/v2/' }, problem: { type: 'null' } }
+      additionalProperties: false
+    CommandStatusFailedV2:
+      type: object
+      required: [commandId, operationId, state, startedAt, expiresAt, retryAfterMs, completedAt, httpStatus, resource, resultHref, problem]
+      properties: { commandId: { $ref: '#/components/schemas/Uuid' }, operationId: { type: string }, state: { const: FAILED }, startedAt: { $ref: '#/components/schemas/DateTime' }, expiresAt: { $ref: '#/components/schemas/DateTime' }, retryAfterMs: { type: integer, minimum: 1 }, completedAt: { $ref: '#/components/schemas/DateTime' }, httpStatus: { type: integer, minimum: 400, maximum: 499 }, resource: { type: 'null' }, resultHref: { type: 'null' }, problem: { $ref: '#/components/schemas/ProblemTerminal' } }
+      additionalProperties: false
+    CommandStatusRecoveryV2:
+      type: object
+      required: [commandId, operationId, state, startedAt, expiresAt, retryAfterMs, completedAt, httpStatus, resource, resultHref, problem]
+      properties: { commandId: { $ref: '#/components/schemas/Uuid' }, operationId: { type: string }, state: { const: RECOVERY_REQUIRED }, startedAt: { $ref: '#/components/schemas/DateTime' }, expiresAt: { $ref: '#/components/schemas/DateTime' }, retryAfterMs: { type: integer, minimum: 1 }, completedAt: { type: 'null' }, httpStatus: { type: 'null' }, resource: { type: 'null' }, resultHref: { type: 'null' }, problem: { $ref: '#/components/schemas/ProblemRecoverable' } }
+      additionalProperties: false
+    CommandStatus:
+      oneOf:
+        - { $ref: '#/components/schemas/CommandStatusInProgressV2' }
+        - { $ref: '#/components/schemas/CommandStatusSucceededV2' }
+        - { $ref: '#/components/schemas/CommandStatusFailedV2' }
+        - { $ref: '#/components/schemas/CommandStatusRecoveryV2' }
+      discriminator: { propertyName: state }
+    ProblemViolation:
+      type: object
+      required: [field, code, message]
+      properties: { field: { type: string, minLength: 1, maxLength: 256 }, code: { type: string, pattern: '^[A-Z][A-Z0-9_]{2,63}$' }, message: { type: string, minLength: 1, maxLength: 500 } }
+      additionalProperties: false
+    ValidationMeta:
+      type: object
+      required: [kind, violations]
+      properties: { kind: { const: VALIDATION }, violations: { type: array, minItems: 1, items: { $ref: '#/components/schemas/ProblemViolation' } } }
+      additionalProperties: false
+    IdempotencyMeta:
+      type: object
+      required: [kind, operationId, commandStatusHref]
+      properties: { kind: { const: IDEMPOTENCY }, operationId: { type: string, minLength: 1 }, commandStatusHref: { type: string, const: /api/v2/commands/status } }
+      additionalProperties: false
+    StateConflictMeta:
+      type: object
+      required: [kind, resourceType, resourceId, currentState]
+      properties: { kind: { const: STATE_CONFLICT }, resourceType: { type: string, enum: [SKU, FILE, ORDER] }, resourceId: { $ref: '#/components/schemas/Uuid' }, currentState: { type: string, minLength: 1, maxLength: 128 } }
+      additionalProperties: false
+    VersionConflictMeta:
+      type: object
+      required: [kind, currentVersion, currentEtag, resourceHref]
+      properties: { kind: { const: VERSION_CONFLICT }, currentVersion: { type: integer, minimum: 1 }, currentEtag: { type: string, pattern: '^"v[1-9][0-9]*"$' }, resourceHref: { type: string, pattern: '^/api/v2/' } }
+      additionalProperties: false
+    FileNotReadyMeta:
+      type: object
+      required: [kind, fileId, state, statusHref]
+      properties: { kind: { const: FILE_NOT_READY }, fileId: { $ref: '#/components/schemas/Uuid' }, state: { type: string, minLength: 1 }, statusHref: { type: string, pattern: '^/api/v2/orders/[0-9a-f-]+/files/[0-9a-f-]+/status$' } }
+      additionalProperties: false
+    CsrfFailedMeta:
+      type: object
+      required: [kind, refreshHref]
+      properties: { kind: { const: CSRF }, refreshHref: { type: string, const: /api/v2/auth/csrf } }
+      additionalProperties: false
+    ProblemCommon:
+      type: object
+      required: [type, title, status, code, requestId, retryable]
+      properties: { type: { type: string, pattern: '^urn:autoflow:problem:[a-z0-9-]+$' }, title: { type: string, minLength: 1, maxLength: 256 }, status: { type: integer, minimum: 400, maximum: 599 }, detail: { type: string, maxLength: 2048 }, instance: { type: string, pattern: '^/api/v2/' }, code: { type: string, pattern: '^[A-Z][A-Z0-9_]{2,63}$' }, requestId: { $ref: '#/components/schemas/Uuid' }, retryable: { type: boolean }, violations: { type: array, items: { $ref: '#/components/schemas/ProblemViolation' } }, meta: {} }
+      additionalProperties: false
+    Problem400:
+      allOf:
+        - { $ref: '#/components/schemas/ProblemCommon' }
+        - type: object
+          required: [status, code, retryable, violations, meta]
+          properties: { status: { const: 400 }, code: { const: VALIDATION_FAILED }, retryable: { const: false }, violations: { type: array, minItems: 1, items: { $ref: '#/components/schemas/ProblemViolation' } }, meta: { $ref: '#/components/schemas/ValidationMeta' } }
+    Problem401:
+      oneOf:
+        - allOf:
+            - { $ref: '#/components/schemas/ProblemCommon' }
+            - type: object
+              required: [status, code, retryable]
+              properties: { status: { const: 401 }, code: { const: AUTHENTICATION_REQUIRED }, retryable: { const: false } }
+        - allOf:
+            - { $ref: '#/components/schemas/ProblemCommon' }
+            - type: object
+              required: [status, code, retryable]
+              properties: { status: { const: 401 }, code: { const: SESSION_EXPIRED }, retryable: { const: false } }
+    Problem403:
+      oneOf:
+        - allOf:
+            - { $ref: '#/components/schemas/ProblemCommon' }
+            - type: object
+              required: [status, code, retryable]
+              properties: { status: { const: 403 }, code: { const: PERMISSION_DENIED }, retryable: { const: false } }
+        - allOf:
+            - { $ref: '#/components/schemas/ProblemCommon' }
+            - type: object
+              required: [status, code, retryable, meta]
+              properties: { status: { const: 403 }, code: { const: CSRF_FAILED }, retryable: { const: false }, meta: { $ref: '#/components/schemas/CsrfFailedMeta' } }
+    Problem404:
+      oneOf:
+        - allOf:
+            - { $ref: '#/components/schemas/ProblemCommon' }
+            - type: object
+              required: [status, code, retryable]
+              properties: { status: { const: 404 }, code: { const: RESOURCE_NOT_FOUND }, retryable: { const: false } }
+        - allOf:
+            - { $ref: '#/components/schemas/ProblemCommon' }
+            - type: object
+              required: [status, code, retryable]
+              properties: { status: { const: 404 }, code: { const: COMMAND_NOT_FOUND }, retryable: { const: false } }
+    Problem409:
+      oneOf:
+        - allOf:
+            - { $ref: '#/components/schemas/ProblemCommon' }
+            - type: object
+              required: [status, code, retryable, meta]
+              properties: { status: { const: 409 }, code: { const: STATE_CONFLICT }, retryable: { const: false }, meta: { $ref: '#/components/schemas/StateConflictMeta' } }
+        - allOf:
+            - { $ref: '#/components/schemas/ProblemCommon' }
+            - type: object
+              required: [status, code, retryable, meta]
+              properties: { status: { const: 409 }, code: { const: VERSION_CONFLICT }, retryable: { const: false }, meta: { $ref: '#/components/schemas/VersionConflictMeta' } }
+        - allOf:
+            - { $ref: '#/components/schemas/ProblemCommon' }
+            - type: object
+              required: [status, code, retryable, meta]
+              properties: { status: { const: 409 }, code: { const: IDEMPOTENCY_KEY_REUSED }, retryable: { const: false }, meta: { $ref: '#/components/schemas/IdempotencyMeta' } }
+        - allOf:
+            - { $ref: '#/components/schemas/ProblemCommon' }
+            - type: object
+              required: [status, code, retryable, meta]
+              properties: { status: { const: 409 }, code: { const: FILE_NOT_READY }, retryable: { const: true }, meta: { $ref: '#/components/schemas/FileNotReadyMeta' } }
+        - allOf:
+            - { $ref: '#/components/schemas/ProblemCommon' }
+            - type: object
+              required: [status, code, retryable]
+              properties: { status: { const: 409 }, code: { const: DUPLICATE_BUSINESS_KEY }, retryable: { const: false } }
+    Problem428:
+      allOf:
+        - { $ref: '#/components/schemas/ProblemCommon' }
+        - type: object
+          required: [status, code, retryable]
+          properties: { status: { const: 428 }, code: { const: PRECONDITION_REQUIRED }, retryable: { const: false } }
+    Problem429:
+      allOf:
+        - { $ref: '#/components/schemas/ProblemCommon' }
+        - type: object
+          required: [status, code, retryable]
+          properties: { status: { const: 429 }, code: { const: RATE_LIMITED }, retryable: { const: true } }
+    Problem500:
+      oneOf:
+        - { $ref: '#/components/schemas/ProblemInternalTerminal' }
+        - { $ref: '#/components/schemas/ProblemInternalRecoverable' }
+    ProblemInternalTerminal:
+      allOf:
+        - { $ref: '#/components/schemas/ProblemCommon' }
+        - type: object
+          required: [status, code, retryable]
+          properties: { status: { const: 500 }, code: { const: INTERNAL_ERROR }, retryable: { const: false } }
+    ProblemInternalRecoverable:
+      allOf:
+        - { $ref: '#/components/schemas/ProblemCommon' }
+        - type: object
+          required: [status, code, retryable]
+          properties: { status: { const: 500 }, code: { const: INTERNAL_ERROR }, retryable: { const: true } }
+    Problem502:
+      allOf:
+        - { $ref: '#/components/schemas/ProblemCommon' }
+        - type: object
+          required: [status, code, retryable]
+          properties: { status: { const: 502 }, code: { const: DEPENDENCY_FAILURE }, retryable: { const: true } }
+    Problem503:
+      allOf:
+        - { $ref: '#/components/schemas/ProblemCommon' }
+        - type: object
+          required: [status, code, retryable]
+          properties: { status: { const: 503 }, code: { const: DEPENDENCY_UNAVAILABLE }, retryable: { const: true } }
+    ProblemTerminal:
+      oneOf:
+        - { $ref: '#/components/schemas/Problem400' }
+        - { $ref: '#/components/schemas/Problem401' }
+        - { $ref: '#/components/schemas/Problem403' }
+        - { $ref: '#/components/schemas/Problem404' }
+        - { $ref: '#/components/schemas/Problem409' }
+        - { $ref: '#/components/schemas/Problem428' }
+        - { $ref: '#/components/schemas/Problem429' }
+        - { $ref: '#/components/schemas/ProblemInternalTerminal' }
+    ProblemRecoverable:
+      oneOf:
+        - { $ref: '#/components/schemas/ProblemInternalRecoverable' }
+        - { $ref: '#/components/schemas/Problem502' }
+        - { $ref: '#/components/schemas/Problem503' }
