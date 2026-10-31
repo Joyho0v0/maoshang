@@ -23,6 +23,9 @@ BEGIN
     RAISE EXCEPTION 'run id is already bound to another input digest' USING ERRCODE = '23P01';
   END IF;
   IF FOUND THEN
+    IF existing.approved_by <> p_approved_by OR existing.source_ref <> p_source_ref OR existing.total_count <> p_total_count THEN
+      RAISE EXCEPTION 'resume metadata does not match the original approved input' USING ERRCODE = '23P01';
+    END IF;
     RETURN existing.status;
   END IF;
   SELECT * INTO existing FROM migration_v2.backfill_run WHERE input_sha256 = p_input_sha256 FOR UPDATE;
@@ -66,6 +69,7 @@ DECLARE
   order_found boolean := false;
   item_map_found boolean := false;
   price_map_found boolean := false;
+  sku_current_mode text;
 BEGIN
   SELECT * INTO run_row FROM migration_v2.backfill_run WHERE run_id = p_run_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'backfill run does not exist' USING ERRCODE = '22023'; END IF;
@@ -89,10 +93,24 @@ BEGIN
   WHERE oh.organization_id = p_organization_id AND oh.id = item_row.order_id
   FOR UPDATE;
   order_found := FOUND;
-  SELECT * INTO item_map FROM migration_v2.approved_order_item_mapping WHERE organization_id = p_organization_id AND order_item_id = p_order_item_id;
+  SELECT * INTO item_map
+  FROM migration_v2.approved_order_item_mapping
+  WHERE organization_id = p_organization_id AND order_item_id = p_order_item_id
+    AND input_sha256 = run_row.input_sha256 AND approved_by = run_row.approved_by
+    AND (source_ref = run_row.source_ref OR source_ref LIKE run_row.source_ref || '/%');
   item_map_found := FOUND;
-  SELECT * INTO price_map FROM migration_v2.approved_price_fx_mapping WHERE organization_id = p_organization_id AND order_item_id = p_order_item_id;
+  SELECT * INTO price_map
+  FROM migration_v2.approved_price_fx_mapping
+  WHERE organization_id = p_organization_id AND order_item_id = p_order_item_id
+    AND input_sha256 = run_row.input_sha256 AND approved_by = run_row.approved_by
+    AND (source_ref = run_row.source_ref OR source_ref LIKE run_row.source_ref || '/%');
   price_map_found := FOUND;
+  IF item_map_found AND item_map.sku_id IS NOT NULL THEN
+    SELECT standardization_mode INTO sku_current_mode
+    FROM catalog.sku
+    WHERE organization_id = p_organization_id AND id = item_map.sku_id
+    FOR UPDATE;
+  END IF;
 
   IF NOT item_found OR NOT order_found OR item_row.id IS NULL THEN
     gap_reason := 'ORDER_ITEM_NOT_FOUND';
@@ -109,8 +127,12 @@ BEGIN
   ELSIF item_row.item_kind = 'STANDARD' AND NOT EXISTS (
     SELECT 1 FROM migration_v2.approved_legacy_sku_mapping
     WHERE organization_id = p_organization_id AND sku_id = item_map.sku_id AND approved_mode = item_map.approved_mode
+      AND input_sha256 = run_row.input_sha256 AND approved_by = run_row.approved_by
+      AND (source_ref = run_row.source_ref OR source_ref LIKE run_row.source_ref || '/%')
   ) THEN
     gap_reason := 'LEGACY_SKU_MAPPING_MISSING';
+  ELSIF item_row.item_kind = 'STANDARD' AND sku_current_mode IS NOT NULL AND sku_current_mode <> item_map.approved_mode THEN
+    gap_reason := 'LEGACY_SKU_MODE_CONFLICT';
   END IF;
 
   IF gap_reason IS NOT NULL THEN
@@ -128,16 +150,19 @@ BEGIN
     SELECT * INTO policy_map
     FROM migration_v2.approved_price_policy_mapping
     WHERE organization_id = p_organization_id AND sku_id = item_map.sku_id AND currency = price_map.source_currency
-      AND source_unit_price = price_map.source_unit_price;
+      AND source_unit_price = price_map.source_unit_price
+      AND input_sha256 = run_row.input_sha256 AND approved_by = run_row.approved_by
+      AND (source_ref = run_row.source_ref OR source_ref LIKE run_row.source_ref || '/%');
     IF NOT FOUND THEN
       gap_reason := 'APPROVED_PRICE_POLICY_MAPPING_MISSING';
     ELSE
       SELECT pp.id INTO policy_id
       FROM catalog.price_policy pp
       WHERE pp.organization_id = p_organization_id AND pp.sku_id = item_map.sku_id AND pp.currency = price_map.source_currency
-        AND pp.unit_price = price_map.source_unit_price AND pp.risk_buffer_bps = policy_map.risk_buffer_bps
-      ORDER BY pp.valid_from DESC, pp.id
-      LIMIT 1;
+        AND pp.id = policy_map.policy_id
+        AND pp.unit_price = price_map.source_unit_price
+        AND pp.version = policy_map.canonical_policy_version
+      FOR UPDATE;
       IF policy_id IS NULL THEN gap_reason := 'PRICE_POLICY_FACT_NOT_FOUND'; END IF;
     END IF;
   END IF;
@@ -154,6 +179,26 @@ BEGIN
     VALUES (p_run_id, p_organization_id, item_row.item_kind, 'GAP', 1)
     ON CONFLICT (run_id, organization_id, item_kind, disposition) DO UPDATE SET row_count = migration_v2.backfill_count.row_count + 1;
     RETURN 'GAP';
+  END IF;
+
+  IF item_row.item_kind = 'STANDARD' THEN
+    UPDATE catalog.sku
+    SET standardization_mode = item_map.approved_mode,
+        version = CASE WHEN standardization_mode IS NULL THEN version + 1 ELSE version END,
+        updated_at = captured_at
+    WHERE organization_id = p_organization_id AND id = item_map.sku_id
+      AND (standardization_mode IS NULL OR standardization_mode = item_map.approved_mode);
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'approved SKU mapping changed during backfill' USING ERRCODE = '40001';
+    END IF;
+    UPDATE catalog.price_policy
+    SET is_primary = policy_map.is_primary,
+        risk_buffer_bps = policy_map.risk_buffer_bps
+    WHERE organization_id = p_organization_id AND id = policy_id
+      AND version = policy_map.canonical_policy_version;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'approved price policy changed during backfill' USING ERRCODE = '40001';
+    END IF;
   END IF;
 
   IF price_map.source_currency = order_row.currency THEN
@@ -221,7 +266,13 @@ AS $$
 DECLARE
   gaps bigint;
   applied bigint;
+  expected bigint;
+  evidence bigint;
+  missing bigint;
+  run_status text;
 BEGIN
+  SELECT total_count INTO expected FROM migration_v2.backfill_run WHERE run_id = p_run_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'backfill run does not exist' USING ERRCODE = '22023'; END IF;
   DELETE FROM migration_v2.backfill_count WHERE run_id = p_run_id;
   INSERT INTO migration_v2.backfill_count (run_id, organization_id, item_kind, disposition, row_count)
   SELECT bi.run_id, bi.organization_id, COALESCE(oi.item_kind, 'UNKNOWN'), bi.disposition, count(*)
@@ -230,13 +281,14 @@ BEGIN
     ON oi.organization_id = bi.organization_id AND oi.id = bi.order_item_id
   WHERE bi.run_id = p_run_id
   GROUP BY bi.run_id, bi.organization_id, COALESCE(oi.item_kind, 'UNKNOWN'), bi.disposition;
-  SELECT count(*) FILTER (WHERE disposition = 'GAP'), count(*) FILTER (WHERE disposition = 'APPLIED') INTO gaps, applied
+  SELECT count(*) FILTER (WHERE disposition = 'GAP'), count(*) FILTER (WHERE disposition = 'APPLIED'), count(*) INTO gaps, applied, evidence
   FROM migration_v2.backfill_item WHERE run_id = p_run_id;
+  missing := GREATEST(expected - evidence, 0);
+  run_status := CASE WHEN gaps = 0 AND evidence = expected THEN 'APPLIED' ELSE 'GAPS' END;
   UPDATE migration_v2.backfill_run
-  SET applied_count = COALESCE(applied, 0), gap_count = COALESCE(gaps, 0), status = CASE WHEN COALESCE(gaps, 0) = 0 THEN 'APPLIED' ELSE 'GAPS' END, finished_at = clock_timestamp()
+  SET applied_count = COALESCE(applied, 0), gap_count = COALESCE(gaps, 0) + missing, status = run_status, finished_at = clock_timestamp()
   WHERE run_id = p_run_id;
-  IF NOT FOUND THEN RAISE EXCEPTION 'backfill run does not exist' USING ERRCODE = '22023'; END IF;
-  RETURN CASE WHEN COALESCE(gaps, 0) = 0 THEN 'APPLIED' ELSE 'GAPS' END;
+  RETURN run_status;
 END;
 $$;
 
@@ -247,7 +299,6 @@ SET LOCAL lock_timeout = '2s';
 SET LOCAL statement_timeout = '30s';
 ALTER TABLE catalog.sku VALIDATE CONSTRAINT sku_v2_standardization_mode_ck;
 ALTER TABLE catalog.price_policy VALIDATE CONSTRAINT price_policy_v2_risk_buffer_ck;
-ALTER TABLE catalog.price_policy VALIDATE CONSTRAINT price_policy_v2_policy_version_ck;
 ALTER TABLE orders.order_item VALIDATE CONSTRAINT order_item_v2_price_snapshot_fk;
 ALTER TABLE orders.order_item VALIDATE CONSTRAINT order_item_v2_fx_snapshot_fk;
 ALTER TABLE orders.order_item VALIDATE CONSTRAINT order_item_v2_image_file_fk;

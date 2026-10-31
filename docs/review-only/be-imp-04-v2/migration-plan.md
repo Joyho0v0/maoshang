@@ -33,12 +33,18 @@ The policy interval is half-open: `valid_from <= captured_at AND
 captured_at < valid_to`; a null `valid_to` means infinity. The selection clock
 is the database transaction's UTC `statement_timestamp()` captured once before
 the policy query. Same-currency active policies win. Otherwise exactly one
-active primary policy is required. A writer locks the SKU and all overlapping
-policies in SKU/currency order, checks `valid_from < valid_to`, rejects overlap
-and duplicate active primary rows, writes a new version, and the order writer
-rechecks `sku.version`, policy version, interval and captured time immediately
-before writing snapshots. `risk_buffer_bps` is owned by the approved Catalog
-pricing role and is constrained to 0..2000.
+active primary policy is required. The one canonical policy version is the
+existing authoritative `catalog.price_policy.version`; there is no parallel
+`policy_version` column. A writer locks the SKU and all overlapping policies in
+SKU/currency order, checks `valid_from < valid_to`, rejects overlap and
+duplicate active primary rows, and writes a new version. `If-Match` protects
+the SKU aggregate while the request `version` protects the selected policy
+row; stale either value is a terminal 409. The order writer rechecks
+`sku.version`, policy version, interval and captured time immediately before
+writing snapshots. `risk_buffer_bps` is owned by the approved Catalog pricing
+role and is constrained to 0..2000. `SkuV2.pricePolicies[]` is the consumer
+projection of `policyId`, canonical `version`, `lifecycle`, currency, price,
+validity, primary flag and risk buffer for CREATE/REPLACE/END follow-up.
 
 The SQL draft uses `btree_gist` and an exclusion constraint for interval
 overlap. Existing rows are not silently backfilled; a legacy null policy is
@@ -77,19 +83,32 @@ classification rather than client-controlled SQL detail.
 The only accepted input is an owner-approved UTF-8 CSV with this header:
 
 ```text
-organization_id,order_item_id,sku_id,standardization_mode,source_price_currency,source_unit_price,fx_raw_market_rate,fx_risk_buffer_bps,approved_by,source_ref
+organization_id,order_item_id,sku_id,standardization_mode,policy_id,canonical_policy_version,is_primary,source_price_currency,source_unit_price,fx_raw_market_rate,fx_risk_buffer_bps,approved_by,source_ref
 ```
 
-Each row is keyed by `(organization_id, order_item_id)`; `sku_id` and all
-snapshot facts are checked against the referenced historical item. A row is
-rejected if it tries to infer mode from tracking/current SKU policy, contains
-an unapproved source reference, or omits a required cross-currency fact. The
-input digest, approval principal, source reference, row counts, per-kind and
-per-organization applied/gap counts, and every applied mapping are stored in
-`migration_v2.backfill_run` / `migration_v2.backfill_item`. Re-running the same
-digest is a no-op; a different digest for a completed run is rejected. A
-partial run commits only its durable gap/evidence rows and can be resumed by
-the same run ID; it does not increment order versions twice.
+Each row is keyed by `(organization_id, order_item_id)`; `sku_id`, the
+owner-approved `standardization_mode`, and all price/policy/FX facts are
+checked against the referenced historical item. Approved policy input carries
+`policy_id`, `canonical_policy_version` (mapped to `price_policy.version`),
+`is_primary`, and `risk_buffer_bps`; it is applied to the nullable expand facts
+and never inferred from tracking mode, current price, or a default. A row is
+rejected if it contains an unapproved source reference or omits a required
+cross-currency fact. Every mapping read must match the run's input digest and
+approver, and its `source_ref` is the run source or a run-scoped child such as
+`<run-source>/order-item/<id>`.
+
+The input digest, approval principal, source reference, authoritative expected
+row count, per-kind/per-organization applied/gap counts, and every applied or
+gap mapping are stored in `migration_v2.backfill_run`, `backfill_count`, and
+`backfill_item`. `backfill_item` deliberately has no target-order-item FK so an
+`ORDER_ITEM_NOT_FOUND` gap remains durable; applied replacement snapshot FKs
+remain protected. `finish_backfill_run` compares evidence count with the
+same-digest input `total_count`; zero evidence for five expected rows is
+`GAPS`, never `APPLIED`. Re-running the same digest/run metadata is idempotent;
+a different digest, approver, source or count is rejected. A partial run can be
+resumed by the same run ID after approved inputs are supplied and does not
+increment order versions twice. An incomplete run makes forward-fix refuse
+with an actionable owner-mapping error instead of replaying DDL blindly.
 
 The migration owner must provide the legacy SKU mapping, existing item mode
 overrides, primary policy and risk-buffer values through the Leader's
@@ -125,7 +144,8 @@ The validation matrix must prove:
 7. 4xx terminal replay, 500/502/503 recovery/takeover, cross-operation ledger
    isolation, audit/outbox rollback and same-key body conflict are all tested.
 8. 005/006/007 up/up, fresh down, and forward-fix preserve the immutable v1
-   rows and leave no temporary review database.
+   rows and leave no temporary review database; down fails closed for run,
+   mapping, snapshot, item-evidence and pointer residue.
 
 ## R1-R8 disposition
 
@@ -135,7 +155,7 @@ The validation matrix must prove:
 | R2 | Typed Problem branches, typed metas, explicit recovery disposition and operation-scoped ledger rules in YAML/matrix. |
 | R3 | Decimal patterns and `RiskBufferBps` bounds align with physical numeric columns; arithmetic/DB checks are specified in 006. |
 | R4 | Exact idempotent DDL drafts, `NOT VALID` staging, dual-write semantics, down guard and forward-fix are specified. |
-| R5 | Half-open interval, captured clock, same-currency/primary selection, exclusion and writer lock/version protocol are specified. |
-| R6 | Per-item mapping, replacement snapshot fingerprint, durable run/input digest/evidence and idempotent retry are specified. |
+| R5 | Existing `price_policy.version` is the sole canonical version; SKU policy projection, policy/SKU If-Match ownership, stale conflict and serialized lifecycle are specified. |
+| R6 | Per-item approved SKU/policy/price/FX mapping, digest/approver/source binding, authoritative count, durable missing-target gap and idempotent resume are specified. |
 | R7 | Closed by system decision: Files-owned status/read/download-intent support is declared at `/api/v2/files/{fileId}` with a live parent resolver design. |
 | R8 | Only `standardizationMode` is required on SKU create; existing defaulted fields are optional. |

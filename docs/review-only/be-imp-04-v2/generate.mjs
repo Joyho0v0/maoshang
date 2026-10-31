@@ -14,8 +14,8 @@ if (!output || output === resolve('.')) throw new Error('Usage: node generate.mj
 await mkdir(output, { recursive: true });
 
 const source = parse(await readFile(new URL('./openapi.yaml', import.meta.url), 'utf8'));
-const document = await SwaggerParser.dereference(source);
 const operations = operationDefinitions(source);
+const document = await SwaggerParser.dereference(source);
 await writeFile(resolve(output, 'document.json'), JSON.stringify(document, null, 2));
 await writeFile(resolve(output, 'types.ts'), astToString(await openapiTS(source)));
 await writeFile(resolve(output, 'runtime-validator.ts'), runtimeValidatorTypescript());
@@ -67,6 +67,27 @@ function schemaName(value) {
   return typeof value?.$ref === 'string' && value.$ref.startsWith('#/components/schemas/') ? value.$ref.split('/').pop() : undefined;
 }
 
+function schemaType(value) {
+  const name = schemaName(value);
+  if (name !== undefined) return `components['schemas'][${JSON.stringify(name)}]`;
+  if (value?.const !== undefined) return JSON.stringify(value.const);
+  if (Array.isArray(value?.enum)) return value.enum.map((item) => JSON.stringify(item)).join(' | ');
+  if (value?.type === 'integer' || value?.type === 'number') return 'number';
+  if (value?.type === 'boolean') return 'boolean';
+  if (value?.type === 'array') return `ReadonlyArray<${schemaType(value.items ?? {})}>`;
+  return 'string';
+}
+
+function headerTypeName(operationId) {
+  return `${operationId[0].toUpperCase()}${operationId.slice(1)}Headers`;
+}
+
+function headerType(headers) {
+  const entries = Object.entries(headers ?? {});
+  if (entries.length === 0) return 'Record<never, never>';
+  return `{ ${entries.map(([name, header]) => `${JSON.stringify(name)}${header.required ? '' : '?'}: ${schemaType(header.schema)}`).join('; ')} }`;
+}
+
 function operationMetadata(operations) {
   return Object.fromEntries(operations.map((operation) => [operation.operationId, {
     method: operation.method,
@@ -83,14 +104,14 @@ function inputType(operation) {
   const fields = [];
   if (path.length > 0) fields.push('pathParams: { ' + path.map((parameter) => parameter.name + ': string').join('; ') + ' }');
   if (query.length > 0) fields.push('query?: { ' + query.map((parameter) => JSON.stringify(parameter.name) + '?: string | number').join('; ') + ' }');
-  if (headers.length > 0) fields.push('headers: Record<string, string>');
+  if (headers.length > 0) fields.push('headers: ' + headerTypeName(operation.operationId));
   if (operation.requestSchema !== undefined) fields.push('body: components[\'schemas\'][' + JSON.stringify(operation.requestSchema) + ']');
   return fields.length === 0 ? 'Record<never, never>' : '{ ' + fields.join('; ') + ' }';
 }
 
 function responseType(operation) {
   const responses = Object.entries(operation.responses).filter(([status]) => /^2\d\d$/.test(status)).map(([status, response]) =>
-    'ContractResponse<' + (response.schema === undefined ? 'void' : 'components[\'schemas\'][' + JSON.stringify(response.schema) + ']') + ', ' + status + '>',
+    'ContractResponse<' + (response.schema === undefined ? 'void' : 'components[\'schemas\'][' + JSON.stringify(response.schema) + ']') + ', ' + status + ', ' + headerType(response.headers) + '>',
   );
   return responses.length === 0 ? 'never' : responses.join(' | ');
 }
@@ -106,10 +127,11 @@ function clientTypescript(operations) {
   const lines = [
     "import type { components } from './types.js';",
     "import type { RuntimeValidator } from './runtime-validator.js';",
-    "export type ContractResponse<T, S extends number> = { readonly status: S; readonly data: T; readonly headers: Readonly<Record<string, string>> };",
+    "export type ContractResponse<T, S extends number, H extends Record<string, unknown> = Record<string, string>> = { readonly status: S; readonly data: T; readonly headers: Readonly<H> };",
     "export interface GeneratedV2ClientOptions { readonly baseUrl?: string; readonly fetch?: typeof globalThis.fetch; readonly validator: RuntimeValidator; }",
     "export const operations = " + JSON.stringify(operationMetadata(operations), null, 2) + " as const;",
     "export type OperationId = keyof typeof operations;",
+    ...operations.filter((operation) => operation.parameters.some((parameter) => parameter.in === 'header')).map((operation) => 'export type ' + headerTypeName(operation.operationId) + ' = ' + headerType(Object.fromEntries(operation.parameters.filter((parameter) => parameter.in === 'header').map((parameter) => [parameter.name, { required: parameter.required === true, schema: parameter.schema }]))) + ';'),
     "export type OperationInputMap = {",
     ...operations.map((operation) => '  ' + JSON.stringify(operation.operationId) + ': ' + inputType(operation) + ';'),
     "};",
@@ -137,9 +159,10 @@ function clientTypescript(operations) {
     "    const body = 'body' in input ? input.body : undefined;",
     "    if (body !== undefined && !headers.has('content-type')) headers.set('content-type', 'application/json');",
     "    const response = await this.fetchImpl(absolute ? url.toString() : url.pathname + url.search, { method: operation.method, credentials: 'include', headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });",
-    "    const contract = (operation.responses as Record<string, { schema?: string }>)[String(response.status)];",
+    "    const contract = (operation.responses as Record<string, { schema?: string; headers?: Record<string, { required: boolean; schema?: object }> }>)[String(response.status)];",
     "    if (contract === undefined) throw new Error('Undeclared HTTP status ' + response.status);",
     "    const payload = await response.text().then((text) => text.length === 0 ? undefined : JSON.parse(text) as unknown);",
+    "    for (const [name, header] of Object.entries(contract.headers ?? {})) { const value = response.headers.get(name); if (value === null && header.required) throw new Error('Missing required response header ' + name); if (value !== null && header.schema !== undefined && !this.options.validator.validateSchema(header.schema, value)) throw new Error('Invalid response header ' + name); }",
     "    if (contract.schema !== undefined && !this.options.validator.validate(contract.schema, payload)) throw new Error('Invalid response schema ' + contract.schema);",
     "    if (!response.ok) throw new ApiProblemError(response.status, payload as OperationErrorMap[Id], Object.fromEntries(response.headers.entries()));",
     "    return { status: response.status, data: payload as OperationResponseMap[Id], headers: Object.fromEntries(response.headers.entries()) } as unknown as OperationResponseMap[Id];",
@@ -167,6 +190,7 @@ function clientJavascript(operations) {
     "    const contract = operation.responses[String(response.status)];",
     "    if (contract === undefined) throw new Error('Undeclared HTTP status ' + response.status);",
     "    const payload = await response.text().then((text) => text.length === 0 ? undefined : JSON.parse(text));",
+    "    for (const [name, header] of Object.entries(contract.headers ?? {})) { const value = response.headers.get(name); if (value === null && header.required) throw new Error('Missing required response header ' + name); if (value !== null && header.schema !== undefined && !this.validator.validateSchema(header.schema, value)) throw new Error('Invalid response header ' + name); }",
     "    if (contract.schema !== undefined && !this.validator.validate(contract.schema, payload)) throw new Error('Invalid response schema ' + contract.schema);",
     "    if (!response.ok) { const error = new Error('API request failed.'); error.status = response.status; error.problem = payload; throw error; }",
     "    return { status: response.status, data: payload, headers: Object.fromEntries(response.headers.entries()) };",
@@ -181,7 +205,7 @@ function runtimeValidatorTypescript() {
     "import addFormatsModule from 'ajv-formats';",
     "const Ajv2020 = Ajv2020Module as unknown as new (options?: object) => { addSchema: (schema: object, key: string) => void; compile: (schema: object) => ((value: unknown) => boolean) & { errors?: unknown[] | null }; };",
     "const addFormats = addFormatsModule as unknown as (instance: object) => void;",
-    "export interface RuntimeValidator { validate(schemaName: string, value: unknown): boolean; readonly errors: unknown[] | null | undefined; }",
+    "export interface RuntimeValidator { validate(schemaName: string, value: unknown): boolean; validateSchema(schema: object, value: unknown): boolean; readonly errors: unknown[] | null | undefined; }",
     "export function createV2RuntimeValidator(document: Record<string, unknown>): RuntimeValidator {",
     "  const ajv = new Ajv2020({ allErrors: true, strict: false, allowUnionTypes: true });",
     "  addFormats(ajv);",
@@ -189,7 +213,7 @@ function runtimeValidatorTypescript() {
     "  for (const [name, schema] of Object.entries(schemas)) ajv.addSchema(schema, '#/components/schemas/' + name);",
     "  const validators = new Map<string, ((value: unknown) => boolean) & { errors?: unknown[] | null }>();",
     "  let errors: unknown[] | null | undefined;",
-    "  return { validate(schemaName, value) { let validator = validators.get(schemaName); if (validator === undefined) { const compiled = ajv.compile({ $ref: '#/components/schemas/' + schemaName }); validator = compiled; validators.set(schemaName, compiled); } const current = validator!; const valid = current(value); errors = current.errors; return valid; }, get errors() { return errors; } };",
+    "  return { validate(schemaName, value) { let validator = validators.get(schemaName); if (validator === undefined) { const compiled = ajv.compile({ $ref: '#/components/schemas/' + schemaName }); validator = compiled; validators.set(schemaName, compiled); } const current = validator!; const valid = current(value); errors = current.errors; return valid; }, validateSchema(schema, value) { const current = ajv.compile(schema); const valid = current(value); errors = current.errors; return valid; }, get errors() { return errors; } };",
     "}",
   ].join('\n') + '\n';
 }
@@ -203,7 +227,7 @@ function runtimeValidatorJavascript() {
     "  addFormats(ajv);",
     "  const validators = new Map(); let errors;",
     "  for (const [name, schema] of Object.entries(document.components?.schemas ?? {})) ajv.addSchema(schema, '#/components/schemas/' + name);",
-    "  return { validate(schemaName, value) { let validator = validators.get(schemaName); if (validator === undefined) { validator = ajv.compile({ $ref: '#/components/schemas/' + schemaName }); validators.set(schemaName, validator); } const valid = validator(value); errors = validator.errors; return valid; }, get errors() { return errors; } };",
+    "  return { validate(schemaName, value) { let validator = validators.get(schemaName); if (validator === undefined) { validator = ajv.compile({ $ref: '#/components/schemas/' + schemaName }); validators.set(schemaName, validator); } const valid = validator(value); errors = validator.errors; return valid; }, validateSchema(schema, value) { const validator = ajv.compile(schema); const valid = validator(value); errors = validator.errors; return valid; }, get errors() { return errors; } };",
     "}",
   ].join('\n') + '\n';
 }

@@ -1,6 +1,6 @@
 /* global Buffer, URL, console, process, Response */
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -49,9 +49,13 @@ function schema(document, name) {
 function propertyFromSchema(candidate, property) {
   if (candidate.properties?.[property]?.const !== undefined) return candidate.properties[property];
   let fallback = candidate.properties?.[property];
-  for (const branch of candidate.allOf ?? []) {
+  for (const branch of [...(candidate.allOf ?? []), ...(candidate.oneOf ?? []), ...(candidate.anyOf ?? [])]) {
+    if (branch.$ref !== undefined) continue;
     if (branch.properties?.[property]?.const !== undefined) return branch.properties[property];
     if (fallback === undefined && branch.properties?.[property] !== undefined) fallback = branch.properties[property];
+    if (fallback === undefined) {
+      try { fallback = propertyFromSchema(branch, property); } catch { /* branch does not define the property */ }
+    }
   }
   if (fallback !== undefined) return fallback;
   throw new Error(`schema has no property ${property}`);
@@ -91,6 +95,10 @@ function independentLint(document, dereferenced) {
   assert(!Object.hasOwn(schema(dereferenced, 'OrderNonStandardLineV2').properties, 'skuId'), 'non-standard response leaks skuId');
   assert(schema(dereferenced, 'OrderStandardLineV2').required.includes('skuId'), 'standard response does not require skuId');
   assert(schema(dereferenced, 'OrderNonStandardLineRequestV2').required.includes('quotedUnitPrice'), 'non-standard request lacks quote');
+  const policyProjection = schema(dereferenced, 'PricePolicyV2');
+  assert(policyProjection.required.includes('policyId') && policyProjection.required.includes('version') && policyProjection.required.includes('lifecycle'), 'policy projection lacks canonical consumer facts');
+  assert(schema(dereferenced, 'SkuV2').required.includes('pricePolicies'), 'SKU projection does not expose policy lifecycle facts');
+  assert(!Object.hasOwn(schema(dereferenced, 'PricePolicyReplaceV2').properties, 'policyVersion') && !Object.hasOwn(schema(dereferenced, 'PricePolicyEndV2').properties, 'policyVersion'), 'policy version has a non-canonical alias');
 
   const quantityPattern = new RegExp(schema(dereferenced, 'DecimalQuantity').pattern);
   const amountPattern = new RegExp(schema(dereferenced, 'DecimalAmount').pattern);
@@ -108,9 +116,11 @@ function independentLint(document, dereferenced) {
   assert(propertyFromSchema(schema(dereferenced, 'ProblemInternalRecoverable'), 'retryable').const === true, 'recoverable 500 is not retryable');
   assert(propertyFromSchema(schema(dereferenced, 'ProblemInternalTerminal'), 'retryable').const === false, 'terminal 500 is retryable');
   assert(propertyFromSchema(schema(dereferenced, 'Problem502'), 'retryable').const === true && propertyFromSchema(schema(dereferenced, 'Problem503'), 'retryable').const === true, 'dependency failures are not recoverable');
+  const csrfBranch = schema(dereferenced, 'Problem403').oneOf.find((branch) => branch.allOf?.some((part) => part.properties?.code?.const === 'CSRF_FAILED'));
+  assert(csrfBranch?.allOf?.some((part) => part.properties?.retryable?.const === true), 'CSRF_FAILED wire retryable semantics must remain true');
   assert(schema(dereferenced, 'CommandStatusRecoveryV2').allOf[1].properties.retryAfterMs.const === 0, 'recovery retryAfterMs must be zero');
   assert(schema(dereferenced, 'CommandStatusRecoveryV2').allOf[1].properties.problem.type === 'null', 'recovery problem must be null');
-  assert(schema(dereferenced, 'CommandStatusFailedV2').allOf[1].properties.httpStatus.maximum === 599, 'terminal failed status must allow deterministic 500');
+  assert(schema(dereferenced, 'CommandStatusFailedV2').allOf[2].oneOf.some((branch) => branch.properties?.httpStatus?.const === 500), 'terminal failed status must allow deterministic 500');
   assert(document.paths['/files/{fileId}'] !== undefined, 'Files v2 support surface is undeclared');
   assert(document.paths['/files/{fileId}'].get.operationId === 'getFileStatusV2', 'Files status operationId is not canonical');
   assert(document.paths['/files/{fileId}/download-intents']?.post.operationId === 'createFileDownloadIntentV2', 'Files download operationId is not canonical');
@@ -139,6 +149,8 @@ function compileFixtures(dereferenced) {
           : name === 'csrfToken' ? validators.get('CsrfToken')
             : name.startsWith('command') ? validators.get('CommandStatus')
               : name === 'problemCsrfFailed' ? validators.get('Problem403')
+          : name === 'skuProjection' ? validators.get('SkuV2')
+            : name === 'policyReplace' ? validators.get('PricePolicyMutationV2')
           : name.startsWith('sku') ? validators.get('SkuCreateRequestV2')
             : orderValidator;
     assert(validator(value), `${name} should validate: ${JSON.stringify(validator.errors)}`);
@@ -148,10 +160,12 @@ function compileFixtures(dereferenced) {
   for (const [name, value] of Object.entries(fixtures.invalid)) {
     const validator = name === 'rateTooPrecise' ? validators.get('DecimalRate')
       : name === 'amountIntegerOverflow' ? validators.get('DecimalAmount')
-      : name.startsWith('problemWrongRecoverability') ? validators.get('Problem503')
+        : name.startsWith('problemWrongRecoverability') ? validators.get('Problem503')
         : name.startsWith('problemWrongMeta') ? validators.get('Problem409')
             : name === 'problem401WithMeta' ? validators.get('Problem401')
               : name === 'problemCsrfWrongRetryable' ? validators.get('Problem403')
+                : name === 'problemValidationConflictingViolations' ? validators.get('Problem400')
+                : name === 'policyReplaceLegacyVersionName' ? validators.get('PricePolicyMutationV2')
                 : name.startsWith('command') ? validators.get('CommandStatus')
                   : name === 'csrfLegacyToken' ? validators.get('CsrfToken')
                     : name === 'thresholdWrongScale' ? validators.get('SkuCreateRequestV2')
@@ -209,6 +223,23 @@ async function runGeneratedGate() {
     const tsc = fileURLToPath(new URL('../../../node_modules/typescript/bin/tsc', import.meta.url));
     const typecheck = spawnSync(process.execPath, [tsc, '-p', join(output, 'tsconfig.json'), '--noEmit'], { encoding: 'utf8' });
     assert(typecheck.status === 0, 'generated typecheck failed: ' + typecheck.stdout + typecheck.stderr);
+    const negativeFixture = join(output, 'negative-header-fixtures.ts');
+    await writeFile(negativeFixture, [
+      "import type { components } from './types.js';",
+      "import type { OperationInputMap } from './client.js';",
+      "const orderBody = {} as components['schemas']['OrderCreateRequestV2'];",
+      "// @ts-expect-error X-CSRF-Token is required for createOrderV2",
+      "const missingCsrf: OperationInputMap['createOrderV2'] = { headers: { 'Idempotency-Key': 'negative-key' }, body: orderBody };",
+      "// @ts-expect-error Idempotency-Key is required for createOrderV2",
+      "const missingIdempotency: OperationInputMap['createOrderV2'] = { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16' }, body: orderBody };",
+      "const skuBody = {} as components['schemas']['SkuUpdateRequestV2'];",
+      "// @ts-expect-error If-Match is required for updateSkuV2",
+      "const missingIfMatch: OperationInputMap['updateSkuV2'] = { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16' }, pathParams: { id: '11111111-1111-4111-8111-111111111111' }, body: skuBody };",
+      "const optionalRequestId: OperationInputMap['createOrderV2'] = { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'valid-key', 'X-Request-ID': '77777777-7777-4777-8777-777777777777' }, body: orderBody };",
+      'void missingCsrf; void missingIdempotency; void missingIfMatch; void optionalRequestId;',
+    ].join('\n') + '\n');
+    const negativeTypecheck = spawnSync(process.execPath, [tsc, '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--lib', 'ES2022,DOM,DOM.Iterable', '--skipLibCheck', '--types', 'node', '--noEmit', negativeFixture], { encoding: 'utf8' });
+    assert(negativeTypecheck.status === 0, 'generated header negative typecheck failed: ' + negativeTypecheck.stdout + negativeTypecheck.stderr);
     const documentValue = JSON.parse(await readFile(join(output, 'document.json'), 'utf8'));
     const validatorModule = await import(pathToFileURL(join(output, 'runtime-validator.mjs')).href);
     const clientModule = await import(pathToFileURL(join(output, 'client.mjs')).href);
@@ -237,7 +268,32 @@ async function runGeneratedGate() {
         return new Response(JSON.stringify(fixtures.valid.commandInProgress), { status: 202, headers: { 'content-type': 'application/json' } });
       },
     });
-    await orderClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'r1-generation-key' }, body: orderBody });
+    let missingResponseHeaderRejected = false;
+    try {
+      await orderClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'r1-generation-key' }, body: orderBody });
+    } catch (error) {
+      missingResponseHeaderRejected = /required response header/i.test(error?.message ?? '');
+    }
+    assert(missingResponseHeaderRejected, 'generated client accepted a 202 response missing required response headers');
+    const invalidResponseHeaderClient = new clientModule.GeneratedV2Client({
+      validator,
+      fetch: async () => new Response(JSON.stringify(fixtures.valid.commandInProgress), { status: 202, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'public', 'content-location': '/api/v2/commands/44444444-4444-4444-8444-444444444444', 'retry-after': '1' } }),
+    });
+    let invalidResponseHeaderRejected = false;
+    try {
+      await invalidResponseHeaderClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'r1-generation-key' }, body: orderBody });
+    } catch (error) {
+      invalidResponseHeaderRejected = /Invalid response header Cache-Control/i.test(error?.message ?? '');
+    }
+    assert(invalidResponseHeaderRejected, 'generated client accepted a response header that violates const/pattern schema');
+    const validOrderClient = new clientModule.GeneratedV2Client({
+      validator,
+      fetch: async (url, init) => {
+        orderObserved = { url, method: init.method, headers: Object.fromEntries(init.headers.entries()), body: init.body, credentials: init.credentials };
+        return new Response(JSON.stringify(fixtures.valid.commandInProgress), { status: 202, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store', 'content-location': '/api/v2/commands/44444444-4444-4444-8444-444444444444', 'retry-after': '1' } });
+      },
+    });
+    await validOrderClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'r1-generation-key' }, body: orderBody });
     assert(orderObserved?.url === '/api/v2/orders' && orderObserved.method === 'POST' && orderObserved.credentials === 'include'
       && orderObserved.headers['content-type'] === 'application/json'
       && orderObserved.headers['idempotency-key'] === 'r1-generation-key'
@@ -245,7 +301,7 @@ async function runGeneratedGate() {
     let errorObserved = false;
     const errorClient = new clientModule.GeneratedV2Client({
       validator,
-      fetch: async () => new Response(JSON.stringify(fixtures.valid.problemFileNotReady), { status: 409, headers: { 'content-type': 'application/problem+json' } }),
+      fetch: async () => new Response(JSON.stringify(fixtures.valid.problemFileNotReady), { status: 409, headers: { 'content-type': 'application/problem+json', 'x-request-id': '77777777-7777-4777-8777-777777777777' } }),
     });
     try {
       await errorClient.call('createFileDownloadIntentV2', { pathParams: { fileId }, headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16' } });
@@ -258,7 +314,7 @@ async function runGeneratedGate() {
     const validatorSource = await readFile(join(output, 'runtime-validator.ts'), 'utf8');
     assert(clientSource.includes('OperationResponseMap') && clientSource.includes('OperationErrorMap'), 'generated client lacks response/error typing');
     assert(!/packages\/contracts\/openapi\/|\/api\/v1/.test(clientSource + validatorSource), 'generated v2 runtime imports or URLs leaked v1');
-    return { operations: summary.operationCount, baseUrl: summary.baseUrl, schemas: Object.keys(documentValue.components?.schemas ?? {}).length, typesBytes: Buffer.byteLength(typesSource), typesSha256: createHash('sha256').update(typesSource).digest('hex'), clientBytes: Buffer.byteLength(clientSource), clientSha256: createHash('sha256').update(clientSource).digest('hex'), runtimeSmoke: 'GET+POST /api/v2; headers/body; success+Problem response validators', runtimeFixtures: runtimeFixtures.length };
+    return { operations: summary.operationCount, baseUrl: summary.baseUrl, schemas: Object.keys(documentValue.components?.schemas ?? {}).length, typesBytes: Buffer.byteLength(typesSource), typesSha256: createHash('sha256').update(typesSource).digest('hex'), clientBytes: Buffer.byteLength(clientSource), clientSha256: createHash('sha256').update(clientSource).digest('hex'), runtimeSmoke: 'GET+POST /api/v2; typed request headers; response header gate; success+Problem response validators', runtimeFixtures: runtimeFixtures.length };
   } finally {
     await rm(output, { recursive: true, force: true });
   }

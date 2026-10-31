@@ -6,10 +6,44 @@ SET LOCAL lock_timeout = '2s';
 SET LOCAL statement_timeout = '30s';
 
 DO $$
+DECLARE
+  durable_table_name text;
+  has_rows boolean;
 BEGIN
-  IF to_regclass('migration_v2.backfill_item') IS NOT NULL THEN
-    IF EXISTS (SELECT 1 FROM migration_v2.backfill_item) THEN
-      RAISE EXCEPTION 'pre-data down refused: backfill evidence exists' USING ERRCODE = '55000';
+  FOREACH durable_table_name IN ARRAY ARRAY[
+    'migration_v2.backfill_item',
+    'migration_v2.backfill_count',
+    'migration_v2.approved_legacy_sku_mapping',
+    'migration_v2.approved_price_policy_mapping',
+    'migration_v2.approved_order_item_mapping',
+    'migration_v2.approved_price_fx_mapping',
+    'catalog.price_snapshot_v2',
+    'orders.fx_snapshot_v2',
+    'migration_v2.backfill_run'
+  ] LOOP
+    IF to_regclass(durable_table_name) IS NOT NULL THEN
+      EXECUTE format('SELECT EXISTS (SELECT 1 FROM %s)', durable_table_name) INTO has_rows;
+      IF has_rows THEN
+        RAISE EXCEPTION 'pre-data down refused: durable v2 evidence exists in %', durable_table_name USING ERRCODE = '55000';
+      END IF;
+    END IF;
+  END LOOP;
+  IF to_regclass('catalog.sku') IS NOT NULL AND EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'catalog' AND table_name = 'sku' AND column_name = 'standardization_mode'
+  ) THEN
+    EXECUTE 'SELECT EXISTS (SELECT 1 FROM catalog.sku WHERE standardization_mode IS NOT NULL)' INTO has_rows;
+    IF has_rows THEN
+      RAISE EXCEPTION 'pre-data down refused: SKU standardization evidence exists' USING ERRCODE = '55000';
+    END IF;
+  END IF;
+  IF to_regclass('catalog.price_policy') IS NOT NULL AND EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'catalog' AND table_name = 'price_policy' AND column_name = 'risk_buffer_bps'
+  ) THEN
+    EXECUTE 'SELECT EXISTS (SELECT 1 FROM catalog.price_policy WHERE risk_buffer_bps IS NOT NULL OR is_primary IS TRUE)' INTO has_rows;
+    IF has_rows THEN
+      RAISE EXCEPTION 'pre-data down refused: price-policy v2 evidence exists' USING ERRCODE = '55000';
     END IF;
   END IF;
   IF EXISTS (
@@ -19,8 +53,11 @@ BEGIN
     IF EXISTS (
       SELECT 1 FROM orders.order_item
       WHERE v2_snapshot_version IS NOT NULL
+         OR line_id IS NOT NULL
+         OR standardization_mode IS NOT NULL
          OR price_snapshot_v2_id IS NOT NULL
          OR fx_snapshot_v2_id IS NOT NULL
+         OR image_file_id IS NOT NULL
     ) THEN
       RAISE EXCEPTION 'pre-data down refused: v2 order-item data exists' USING ERRCODE = '55000';
     END IF;
@@ -78,6 +115,7 @@ ALTER TABLE orders.order_item
 
 DROP TABLE IF EXISTS migration_v2.backfill_item;
 DROP TABLE IF EXISTS migration_v2.backfill_count;
+DROP INDEX IF EXISTS migration_v2.approved_price_policy_policy_idx;
 DROP TABLE IF EXISTS migration_v2.approved_price_fx_mapping;
 DROP TABLE IF EXISTS migration_v2.approved_order_item_mapping;
 DROP TABLE IF EXISTS migration_v2.approved_price_policy_mapping;
@@ -88,10 +126,8 @@ DROP TABLE IF EXISTS catalog.price_snapshot_v2;
 
 ALTER TABLE catalog.price_policy DROP CONSTRAINT IF EXISTS price_policy_v2_window_excl;
 DROP INDEX IF EXISTS catalog.price_policy_v2_primary_open_uq;
-ALTER TABLE catalog.price_policy DROP CONSTRAINT IF EXISTS price_policy_v2_policy_version_ck;
 ALTER TABLE catalog.price_policy DROP CONSTRAINT IF EXISTS price_policy_v2_risk_buffer_ck;
 ALTER TABLE catalog.price_policy
-  DROP COLUMN IF EXISTS policy_version,
   DROP COLUMN IF EXISTS risk_buffer_bps,
   DROP COLUMN IF EXISTS is_primary;
 ALTER TABLE catalog.sku DROP CONSTRAINT IF EXISTS sku_v2_standardization_mode_ck;

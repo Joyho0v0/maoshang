@@ -2,16 +2,17 @@
 
 The candidate uses typed Problem branches, not a free-form envelope. Every
 branch fixes `status`, `code`, `retryable`, and the shape of `meta` (when the
-code requires it). `ProblemCommon.violations` exists only to make the
-`Problem400` all-of branch closed under JSON Schema; `Problem400` requires the
-array and all other branches prohibit it by their branch schema semantics.
+code requires it). Validation violations have exactly one authoritative home:
+`Problem400.meta.violations`; a top-level `violations` property is rejected.
+`CommandStatusFailedV2` uses status-specific branches, so its `httpStatus` and
+`problem.status` are the same machine-checked value.
 
 | HTTP | code | retryable | ledger disposition | required machine data |
 | ---: | --- | :---: | --- | --- |
 | 400 | `VALIDATION_FAILED` | false | `FAILED` terminal replay | `violations[]` with `field`, `reason`; `meta.kind=VALIDATION` |
 | 401 | `AUTHENTICATION_REQUIRED` or `SESSION_EXPIRED` | false | terminal replay | no sensitive session detail |
 | 403 | `PERMISSION_DENIED` | false | terminal replay | no meta; hidden resource policy remains separate |
-| 403 | `CSRF_FAILED` | false | terminal replay | `meta.kind=CSRF`, `refreshHref=/api/v2/auth/csrf` |
+| 403 | `CSRF_FAILED` | true | terminal replay | `meta.kind=CSRF`, `refreshHref=/api/v2/auth/csrf`; retryable describes the wire response, not ledger disposition |
 | 404 | `RESOURCE_NOT_FOUND` or `COMMAND_NOT_FOUND` | false | terminal replay | no scope-disclosing detail |
 | 409 | `STATE_CONFLICT` | false | terminal replay | `resourceType`, `resourceId`, `currentState` |
 | 409 | `VERSION_CONFLICT` | false | terminal replay | `resourceType`, `resourceId`, `currentVersion`, `providedVersion` |

@@ -109,7 +109,6 @@
         "code": "VALIDATION_FAILED",
         "requestId": "77777777-7777-4777-8777-777777777777",
         "retryable": false,
-        "violations": [{ "field": "lines[0].quantity", "code": "INVALID", "message": "Quantity is invalid." }],
         "meta": { "kind": "VALIDATION", "violations": [{ "field": "lines[0].quantity", "code": "INVALID", "message": "Quantity is invalid." }] }
       }
     },
@@ -139,7 +138,7 @@
       "status": 403,
       "code": "CSRF_FAILED",
       "requestId": "77777777-7777-4777-8777-777777777777",
-      "retryable": false,
+      "retryable": true,
       "meta": { "kind": "CSRF", "refreshHref": "/api/v2/auth/csrf" }
     },
     "skuMinimal": {
@@ -168,6 +167,34 @@
       "trackingMode": "NONE",
       "standardizationMode": "NONE",
       "lowStockThreshold": "0"
+    },
+    "skuProjection": {
+      "id": "99999999-9999-4999-8999-999999999999",
+      "organizationId": "66666666-6666-4666-8666-666666666666",
+      "version": 4,
+      "createdAt": "2026-10-31T00:00:00Z",
+      "updatedAt": "2026-10-31T00:01:00Z",
+      "productId": "88888888-8888-4888-8888-888888888888",
+      "skuCode": "SKU-PROJECTION",
+      "name": "Projection SKU",
+      "unit": "piece",
+      "baseUnit": "piece",
+      "trackingMode": "NONE",
+      "standardizationMode": "STRICT",
+      "lowStockThreshold": "0",
+      "status": "ACTIVE",
+      "pricePolicies": [{ "policyId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "version": 3, "lifecycle": "ACTIVE", "currency": "USD", "unitPrice": "19.9900", "validFrom": "2026-10-31T00:00:00Z", "validTo": null, "isPrimary": true, "riskBufferBps": 25 }]
+    },
+    "policyReplace": {
+      "action": "REPLACE",
+      "policyId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "version": 3,
+      "currency": "USD",
+      "unitPrice": "20.0000",
+      "validFrom": "2026-11-01T00:00:00Z",
+      "validTo": null,
+      "isPrimary": true,
+      "riskBufferBps": 25
     }
   },
   "invalid": {
@@ -205,7 +232,10 @@
     "problemWrongMeta": { "type": "urn:autoflow:problem:idempotency-key-reused", "title": "Idempotency key reused", "status": 409, "code": "IDEMPOTENCY_KEY_REUSED", "requestId": "77777777-7777-4777-8777-777777777777", "retryable": false, "meta": { "kind": "STATE_CONFLICT", "resourceType": "ORDER", "resourceId": "44444444-4444-4444-8444-444444444444", "currentState": "DRAFT" } }
     ,
     "problem401WithMeta": { "type": "urn:autoflow:problem:auth", "title": "Authentication required", "status": 401, "code": "AUTHENTICATION_REQUIRED", "requestId": "77777777-7777-4777-8777-777777777777", "retryable": false, "meta": { "refreshHref": "/api/v2/auth/csrf" } },
-    "problemCsrfWrongRetryable": { "type": "urn:autoflow:problem:csrf-failed", "title": "CSRF failed", "status": 403, "code": "CSRF_FAILED", "requestId": "77777777-7777-4777-8777-777777777777", "retryable": true, "meta": { "kind": "CSRF", "refreshHref": "/api/v2/auth/csrf" } },
+    "problemCsrfWrongRetryable": { "type": "urn:autoflow:problem:csrf-failed", "title": "CSRF failed", "status": 403, "code": "CSRF_FAILED", "requestId": "77777777-7777-4777-8777-777777777777", "retryable": false, "meta": { "kind": "CSRF", "refreshHref": "/api/v2/auth/csrf" } },
+    "commandFailedStatusMismatch": { "commandId": "44444444-4444-4444-8444-444444444444", "operationId": "createOrderV2", "state": "FAILED", "startedAt": "2026-10-31T00:00:00Z", "expiresAt": "2026-10-31T00:01:00Z", "retryAfterMs": 0, "completedAt": "2026-10-31T00:00:01Z", "httpStatus": 500, "resource": null, "resultHref": null, "problem": { "type": "urn:autoflow:problem:validation-failed", "title": "Validation failed", "status": 400, "code": "VALIDATION_FAILED", "requestId": "77777777-7777-4777-8777-777777777777", "retryable": false, "meta": { "kind": "VALIDATION", "violations": [{ "field": "lines[0].quantity", "code": "INVALID", "message": "Quantity is invalid." }] } } },
+    "problemValidationConflictingViolations": { "type": "urn:autoflow:problem:validation-failed", "title": "Validation failed", "status": 400, "code": "VALIDATION_FAILED", "requestId": "77777777-7777-4777-8777-777777777777", "retryable": false, "violations": [{ "field": "lines[0].quantity", "code": "TOP_LEVEL", "message": "Conflict." }], "meta": { "kind": "VALIDATION", "violations": [{ "field": "lines[0].quantity", "code": "META_LEVEL", "message": "Different." }] } },
+    "policyReplaceLegacyVersionName": { "action": "REPLACE", "policyId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "policyVersion": 3, "currency": "USD", "unitPrice": "20.0000", "validFrom": "2026-11-01T00:00:00Z", "validTo": null, "isPrimary": true, "riskBufferBps": 25 },
     "commandRecoveryWithProblem": { "commandId": "44444444-4444-4444-8444-444444444444", "operationId": "createOrderV2", "state": "RECOVERY_REQUIRED", "startedAt": "2026-10-31T00:00:00Z", "expiresAt": "2026-10-31T00:01:00Z", "retryAfterMs": 1, "completedAt": null, "httpStatus": null, "resource": null, "resultHref": null, "problem": { "type": "urn:autoflow:problem:internal-error", "title": "Internal server error", "status": 500, "code": "INTERNAL_ERROR", "requestId": "77777777-7777-4777-8777-777777777777", "retryable": true } },
     "csrfLegacyToken": { "token": "legacy-token-value", "expiresAt": "2026-10-31T00:05:00Z" }
   }

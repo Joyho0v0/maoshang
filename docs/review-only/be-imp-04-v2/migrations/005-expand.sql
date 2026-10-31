@@ -16,18 +16,14 @@ BEGIN
 END $$;
 
 -- These are nullable expand columns by design. Existing policy rows are not
--- assigned a guessed primary/risk/version value; owner-approved mapping is a
+-- assigned a guessed primary/risk value; owner-approved mapping is a
 -- prerequisite for v2 use and is validated by the dual-version path.
 ALTER TABLE catalog.price_policy ADD COLUMN IF NOT EXISTS is_primary boolean;
 ALTER TABLE catalog.price_policy ADD COLUMN IF NOT EXISTS risk_buffer_bps integer;
-ALTER TABLE catalog.price_policy ADD COLUMN IF NOT EXISTS policy_version integer;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'price_policy_v2_risk_buffer_ck' AND conrelid = 'catalog.price_policy'::regclass) THEN
     ALTER TABLE catalog.price_policy ADD CONSTRAINT price_policy_v2_risk_buffer_ck CHECK (risk_buffer_bps BETWEEN 0 AND 2000) NOT VALID;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'price_policy_v2_policy_version_ck' AND conrelid = 'catalog.price_policy'::regclass) THEN
-    ALTER TABLE catalog.price_policy ADD CONSTRAINT price_policy_v2_policy_version_ck CHECK (policy_version > 0) NOT VALID;
   END IF;
 END $$;
 
@@ -139,7 +135,6 @@ CREATE TABLE IF NOT EXISTS migration_v2.backfill_item (
   source_ref text NOT NULL,
   applied_at timestamptz,
   PRIMARY KEY (run_id, organization_id, order_item_id),
-  FOREIGN KEY (organization_id, order_item_id) REFERENCES orders.order_item (organization_id, id) ON DELETE RESTRICT,
   FOREIGN KEY (organization_id, source_sku_id) REFERENCES catalog.sku (organization_id, id) ON DELETE RESTRICT,
   FOREIGN KEY (organization_id, replacement_price_snapshot_v2_id) REFERENCES catalog.price_snapshot_v2 (organization_id, id) ON DELETE RESTRICT,
   FOREIGN KEY (organization_id, replacement_fx_snapshot_v2_id) REFERENCES orders.fx_snapshot_v2 (organization_id, id) ON DELETE RESTRICT,
@@ -175,15 +170,20 @@ CREATE TABLE IF NOT EXISTS migration_v2.approved_legacy_sku_mapping (
 CREATE TABLE IF NOT EXISTS migration_v2.approved_price_policy_mapping (
   organization_id uuid NOT NULL,
   sku_id uuid NOT NULL,
+  policy_id uuid NOT NULL,
   currency char(3) NOT NULL CHECK (currency ~ '^[A-Z]{3}$'),
   source_unit_price numeric(19,4) NOT NULL CHECK (source_unit_price >= 0),
+  is_primary boolean NOT NULL,
   risk_buffer_bps integer NOT NULL CHECK (risk_buffer_bps BETWEEN 0 AND 2000),
+  canonical_policy_version integer NOT NULL CHECK (canonical_policy_version > 0),
   approved_by uuid NOT NULL,
   source_ref text NOT NULL,
   input_sha256 bytea NOT NULL CHECK (octet_length(input_sha256) = 32),
   PRIMARY KEY (organization_id, sku_id, currency),
-  FOREIGN KEY (organization_id, sku_id) REFERENCES catalog.sku (organization_id, id) ON DELETE RESTRICT
+  FOREIGN KEY (organization_id, sku_id) REFERENCES catalog.sku (organization_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY (organization_id, policy_id) REFERENCES catalog.price_policy (organization_id, id) ON DELETE RESTRICT
 );
+CREATE INDEX IF NOT EXISTS approved_price_policy_policy_idx ON migration_v2.approved_price_policy_mapping (organization_id, policy_id, canonical_policy_version);
 
 CREATE TABLE IF NOT EXISTS migration_v2.approved_order_item_mapping (
   organization_id uuid NOT NULL,

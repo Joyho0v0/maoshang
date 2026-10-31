@@ -472,13 +472,13 @@ components:
       additionalProperties: false
     PricePolicyReplaceV2:
       type: object
-      required: [action, policyId, policyVersion, currency, unitPrice, validFrom, validTo, isPrimary, riskBufferBps]
-      properties: { action: { const: REPLACE }, policyId: { $ref: '#/components/schemas/Uuid' }, policyVersion: { type: integer, minimum: 1 }, currency: { $ref: '#/components/schemas/Currency' }, unitPrice: { $ref: '#/components/schemas/DecimalAmount' }, validFrom: { $ref: '#/components/schemas/DateTime' }, validTo: { anyOf: [{ $ref: '#/components/schemas/DateTime' }, { type: 'null' }] }, isPrimary: { type: boolean }, riskBufferBps: { $ref: '#/components/schemas/RiskBufferBps' } }
+      required: [action, policyId, version, currency, unitPrice, validFrom, validTo, isPrimary, riskBufferBps]
+      properties: { action: { const: REPLACE }, policyId: { $ref: '#/components/schemas/Uuid' }, version: { type: integer, minimum: 1 }, currency: { $ref: '#/components/schemas/Currency' }, unitPrice: { $ref: '#/components/schemas/DecimalAmount' }, validFrom: { $ref: '#/components/schemas/DateTime' }, validTo: { anyOf: [{ $ref: '#/components/schemas/DateTime' }, { type: 'null' }] }, isPrimary: { type: boolean }, riskBufferBps: { $ref: '#/components/schemas/RiskBufferBps' } }
       additionalProperties: false
     PricePolicyEndV2:
       type: object
-      required: [action, policyId, policyVersion, validTo]
-      properties: { action: { const: END }, policyId: { $ref: '#/components/schemas/Uuid' }, policyVersion: { type: integer, minimum: 1 }, validTo: { $ref: '#/components/schemas/DateTime' } }
+      required: [action, policyId, version, validTo]
+      properties: { action: { const: END }, policyId: { $ref: '#/components/schemas/Uuid' }, version: { type: integer, minimum: 1 }, validTo: { $ref: '#/components/schemas/DateTime' } }
       additionalProperties: false
     PricePolicyMutationV2:
       oneOf:
@@ -486,6 +486,11 @@ components:
         - { $ref: '#/components/schemas/PricePolicyReplaceV2' }
         - { $ref: '#/components/schemas/PricePolicyEndV2' }
       discriminator: { propertyName: action, mapping: { CREATE: '#/components/schemas/PricePolicyCreateV2', REPLACE: '#/components/schemas/PricePolicyReplaceV2', END: '#/components/schemas/PricePolicyEndV2' } }
+    PricePolicyV2:
+      type: object
+      required: [policyId, version, lifecycle, currency, unitPrice, validFrom, validTo, isPrimary, riskBufferBps]
+      properties: { policyId: { $ref: '#/components/schemas/Uuid' }, version: { type: integer, minimum: 1 }, lifecycle: { type: string, enum: [ACTIVE, ENDED] }, currency: { $ref: '#/components/schemas/Currency' }, unitPrice: { $ref: '#/components/schemas/DecimalAmount' }, validFrom: { $ref: '#/components/schemas/DateTime' }, validTo: { anyOf: [{ $ref: '#/components/schemas/DateTime' }, { type: 'null' }] }, isPrimary: { type: boolean }, riskBufferBps: { $ref: '#/components/schemas/RiskBufferBps' } }
+      additionalProperties: false
     OrderStandardLineRequestV2:
       type: object
       required: [itemKind, skuId, quantity]
@@ -550,8 +555,8 @@ components:
       additionalProperties: false
     SkuV2:
       type: object
-      required: [id, organizationId, version, createdAt, updatedAt, productId, skuCode, name, unit, baseUnit, trackingMode, standardizationMode, lowStockThreshold, status]
-      properties: { id: { $ref: '#/components/schemas/Uuid' }, organizationId: { $ref: '#/components/schemas/Uuid' }, version: { type: integer, minimum: 1 }, createdAt: { $ref: '#/components/schemas/DateTime' }, updatedAt: { $ref: '#/components/schemas/DateTime' }, productId: { $ref: '#/components/schemas/Uuid' }, skuCode: { type: string, minLength: 1, maxLength: 64 }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, baseUnit: { type: string, minLength: 1, maxLength: 32 }, trackingMode: { $ref: '#/components/schemas/TrackingMode' }, standardizationMode: { anyOf: [{ $ref: '#/components/schemas/StandardizationMode' }, { type: 'null' }] }, lowStockThreshold: { $ref: '#/components/schemas/DecimalThreshold' }, status: { $ref: '#/components/schemas/SkuStatus' }, metadata: { type: object, additionalProperties: true } }
+      required: [id, organizationId, version, createdAt, updatedAt, productId, skuCode, name, unit, baseUnit, trackingMode, standardizationMode, lowStockThreshold, status, pricePolicies]
+      properties: { id: { $ref: '#/components/schemas/Uuid' }, organizationId: { $ref: '#/components/schemas/Uuid' }, version: { type: integer, minimum: 1 }, createdAt: { $ref: '#/components/schemas/DateTime' }, updatedAt: { $ref: '#/components/schemas/DateTime' }, productId: { $ref: '#/components/schemas/Uuid' }, skuCode: { type: string, minLength: 1, maxLength: 64 }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, baseUnit: { type: string, minLength: 1, maxLength: 32 }, trackingMode: { $ref: '#/components/schemas/TrackingMode' }, standardizationMode: { anyOf: [{ $ref: '#/components/schemas/StandardizationMode' }, { type: 'null' }] }, lowStockThreshold: { $ref: '#/components/schemas/DecimalThreshold' }, status: { $ref: '#/components/schemas/SkuStatus' }, pricePolicies: { type: array, items: { $ref: '#/components/schemas/PricePolicyV2' }, maxItems: 100 } , metadata: { type: object, additionalProperties: true } }
       additionalProperties: false
     OrderV2:
       type: object
@@ -634,7 +639,32 @@ components:
         - { $ref: '#/components/schemas/CommandStatusCommonV2' }
         - type: object
           required: [state, completedAt, httpStatus, resource, resultHref, problem]
-          properties: { state: { const: FAILED }, retryAfterMs: { const: 0 }, completedAt: { $ref: '#/components/schemas/DateTime' }, httpStatus: { type: integer, minimum: 400, maximum: 599 }, resource: { type: 'null' }, resultHref: { type: 'null' }, problem: { $ref: '#/components/schemas/ProblemTerminal' } }
+          properties: { state: { const: FAILED }, retryAfterMs: { const: 0 }, completedAt: { $ref: '#/components/schemas/DateTime' }, resource: { type: 'null' }, resultHref: { type: 'null' } }
+        - oneOf:
+            - type: object
+              required: [httpStatus, problem]
+              properties: { httpStatus: { const: 400 }, problem: { $ref: '#/components/schemas/Problem400' } }
+            - type: object
+              required: [httpStatus, problem]
+              properties: { httpStatus: { const: 401 }, problem: { $ref: '#/components/schemas/Problem401' } }
+            - type: object
+              required: [httpStatus, problem]
+              properties: { httpStatus: { const: 403 }, problem: { $ref: '#/components/schemas/Problem403' } }
+            - type: object
+              required: [httpStatus, problem]
+              properties: { httpStatus: { const: 404 }, problem: { $ref: '#/components/schemas/Problem404' } }
+            - type: object
+              required: [httpStatus, problem]
+              properties: { httpStatus: { const: 409 }, problem: { $ref: '#/components/schemas/Problem409' } }
+            - type: object
+              required: [httpStatus, problem]
+              properties: { httpStatus: { const: 428 }, problem: { $ref: '#/components/schemas/Problem428' } }
+            - type: object
+              required: [httpStatus, problem]
+              properties: { httpStatus: { const: 429 }, problem: { $ref: '#/components/schemas/Problem429' } }
+            - type: object
+              required: [httpStatus, problem]
+              properties: { httpStatus: { const: 500 }, problem: { $ref: '#/components/schemas/ProblemInternalTerminal' } }
       unevaluatedProperties: false
     CommandStatus:
       oneOf:
@@ -686,8 +716,8 @@ components:
       allOf:
         - { $ref: '#/components/schemas/ProblemCommon' }
         - type: object
-          required: [status, code, retryable, violations, meta]
-          properties: { status: { const: 400 }, code: { const: VALIDATION_FAILED }, retryable: { const: false }, violations: { type: array, minItems: 1, items: { $ref: '#/components/schemas/ProblemViolation' } }, meta: { $ref: '#/components/schemas/ValidationMeta' } }
+          required: [status, code, retryable, meta]
+          properties: { status: { const: 400 }, code: { const: VALIDATION_FAILED }, retryable: { const: false }, meta: { $ref: '#/components/schemas/ValidationMeta' } }
       unevaluatedProperties: false
     Problem401:
       oneOf:
@@ -715,7 +745,7 @@ components:
             - { $ref: '#/components/schemas/ProblemCommon' }
             - type: object
               required: [status, code, retryable, meta]
-              properties: { status: { const: 403 }, code: { const: CSRF_FAILED }, retryable: { const: false }, meta: { $ref: '#/components/schemas/CsrfFailedMeta' } }
+              properties: { status: { const: 403 }, code: { const: CSRF_FAILED }, retryable: { const: true }, meta: { $ref: '#/components/schemas/CsrfFailedMeta' } }
           unevaluatedProperties: false
     Problem404:
       oneOf:
