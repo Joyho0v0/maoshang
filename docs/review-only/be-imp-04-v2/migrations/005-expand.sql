@@ -112,10 +112,26 @@ CREATE TABLE IF NOT EXISTS migration_v2.backfill_run (
   total_count bigint NOT NULL DEFAULT 0 CHECK (total_count >= 0),
   applied_count bigint NOT NULL DEFAULT 0 CHECK (applied_count >= 0),
   gap_count bigint NOT NULL DEFAULT 0 CHECK (gap_count >= 0),
+  unexpected_count bigint NOT NULL DEFAULT 0 CHECK (unexpected_count >= 0),
   started_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   finished_at timestamptz,
   UNIQUE (input_sha256)
 );
+ALTER TABLE migration_v2.backfill_run
+  ADD COLUMN IF NOT EXISTS unexpected_count bigint NOT NULL DEFAULT 0 CHECK (unexpected_count >= 0);
+
+CREATE TABLE IF NOT EXISTS migration_v2.backfill_manifest (
+  run_id uuid NOT NULL REFERENCES migration_v2.backfill_run(run_id) ON DELETE RESTRICT,
+  organization_id uuid NOT NULL,
+  order_item_id uuid NOT NULL,
+  expected_item_kind text NOT NULL CHECK (expected_item_kind IN ('STANDARD', 'NON_STANDARD', 'UNKNOWN')),
+  approved_by uuid NOT NULL,
+  source_ref text NOT NULL CHECK (length(source_ref) BETWEEN 1 AND 512),
+  input_sha256 bytea NOT NULL CHECK (octet_length(input_sha256) = 32),
+  PRIMARY KEY (run_id, organization_id, order_item_id)
+);
+CREATE INDEX IF NOT EXISTS backfill_manifest_org_idx ON migration_v2.backfill_manifest (run_id, organization_id, expected_item_kind);
+CREATE INDEX IF NOT EXISTS backfill_manifest_item_idx ON migration_v2.backfill_manifest (organization_id, order_item_id, run_id);
 
 CREATE TABLE IF NOT EXISTS migration_v2.backfill_item (
   run_id uuid NOT NULL REFERENCES migration_v2.backfill_run(run_id) ON DELETE RESTRICT,
@@ -146,6 +162,46 @@ CREATE INDEX IF NOT EXISTS backfill_item_order_idx ON migration_v2.backfill_item
 CREATE INDEX IF NOT EXISTS backfill_item_source_sku_idx ON migration_v2.backfill_item (organization_id, source_sku_id, run_id) WHERE source_sku_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS backfill_item_price_snapshot_idx ON migration_v2.backfill_item (organization_id, replacement_price_snapshot_v2_id, run_id) WHERE replacement_price_snapshot_v2_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS backfill_item_fx_snapshot_idx ON migration_v2.backfill_item (organization_id, replacement_fx_snapshot_v2_id, run_id) WHERE replacement_fx_snapshot_v2_id IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION migration_v2.guard_backfill_manifest()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  run_status text;
+BEGIN
+  IF TG_OP <> 'INSERT' THEN
+    RAISE EXCEPTION 'backfill input manifest is append-only and frozen' USING ERRCODE = '42501';
+  END IF;
+  SELECT status INTO run_status
+  FROM migration_v2.backfill_run
+  WHERE run_id = NEW.run_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'backfill run does not exist' USING ERRCODE = '22023';
+  END IF;
+  IF run_status <> 'RUNNING' THEN
+    RAISE EXCEPTION 'backfill input manifest can only be frozen while run is RUNNING' USING ERRCODE = '55000';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM migration_v2.backfill_run
+    WHERE run_id = NEW.run_id
+      AND input_sha256 = NEW.input_sha256
+      AND approved_by = NEW.approved_by
+      AND (source_ref = NEW.source_ref OR NEW.source_ref LIKE source_ref || '/%')
+  ) THEN
+    RAISE EXCEPTION 'manifest member provenance does not match its run' USING ERRCODE = '23P01';
+  END IF;
+  IF EXISTS (SELECT 1 FROM migration_v2.backfill_item WHERE run_id = NEW.run_id) THEN
+    RAISE EXCEPTION 'backfill input manifest is frozen after evidence exists' USING ERRCODE = '55000';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS backfill_manifest_frozen ON migration_v2.backfill_manifest;
+CREATE TRIGGER backfill_manifest_frozen
+  BEFORE INSERT OR UPDATE OR DELETE ON migration_v2.backfill_manifest
+  FOR EACH ROW EXECUTE FUNCTION migration_v2.guard_backfill_manifest();
 
 CREATE TABLE IF NOT EXISTS migration_v2.backfill_count (
   run_id uuid NOT NULL REFERENCES migration_v2.backfill_run(run_id) ON DELETE RESTRICT,

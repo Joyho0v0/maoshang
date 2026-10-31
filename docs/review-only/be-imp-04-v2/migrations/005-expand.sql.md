@@ -10,4 +10,7 @@ Run it with psql --set ON_ERROR_STOP=1 --file 005-expand.sql only after 001–00
 have been applied to a disposable PostgreSQL 16 database. Re-running the file
 is part of the rehearsal. The SQL includes organization-scoped FKs, supporting
 indexes, approved-input tables, and durable run/item/count provenance tables.
-No H-05 business values are included.
+The durable `backfill_manifest` table freezes the digest-bound input set without
+an order-item FK; `backfill_run.unexpected_count` records evidence outside that
+set so malformed evidence cannot look applied. No H-05 business values are
+included.

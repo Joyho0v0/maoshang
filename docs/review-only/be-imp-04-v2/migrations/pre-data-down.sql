@@ -8,10 +8,12 @@ SET LOCAL statement_timeout = '30s';
 DO $$
 DECLARE
   durable_table_name text;
+  durable_column record;
   has_rows boolean;
 BEGIN
   FOREACH durable_table_name IN ARRAY ARRAY[
     'migration_v2.backfill_item',
+    'migration_v2.backfill_manifest',
     'migration_v2.backfill_count',
     'migration_v2.approved_legacy_sku_mapping',
     'migration_v2.approved_price_policy_mapping',
@@ -28,40 +30,44 @@ BEGIN
       END IF;
     END IF;
   END LOOP;
-  IF to_regclass('catalog.sku') IS NOT NULL AND EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'catalog' AND table_name = 'sku' AND column_name = 'standardization_mode'
-  ) THEN
-    EXECUTE 'SELECT EXISTS (SELECT 1 FROM catalog.sku WHERE standardization_mode IS NOT NULL)' INTO has_rows;
-    IF has_rows THEN
-      RAISE EXCEPTION 'pre-data down refused: SKU standardization evidence exists' USING ERRCODE = '55000';
+  FOR durable_column IN
+    SELECT * FROM (VALUES
+      ('catalog', 'sku', 'standardization_mode'),
+      ('catalog', 'price_policy', 'is_primary'),
+      ('catalog', 'price_policy', 'risk_buffer_bps'),
+      ('orders', 'order_item', 'line_id'),
+      ('orders', 'order_item', 'v2_snapshot_version'),
+      ('orders', 'order_item', 'standardization_mode'),
+      ('orders', 'order_item', 'order_currency_v2'),
+      ('orders', 'order_item', 'source_price_currency'),
+      ('orders', 'order_item', 'source_unit_price'),
+      ('orders', 'order_item', 'effective_unit_price_v2'),
+      ('orders', 'order_item', 'line_amount_v2'),
+      ('orders', 'order_item', 'price_snapshot_v2_id'),
+      ('orders', 'order_item', 'fx_snapshot_v2_id'),
+      ('orders', 'order_item', 'price_source_kind'),
+      ('orders', 'order_item', 'price_captured_at'),
+      ('orders', 'order_item', 'image_file_id')
+    ) AS columns(schema_name, table_name, column_name)
+  LOOP
+    IF to_regclass(format('%I.%I', durable_column.schema_name, durable_column.table_name)) IS NOT NULL
+       AND EXISTS (
+         SELECT 1 FROM information_schema.columns
+         WHERE table_schema = durable_column.schema_name
+           AND table_name = durable_column.table_name
+           AND column_name = durable_column.column_name
+       ) THEN
+      EXECUTE format(
+        'SELECT EXISTS (SELECT 1 FROM %I.%I WHERE %I IS NOT NULL)',
+        durable_column.schema_name,
+        durable_column.table_name,
+        durable_column.column_name
+      ) INTO has_rows;
+      IF has_rows THEN
+        RAISE EXCEPTION 'pre-data down refused: durable v2 column fact exists in %.%.%', durable_column.schema_name, durable_column.table_name, durable_column.column_name USING ERRCODE = '55000';
+      END IF;
     END IF;
-  END IF;
-  IF to_regclass('catalog.price_policy') IS NOT NULL AND EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'catalog' AND table_name = 'price_policy' AND column_name = 'risk_buffer_bps'
-  ) THEN
-    EXECUTE 'SELECT EXISTS (SELECT 1 FROM catalog.price_policy WHERE risk_buffer_bps IS NOT NULL OR is_primary IS TRUE)' INTO has_rows;
-    IF has_rows THEN
-      RAISE EXCEPTION 'pre-data down refused: price-policy v2 evidence exists' USING ERRCODE = '55000';
-    END IF;
-  END IF;
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'orders' AND table_name = 'order_item' AND column_name = 'v2_snapshot_version'
-  ) THEN
-    IF EXISTS (
-      SELECT 1 FROM orders.order_item
-      WHERE v2_snapshot_version IS NOT NULL
-         OR line_id IS NOT NULL
-         OR standardization_mode IS NOT NULL
-         OR price_snapshot_v2_id IS NOT NULL
-         OR fx_snapshot_v2_id IS NOT NULL
-         OR image_file_id IS NOT NULL
-    ) THEN
-      RAISE EXCEPTION 'pre-data down refused: v2 order-item data exists' USING ERRCODE = '55000';
-    END IF;
-  END IF;
+  END LOOP;
 END $$;
 
 DROP TRIGGER IF EXISTS price_policy_v2_lifecycle_guard ON catalog.price_policy;
@@ -80,12 +86,14 @@ BEGIN
   IF to_regnamespace('migration_v2') IS NOT NULL THEN
     EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.assert_price_policy_lifecycle()';
     EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.prevent_snapshot_mutation()';
-    EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.begin_backfill_run(uuid, bytea, uuid, text, bigint)';
+    EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.begin_backfill_run(uuid, bytea, uuid, text)';
+    EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.guard_backfill_manifest()';
     EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.apply_backfill_item(uuid, uuid, uuid)';
     EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.finish_backfill_run(uuid)';
   END IF;
 END $$;
 
+DROP TABLE IF EXISTS migration_v2.backfill_manifest;
 ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_image_file_fk;
 ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_fx_snapshot_fk;
 ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_price_snapshot_fk;

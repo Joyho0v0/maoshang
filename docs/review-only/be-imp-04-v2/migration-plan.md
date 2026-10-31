@@ -97,15 +97,21 @@ cross-currency fact. Every mapping read must match the run's input digest and
 approver, and its `source_ref` is the run source or a run-scoped child such as
 `<run-source>/order-item/<id>`.
 
-The input digest, approval principal, source reference, authoritative expected
-row count, per-kind/per-organization applied/gap counts, and every applied or
-gap mapping are stored in `migration_v2.backfill_run`, `backfill_count`, and
-`backfill_item`. `backfill_item` deliberately has no target-order-item FK so an
-`ORDER_ITEM_NOT_FOUND` gap remains durable; applied replacement snapshot FKs
-remain protected. `finish_backfill_run` compares evidence count with the
-same-digest input `total_count`; zero evidence for five expected rows is
-`GAPS`, never `APPLIED`. Re-running the same digest/run metadata is idempotent;
-a different digest, approver, source or count is rejected. A partial run can be
+The input digest, approval principal, source reference, and frozen input-item
+manifest are stored in `migration_v2.backfill_run` and
+`migration_v2.backfill_manifest`; the manifest has no target-order-item FK, so
+an object that does not exist can still be represented as an approved input
+member. The manifest trigger permits members only while the run is empty and
+then makes the set append-only. `backfill_item` likewise deliberately has no
+target-order-item FK so an `ORDER_ITEM_NOT_FOUND` gap remains durable; applied
+replacement snapshot FKs remain protected. `finish_backfill_run` derives
+`total_count` from the same-digest manifest, compares the exact manifest/evidence
+key sets, and rebuilds per-kind/per-organization `backfill_count`. Missing or
+extra evidence is `FAILED` (with `unexpected_count` recorded); zero evidence
+for a non-empty manifest cannot be `APPLIED`. Re-running the same digest/run
+metadata is idempotent; a different digest, approver or source is rejected.
+Only RUNNING/GAPS runs accept a manifest member; APPLIED/FAILED runs reject
+apply before snapshot, order, version or evidence writes. A partial run can be
 resumed by the same run ID after approved inputs are supplied and does not
 increment order versions twice. An incomplete run makes forward-fix refuse
 with an actionable owner-mapping error instead of replaying DDL blindly.

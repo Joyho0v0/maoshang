@@ -33,7 +33,7 @@
   "candidateDigests": {
     "openapi": "42b7093480277848e551cb691c0918819a1627e080e5cc5fa9b86c2e8cd7e1f2",
     "generatedTypes": "4dea7d9786169062aa6a79ae7a5a11e2bc4f325ff1bfdd3e85c0d66c485e9e87",
-    "generatedClient": "d92db72b3aa859df0a2c8557066f90bbc557148c89f33276a67c2d328ac7ff4f"
+    "generatedClient": "48898f6706b2357f283655013a836def23f058e490d1a7cff444fc4a1cdb52a0"
   },
   "promotionRules": [
     "Do not overwrite v1 artifact or generated files.",

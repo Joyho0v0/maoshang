@@ -27,6 +27,10 @@ parse and validate the candidate without promotion:
   `pre-data-down.sql`, and `forward-fix.sql` are exact review-only rehearsal
   SQL. They are not formal migrations and are never run by this change. The
   adjacent Markdown files explain their lock/scan/recovery contracts.
+- `migration_v2.backfill_manifest` is the digest/approver/source-bound input
+  manifest used by the rehearsal functions. Counts are derived from that
+  frozen key set; target objects are intentionally not foreign-keyed so
+  missing-object gaps remain durable.
 
 ## Review-only commands
 

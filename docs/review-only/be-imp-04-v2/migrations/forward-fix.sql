@@ -11,6 +11,7 @@ BEGIN
     FROM migration_v2.backfill_run
     WHERE status IN ('RUNNING', 'GAPS', 'FAILED')
        OR total_count <> applied_count + gap_count
+       OR unexpected_count <> 0
     ORDER BY started_at, run_id
     LIMIT 1;
   END IF;

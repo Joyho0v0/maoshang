@@ -7,15 +7,14 @@ CREATE OR REPLACE FUNCTION migration_v2.begin_backfill_run(
   p_run_id uuid,
   p_input_sha256 bytea,
   p_approved_by uuid,
-  p_source_ref text,
-  p_total_count bigint
+  p_source_ref text
 ) RETURNS text
 LANGUAGE plpgsql
 AS $$
 DECLARE
   existing migration_v2.backfill_run%ROWTYPE;
 BEGIN
-  IF octet_length(p_input_sha256) <> 32 OR p_total_count < 0 OR length(p_source_ref) NOT BETWEEN 1 AND 512 THEN
+  IF octet_length(p_input_sha256) <> 32 OR length(p_source_ref) NOT BETWEEN 1 AND 512 THEN
     RAISE EXCEPTION 'invalid backfill run metadata' USING ERRCODE = '22023';
   END IF;
   SELECT * INTO existing FROM migration_v2.backfill_run WHERE run_id = p_run_id FOR UPDATE;
@@ -23,7 +22,7 @@ BEGIN
     RAISE EXCEPTION 'run id is already bound to another input digest' USING ERRCODE = '23P01';
   END IF;
   IF FOUND THEN
-    IF existing.approved_by <> p_approved_by OR existing.source_ref <> p_source_ref OR existing.total_count <> p_total_count THEN
+    IF existing.approved_by <> p_approved_by OR existing.source_ref <> p_source_ref THEN
       RAISE EXCEPTION 'resume metadata does not match the original approved input' USING ERRCODE = '23P01';
     END IF;
     RETURN existing.status;
@@ -33,7 +32,7 @@ BEGIN
     RAISE EXCEPTION 'input digest must resume its original run id' USING ERRCODE = '23P01';
   END IF;
   INSERT INTO migration_v2.backfill_run (run_id, input_sha256, approved_by, source_ref, status, total_count)
-  VALUES (p_run_id, p_input_sha256, p_approved_by, p_source_ref, 'RUNNING', p_total_count)
+  VALUES (p_run_id, p_input_sha256, p_approved_by, p_source_ref, 'RUNNING', 0)
   ON CONFLICT (run_id) DO NOTHING;
   RETURN 'RUNNING';
 END;
@@ -56,6 +55,7 @@ DECLARE
   sku_map migration_v2.approved_legacy_sku_mapping%ROWTYPE;
   policy_map migration_v2.approved_price_policy_mapping%ROWTYPE;
   policy_id uuid;
+  manifest_row migration_v2.backfill_manifest%ROWTYPE;
   new_price_snapshot_id uuid;
   new_fx_snapshot_id uuid;
   captured_at timestamptz := clock_timestamp();
@@ -73,6 +73,15 @@ DECLARE
 BEGIN
   SELECT * INTO run_row FROM migration_v2.backfill_run WHERE run_id = p_run_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'backfill run does not exist' USING ERRCODE = '22023'; END IF;
+  IF run_row.status NOT IN ('RUNNING', 'GAPS') THEN
+    RAISE EXCEPTION 'backfill run is terminal and cannot accept evidence' USING ERRCODE = '55000';
+  END IF;
+  SELECT * INTO manifest_row
+  FROM migration_v2.backfill_manifest
+  WHERE run_id = p_run_id AND organization_id = p_organization_id AND order_item_id = p_order_item_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'backfill item is not a member of the frozen input manifest' USING ERRCODE = '55000';
+  END IF;
   SELECT * INTO existing_item FROM migration_v2.backfill_item WHERE run_id = p_run_id AND organization_id = p_organization_id AND order_item_id = p_order_item_id;
   IF FOUND AND existing_item.disposition = 'APPLIED' THEN RETURN 'APPLIED'; END IF;
   IF FOUND THEN
@@ -114,6 +123,8 @@ BEGIN
 
   IF NOT item_found OR NOT order_found OR item_row.id IS NULL THEN
     gap_reason := 'ORDER_ITEM_NOT_FOUND';
+  ELSIF manifest_row.expected_item_kind <> 'UNKNOWN' AND manifest_row.expected_item_kind <> item_row.item_kind THEN
+    gap_reason := 'MANIFEST_ITEM_KIND_MISMATCH';
   ELSIF NOT item_map_found OR item_map.order_item_id IS NULL THEN
     gap_reason := 'ORDER_ITEM_MAPPING_MISSING';
   ELSIF NOT price_map_found OR price_map.order_item_id IS NULL THEN
@@ -193,7 +204,11 @@ BEGIN
     END IF;
     UPDATE catalog.price_policy
     SET is_primary = policy_map.is_primary,
-        risk_buffer_bps = policy_map.risk_buffer_bps
+        risk_buffer_bps = policy_map.risk_buffer_bps,
+        version = version + CASE
+          WHEN is_primary IS DISTINCT FROM policy_map.is_primary
+            OR risk_buffer_bps IS DISTINCT FROM policy_map.risk_buffer_bps
+          THEN 1 ELSE 0 END
     WHERE organization_id = p_organization_id AND id = policy_id
       AND version = policy_map.canonical_policy_version;
     IF NOT FOUND THEN
@@ -266,13 +281,29 @@ AS $$
 DECLARE
   gaps bigint;
   applied bigint;
+  extras bigint;
+  missing_members bigint;
   expected bigint;
   evidence bigint;
-  missing bigint;
   run_status text;
 BEGIN
   SELECT total_count INTO expected FROM migration_v2.backfill_run WHERE run_id = p_run_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'backfill run does not exist' USING ERRCODE = '22023'; END IF;
+  SELECT count(*) INTO expected FROM migration_v2.backfill_manifest WHERE run_id = p_run_id;
+  SELECT count(*) INTO missing_members
+  FROM migration_v2.backfill_manifest manifest
+  LEFT JOIN migration_v2.backfill_item evidence_item
+    ON evidence_item.run_id = manifest.run_id
+   AND evidence_item.organization_id = manifest.organization_id
+   AND evidence_item.order_item_id = manifest.order_item_id
+  WHERE manifest.run_id = p_run_id AND evidence_item.run_id IS NULL;
+  SELECT count(*) INTO extras
+  FROM migration_v2.backfill_item evidence_item
+  LEFT JOIN migration_v2.backfill_manifest manifest
+    ON manifest.run_id = evidence_item.run_id
+   AND manifest.organization_id = evidence_item.organization_id
+   AND manifest.order_item_id = evidence_item.order_item_id
+  WHERE evidence_item.run_id = p_run_id AND manifest.run_id IS NULL;
   DELETE FROM migration_v2.backfill_count WHERE run_id = p_run_id;
   INSERT INTO migration_v2.backfill_count (run_id, organization_id, item_kind, disposition, row_count)
   SELECT bi.run_id, bi.organization_id, COALESCE(oi.item_kind, 'UNKNOWN'), bi.disposition, count(*)
@@ -283,10 +314,18 @@ BEGIN
   GROUP BY bi.run_id, bi.organization_id, COALESCE(oi.item_kind, 'UNKNOWN'), bi.disposition;
   SELECT count(*) FILTER (WHERE disposition = 'GAP'), count(*) FILTER (WHERE disposition = 'APPLIED'), count(*) INTO gaps, applied, evidence
   FROM migration_v2.backfill_item WHERE run_id = p_run_id;
-  missing := GREATEST(expected - evidence, 0);
-  run_status := CASE WHEN gaps = 0 AND evidence = expected THEN 'APPLIED' ELSE 'GAPS' END;
+  run_status := CASE
+    WHEN missing_members > 0 OR extras > 0 THEN 'FAILED'
+    WHEN gaps = 0 AND evidence = expected THEN 'APPLIED'
+    ELSE 'GAPS'
+  END;
   UPDATE migration_v2.backfill_run
-  SET applied_count = COALESCE(applied, 0), gap_count = COALESCE(gaps, 0) + missing, status = run_status, finished_at = clock_timestamp()
+  SET total_count = expected,
+      applied_count = CASE WHEN run_status = 'FAILED' THEN 0 ELSE COALESCE(applied, 0) END,
+      gap_count = CASE WHEN run_status = 'FAILED' THEN missing_members + extras + COALESCE(gaps, 0) ELSE COALESCE(gaps, 0) + missing_members END,
+      unexpected_count = extras,
+      status = run_status,
+      finished_at = clock_timestamp()
   WHERE run_id = p_run_id;
   RETURN run_status;
 END;

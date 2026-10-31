@@ -257,8 +257,9 @@ async function runGeneratedGate() {
         return new Response(JSON.stringify(fixtures.valid.fileStatus), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store' } });
       },
     });
-    await client.call('getFileStatusV2', { pathParams: { fileId }, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
+    const fileStatusResponse = await client.call('getFileStatusV2', { pathParams: { fileId }, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
     assert(observed?.url === '/api/v2/files/' + fileId && observed.method === 'GET' && observed.credentials === 'include', 'generated client did not serialize the v2 URL/request correctly');
+    assert(fileStatusResponse.headers['X-Request-ID'] === '77777777-7777-4777-8777-777777777777' && fileStatusResponse.headers['Cache-Control'] === 'no-store', 'generated response header type keys are not readable at runtime');
     const orderBody = fixtures.valid.standardSameCurrency;
     let orderObserved;
     const orderClient = new clientModule.GeneratedV2Client({
