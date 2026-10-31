@@ -1,8 +1,9 @@
 # 005+ review plan and validation matrix
 
-This is a review plan, not an executable migration. The SQL blocks are kept in
-`.sql.md` files so the repository migration runner cannot discover or execute
-them accidentally. No backfill input is present in this package.
+This is a review plan. The exact SQL rehearsal files are kept under this
+directory so the repository migration runner cannot discover or execute them
+accidentally. They are not formal migrations and no backfill input is present
+in this package.
 
 ## Ownership and compatibility
 
@@ -17,12 +18,14 @@ effective order-currency unit price into legacy `order_item.unit_price` and
 records the authoritative source/effective facts in the v2 columns; it never
 uses the legacy column to reconstruct a v2 snapshot.
 
-005 creates nullable expansion columns/tables and `NOT VALID` checks/FKs. 006
-adds v2-only validation functions, immutable snapshot protections, and the
-dual-version writer contract. 007 contains only the approved mapping import
-and durable run/evidence model. A later contract migration may validate and
-tighten constraints only after `unmapped_count=0`, v1 writer retirement, and a
-successful compatibility run.
+005-expand.sql creates nullable expansion columns/tables with no guessed
+defaults for legacy policy rows, plus `NOT VALID` checks/FKs.
+006-dual-version.sql adds v2-only validation functions, immutable snapshot
+protections, and the dual-version writer contract. 007-backfill.sql
+contains only the approved mapping import and durable run/evidence model.
+pre-data-down.sql and forward-fix.sql are exact rehearsal paths. A later
+contract migration may validate and tighten constraints only after
+`unmapped_count=0`, v1 writer retirement, and a successful compatibility run.
 
 ## Policy lifecycle
 
@@ -95,9 +98,9 @@ values and therefore cannot close the gap count.
 
 ## Rehearsal and promotion gates
 
-On an isolated PostgreSQL 16 database only, the eventual implementation must
-run: fresh 001→007 up; 004→005→006→007 upgrade; 005/006/007 up twice; pre-data
-down; post-data forward-fix; partial backfill retry; concurrent policy write
+On an isolated PostgreSQL 16 database only, run the exact files for fresh
+001→007 up; 004→005→006→007 upgrade; 005/006/007 up twice; pre-data down
+twice; post-data forward-fix; partial backfill retry; concurrent policy write
 and concurrent order create; and `EXPLAIN (ANALYZE, BUFFERS)` for all new
 lookup indexes. DDL uses `lock_timeout=2s` and `statement_timeout=30s` for
 expand/validation probes; a timeout aborts the transaction and is retried by
@@ -128,11 +131,11 @@ The validation matrix must prove:
 
 | finding | disposition in this package |
 | --- | --- |
-| R1 | Complete parseable OpenAPI with explicit operation objects; `validate.ts` performs dereference and dry generation. Promotion remains pending. |
+| R1 | Complete parseable OpenAPI with explicit operation objects; `validate.mjs` invokes `generate.mjs` for real temporary types/client/runtime-validator generation and typecheck. Promotion remains pending. |
 | R2 | Typed Problem branches, typed metas, explicit recovery disposition and operation-scoped ledger rules in YAML/matrix. |
 | R3 | Decimal patterns and `RiskBufferBps` bounds align with physical numeric columns; arithmetic/DB checks are specified in 006. |
 | R4 | Exact idempotent DDL drafts, `NOT VALID` staging, dual-write semantics, down guard and forward-fix are specified. |
 | R5 | Half-open interval, captured clock, same-currency/primary selection, exclusion and writer lock/version protocol are specified. |
 | R6 | Per-item mapping, replacement snapshot fingerprint, durable run/input digest/evidence and idempotent retry are specified. |
-| R7 | Candidate uses Order-scoped status resource and defines live parent authorization; Chief Architect must approve this versus a Files-owned alias. |
+| R7 | Closed by system decision: Files-owned status/read/download-intent support is declared at `/api/v2/files/{fileId}` with a live parent resolver design. |
 | R8 | Only `standardizationMode` is required on SKU create; existing defaulted fields are optional. |

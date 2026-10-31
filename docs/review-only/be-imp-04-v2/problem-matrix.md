@@ -53,4 +53,4 @@ requires the header and receives none returns the explicitly declared
 replays 409, and the caller creates a new key after the file is AVAILABLE.
 The status href remains independently valid after an Order transaction rolls
 back because Files owns `GET /api/v2/files/{fileId}`; it never contains an
-Order-scoped path.
+Order-scoped path. Files re-checks a live parent resolver for linked resources.

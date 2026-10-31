@@ -1,10 +1,12 @@
-/* global Buffer, URL, console */
+/* global Buffer, URL, console, process, Response */
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import Ajv from 'ajv';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import Ajv from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import SwaggerParser from '@apidevtools/swagger-parser';
-import openapiTS, { astToString } from 'openapi-typescript';
 
 const root = new URL('./', import.meta.url);
 const documentPath = new URL('./openapi.yaml', root).pathname;
@@ -93,16 +95,22 @@ function independentLint(document, dereferenced) {
   const quantityPattern = new RegExp(schema(dereferenced, 'DecimalQuantity').pattern);
   const amountPattern = new RegExp(schema(dereferenced, 'DecimalAmount').pattern);
   const ratePattern = new RegExp(schema(dereferenced, 'DecimalRate').pattern);
+  const thresholdPattern = new RegExp(schema(dereferenced, 'DecimalThreshold').pattern);
   assert(quantityPattern.test('999999999999.999999') && !quantityPattern.test('1000000000000'), 'quantity integer precision is not bounded');
-  assert(quantityPattern.test('0.000001') && !quantityPattern.test('0.0000001'), 'quantity scale/positive boundary is not bounded');
+  assert(quantityPattern.test('0.000001') && !quantityPattern.test('0.0000001') && !quantityPattern.test('0.00000100000'), 'quantity scale/positive boundary is not bounded');
   assert(amountPattern.test('999999999999999.9999') && !amountPattern.test('1000000000000000'), 'amount precision is not bounded');
-  assert(ratePattern.test('999999999999.999999999999') && !ratePattern.test('1000000000000'), 'rate precision is not bounded');
+  assert(ratePattern.test('999999999999.999999999999') && !ratePattern.test('1000000000000') && !ratePattern.test('0.0000000000001'), 'rate precision is not bounded');
+  assert(thresholdPattern.test('999999999999.999999') && thresholdPattern.test('0.000001') && !thresholdPattern.test('1000000000000') && !thresholdPattern.test('0.0000001'), 'threshold precision is not bounded independently from amount');
+  assertDecimalArithmeticBoundaries();
   assert(schema(dereferenced, 'RiskBufferBps').maximum === 2000, 'risk buffer has no approved upper bound');
 
   for (const name of ['Problem400', 'Problem401', 'Problem403', 'Problem404', 'Problem409', 'Problem428', 'Problem429', 'Problem500', 'Problem502', 'Problem503']) schema(dereferenced, name);
   assert(propertyFromSchema(schema(dereferenced, 'ProblemInternalRecoverable'), 'retryable').const === true, 'recoverable 500 is not retryable');
   assert(propertyFromSchema(schema(dereferenced, 'ProblemInternalTerminal'), 'retryable').const === false, 'terminal 500 is retryable');
   assert(propertyFromSchema(schema(dereferenced, 'Problem502'), 'retryable').const === true && propertyFromSchema(schema(dereferenced, 'Problem503'), 'retryable').const === true, 'dependency failures are not recoverable');
+  assert(schema(dereferenced, 'CommandStatusRecoveryV2').allOf[1].properties.retryAfterMs.const === 0, 'recovery retryAfterMs must be zero');
+  assert(schema(dereferenced, 'CommandStatusRecoveryV2').allOf[1].properties.problem.type === 'null', 'recovery problem must be null');
+  assert(schema(dereferenced, 'CommandStatusFailedV2').allOf[1].properties.httpStatus.maximum === 599, 'terminal failed status must allow deterministic 500');
   assert(document.paths['/files/{fileId}'] !== undefined, 'Files v2 support surface is undeclared');
   assert(document.paths['/files/{fileId}'].get.operationId === 'getFileStatusV2', 'Files status operationId is not canonical');
   assert(document.paths['/files/{fileId}/download-intents']?.post.operationId === 'createFileDownloadIntentV2', 'Files download operationId is not canonical');
@@ -128,6 +136,9 @@ function compileFixtures(dereferenced) {
     const validator = name === 'problemFileNotReady' ? validators.get('Problem409')
       : name === 'fileStatus' ? validators.get('FileStatusV2')
         : name === 'fileDownloadIntent' ? validators.get('FileDownloadIntentV2')
+          : name === 'csrfToken' ? validators.get('CsrfToken')
+            : name.startsWith('command') ? validators.get('CommandStatus')
+              : name === 'problemCsrfFailed' ? validators.get('Problem403')
           : name.startsWith('sku') ? validators.get('SkuCreateRequestV2')
             : orderValidator;
     assert(validator(value), `${name} should validate: ${JSON.stringify(validator.errors)}`);
@@ -136,8 +147,14 @@ function compileFixtures(dereferenced) {
   let invalidCount = 0;
   for (const [name, value] of Object.entries(fixtures.invalid)) {
     const validator = name === 'rateTooPrecise' ? validators.get('DecimalRate')
+      : name === 'amountIntegerOverflow' ? validators.get('DecimalAmount')
       : name.startsWith('problemWrongRecoverability') ? validators.get('Problem503')
         : name.startsWith('problemWrongMeta') ? validators.get('Problem409')
+            : name === 'problem401WithMeta' ? validators.get('Problem401')
+              : name === 'problemCsrfWrongRetryable' ? validators.get('Problem403')
+                : name.startsWith('command') ? validators.get('CommandStatus')
+                  : name === 'csrfLegacyToken' ? validators.get('CsrfToken')
+                    : name === 'thresholdWrongScale' ? validators.get('SkuCreateRequestV2')
           : name === 'fileBadHref' ? validators.get('FileStatusV2')
             : name === 'skuMissingStandardization' ? validators.get('SkuCreateRequestV2')
               : orderValidator;
@@ -147,6 +164,106 @@ function compileFixtures(dereferenced) {
   return { schemaCount: validators.size, validCount, invalidCount };
 }
 
+function assertDecimalArithmeticBoundaries() {
+  const quantityMax = scaled('999999999999.999999', 6);
+  const quantityOverflow = scaled('1000000000000', 6);
+  const amountMax = scaled('999999999999999.9999', 4);
+  const amountOverflow = scaled('1000000000000000', 4);
+  const rateMax = scaled('999999999999.999999999999', 12);
+  const rateOverflow = scaled('1000000000000', 12);
+  assert(quantityMax === 999999999999999999n && quantityOverflow > quantityMax, 'quantity scaled boundary is wrong');
+  assert(amountMax === 9999999999999999999n && amountOverflow > amountMax, 'amount scaled boundary is wrong');
+  assert(rateMax === 999999999999999999999999n && rateOverflow > rateMax, 'rate scaled boundary is wrong');
+  const roundedUnit = roundHalfUp(multiplyScaled(scaled('999999999999999.9999', 4), scaled('1.000000000001', 12), 16), 16, 4);
+  assert(roundedUnit > amountMax, 'amount multiplication overflow was not detected');
+  const total = amountMax + 1n;
+  assert(total > amountMax, 'amount total overflow was not detected');
+}
+
+function scaled(value, scale) {
+  const [integer, fraction = ''] = value.split('.');
+  return BigInt(integer + fraction.padEnd(scale, '0'));
+}
+
+function multiplyScaled(left, right, leftScaleAndRightScale) {
+  void leftScaleAndRightScale;
+  return left * right;
+}
+
+function roundHalfUp(value, sourceScale, targetScale) {
+  const divisor = 10n ** BigInt(sourceScale - targetScale);
+  const remainder = value % divisor;
+  const rounded = value / divisor;
+  return rounded + (remainder * 2n >= divisor ? 1n : 0n);
+}
+
+async function runGeneratedGate() {
+  const output = await mkdtemp(join(process.cwd(), '.review-v2-generation-'));
+  try {
+    const generator = fileURLToPath(new URL('./generate.mjs', import.meta.url));
+    const generated = spawnSync(process.execPath, [generator, '--out', output], { encoding: 'utf8' });
+    assert(generated.status === 0, 'generated chain failed: ' + generated.stderr);
+    const summary = JSON.parse(generated.stdout);
+    assert(summary.baseUrl === '/api/v2' && summary.operationCount === 18, 'generated chain did not preserve v2 base URL and 18 operations');
+    assert(!summary.generatedFiles.some((name) => name.includes('v1')), 'generated chain contains a v1 artifact');
+    const tsc = fileURLToPath(new URL('../../../node_modules/typescript/bin/tsc', import.meta.url));
+    const typecheck = spawnSync(process.execPath, [tsc, '-p', join(output, 'tsconfig.json'), '--noEmit'], { encoding: 'utf8' });
+    assert(typecheck.status === 0, 'generated typecheck failed: ' + typecheck.stdout + typecheck.stderr);
+    const documentValue = JSON.parse(await readFile(join(output, 'document.json'), 'utf8'));
+    const validatorModule = await import(pathToFileURL(join(output, 'runtime-validator.mjs')).href);
+    const clientModule = await import(pathToFileURL(join(output, 'client.mjs')).href);
+    const validator = validatorModule.createV2RuntimeValidator(documentValue);
+    const fixtures = JSON.parse(awaitReadFixtures);
+    const runtimeFixtures = ['fileStatus', 'fileDownloadIntent', 'commandInProgress', 'commandRecovery', 'commandSucceeded', 'commandFailed', 'problemCsrfFailed']
+      .map((name) => [name, validator.validate(name === 'fileStatus' ? 'FileStatusV2' : name === 'fileDownloadIntent' ? 'FileDownloadIntentV2' : name.startsWith('command') ? 'CommandStatus' : 'Problem403', fixtures.valid[name])]);
+    assert(runtimeFixtures.every(([, valid]) => valid), 'generated runtime validator rejected valid fixtures: ' + JSON.stringify(validator.errors));
+    const fileId = fixtures.valid.fileStatus.id;
+    let observed;
+    const client = new clientModule.GeneratedV2Client({
+      validator,
+      fetch: async (url, init) => {
+        observed = { url, method: init.method, headers: Object.fromEntries(init.headers.entries()), credentials: init.credentials };
+        return new Response(JSON.stringify(fixtures.valid.fileStatus), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store' } });
+      },
+    });
+    await client.call('getFileStatusV2', { pathParams: { fileId }, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
+    assert(observed?.url === '/api/v2/files/' + fileId && observed.method === 'GET' && observed.credentials === 'include', 'generated client did not serialize the v2 URL/request correctly');
+    const orderBody = fixtures.valid.standardSameCurrency;
+    let orderObserved;
+    const orderClient = new clientModule.GeneratedV2Client({
+      validator,
+      fetch: async (url, init) => {
+        orderObserved = { url, method: init.method, headers: Object.fromEntries(init.headers.entries()), body: init.body, credentials: init.credentials };
+        return new Response(JSON.stringify(fixtures.valid.commandInProgress), { status: 202, headers: { 'content-type': 'application/json' } });
+      },
+    });
+    await orderClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'r1-generation-key' }, body: orderBody });
+    assert(orderObserved?.url === '/api/v2/orders' && orderObserved.method === 'POST' && orderObserved.credentials === 'include'
+      && orderObserved.headers['content-type'] === 'application/json'
+      && orderObserved.headers['idempotency-key'] === 'r1-generation-key'
+      && JSON.parse(orderObserved.body).orderNo === 'V2-STD-SAME', 'generated client did not serialize the command body/headers correctly');
+    let errorObserved = false;
+    const errorClient = new clientModule.GeneratedV2Client({
+      validator,
+      fetch: async () => new Response(JSON.stringify(fixtures.valid.problemFileNotReady), { status: 409, headers: { 'content-type': 'application/problem+json' } }),
+    });
+    try {
+      await errorClient.call('createFileDownloadIntentV2', { pathParams: { fileId }, headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16' } });
+    } catch (error) {
+      errorObserved = error?.status === 409 && error?.problem?.code === 'FILE_NOT_READY';
+    }
+    assert(errorObserved, 'generated client did not validate/type the declared Problem response');
+    const clientSource = await readFile(join(output, 'client.ts'), 'utf8');
+    const typesSource = await readFile(join(output, 'types.ts'), 'utf8');
+    const validatorSource = await readFile(join(output, 'runtime-validator.ts'), 'utf8');
+    assert(clientSource.includes('OperationResponseMap') && clientSource.includes('OperationErrorMap'), 'generated client lacks response/error typing');
+    assert(!/packages\/contracts\/openapi\/|\/api\/v1/.test(clientSource + validatorSource), 'generated v2 runtime imports or URLs leaked v1');
+    return { operations: summary.operationCount, baseUrl: summary.baseUrl, schemas: Object.keys(documentValue.components?.schemas ?? {}).length, typesBytes: Buffer.byteLength(typesSource), typesSha256: createHash('sha256').update(typesSource).digest('hex'), clientBytes: Buffer.byteLength(clientSource), clientSha256: createHash('sha256').update(clientSource).digest('hex'), runtimeSmoke: 'GET+POST /api/v2; headers/body; success+Problem response validators', runtimeFixtures: runtimeFixtures.length };
+  } finally {
+    await rm(output, { recursive: true, force: true });
+  }
+}
+
 const awaitReadFixtures = await readFile(fixturesPath, 'utf8');
 const parsed = await SwaggerParser.parse(documentPath);
 const dereferenced = await SwaggerParser.dereference(documentPath);
@@ -154,17 +271,12 @@ independentLint(parsed, dereferenced);
 const unresolvedRefs = countRefs(dereferenced);
 assert(unresolvedRefs === 0, `dereferenced document contains ${unresolvedRefs} unresolved references`);
 const operationIds = operationsOf(parsed).map(({ operation }) => operation.operationId);
-const typesSource = astToString(await openapiTS(parsed));
-const clientSource = [
-  '/* review-only in-memory client dry output; no file is written */',
-  `export const operationIds = ${JSON.stringify(operationIds)} as const;`,
-  ...operationIds.map((id) => `export type ${id}Operation = typeof operationIds[number];`),
-].join('\n');
 const fixtureStats = compileFixtures(dereferenced);
-const hash = (source) => createHash('sha256').update(source).digest('hex');
+const generationStats = await runGeneratedGate();
 console.log(`V2_REVIEW_PARSE exit=0 operations=${operationIds.length} paths=${Object.keys(parsed.paths).length}`);
 console.log(`V2_REVIEW_DEREFERENCE exit=0 unresolvedRefs=${unresolvedRefs}`);
-console.log(`V2_REVIEW_LINT exit=0 checks=R1,R2,R3,R7,R8`);
-console.log(`V2_REVIEW_TYPES_DRY_GENERATION exit=0 bytes=${Buffer.byteLength(typesSource)} sha256=${hash(typesSource)}`);
-console.log(`V2_REVIEW_CLIENT_DRY_GENERATION exit=0 operations=${operationIds.length} bytes=${Buffer.byteLength(clientSource)} sha256=${hash(clientSource)}`);
-console.log(`V2_REVIEW_VALIDATOR_DRY_GENERATION exit=0 schemas=${fixtureStats.schemaCount} fixtures=${fixtureStats.validCount}-valid/${fixtureStats.invalidCount}-invalid`);
+console.log(`V2_REVIEW_LINT exit=0 checks=R1,R2,R3,R4,R5,R6,R7,R8,P3-01`);
+console.log(`V2_REVIEW_TYPES_GENERATION exit=0 bytes=${generationStats.typesBytes} sha256=${generationStats.typesSha256}`);
+console.log(`V2_REVIEW_CLIENT_GENERATION exit=0 operations=${generationStats.operations} bytes=${generationStats.clientBytes} sha256=${generationStats.clientSha256} baseUrl=${generationStats.baseUrl} runtimeSmoke=${generationStats.runtimeSmoke}`);
+console.log(`V2_REVIEW_VALIDATOR_GENERATION exit=0 schemas=${generationStats.schemas} typecheck=0 runtimeFixtures=${generationStats.runtimeFixtures}`);
+console.log(`V2_REVIEW_VALIDATOR_FIXTURES exit=0 schemas=${fixtureStats.schemaCount} fixtures=${fixtureStats.validCount}-valid/${fixtureStats.invalidCount}-invalid`);

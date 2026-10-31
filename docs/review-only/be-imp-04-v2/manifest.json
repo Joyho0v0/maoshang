@@ -31,9 +31,9 @@
     "generatedClient": "b4a017cef65a11018f70321f624e3456708d55fdea638b9683a57fb610b5712c"
   },
   "candidateDigests": {
-    "openapi": "544fc001c45cecf8b89a457ac2ac38adce1202060a9037146e634fd9d765b7e8",
-    "generatedTypes": "1265937a64ed6bc9ebafb0c61ef4d7d716ab1fe21649fc30f739d8968d62414b",
-    "generatedClient": "295401ce8653bce44a7ed82a7ec687b052ab9322b278a61dd3ada301591b0519"
+    "openapi": "9fc55e8d1b63f78854f3613bbca0f51bcaec5c79808b0443356746ead91b4698",
+    "generatedTypes": "c24e6ccfd9d8c9841bad57998e46009f488695ec6ccd6f27365bada7d5ba9f26",
+    "generatedClient": "5af7fcd81ca76542ad545f584c670efcfd42539b4b1f6850784148bc7a34e7fa"
   },
   "promotionRules": [
     "Do not overwrite v1 artifact or generated files.",

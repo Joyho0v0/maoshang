@@ -13,29 +13,33 @@ parse and validate the candidate without promotion:
   typed Problem branches. The candidate contains 18 operations across 12 paths,
   including the Files-owned `GET /api/v2/files/{fileId}` and
   `POST /api/v2/files/{fileId}/download-intents` support surface.
-- `validate.ts` performs parser, dereference, independent contract checks, AJV
-  schema compilation, fixture validation, and in-memory TypeScript/client dry
-  generation. It writes no generated artifact.
+- `validate.mjs` is the single review entry point. It performs parser,
+  dereference, independent contract checks, AJV schema compilation, fixture
+  validation, and invokes `generate.mjs` in a temporary directory for real
+  types/client/runtime-validator generation and typecheck. It removes the
+  temporary output and writes no repository artifact.
 - `fixtures.json` contains valid and invalid request/Problem examples. Invalid
   examples are expected to be rejected by the runtime validator.
 - `problem-matrix.md` is the per-code HTTP/ledger/idempotency matrix. A ledger
   identity is `(actor, organization, operationId, idempotencyKey)`; the
   canonical body hash is compared only within that identity.
-- `migrations/005-expand.sql.md`, `006-dual-version.sql.md`, and
-  `007-backfill.sql.md` are executable SQL drafts embedded in Markdown for
-  review. They are not migration files and are not run by this change.
+- `migrations/005-expand.sql`, `006-dual-version.sql`, `007-backfill.sql`,
+  `pre-data-down.sql`, and `forward-fix.sql` are exact review-only rehearsal
+  SQL. They are not formal migrations and are never run by this change. The
+  adjacent Markdown files explain their lock/scan/recovery contracts.
 
 ## Review-only commands
 
 From the repository root, with the repository's locked dependencies installed:
 
 ```bash
-npm exec -- tsx docs/review-only/be-imp-04-v2/validate.ts
+node docs/review-only/be-imp-04-v2/validate.mjs
 ```
 
 The validator reports parser/dereference status, operation count, unresolved
-references, lint result, fixture result, schema count, and SHA-256 values for
-the in-memory type/client dry outputs. A reviewer may additionally run:
+references, lint result, fixture result, generated schema/typecheck status,
+real client/runtime smoke status, and SHA-256 values. A reviewer may
+additionally run:
 
 ```bash
 npm exec -- openapi-format check docs/review-only/be-imp-04-v2/openapi.yaml
