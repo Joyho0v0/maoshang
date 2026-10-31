@@ -80,6 +80,15 @@ describe('CRM/Catalog/Orders HTTP PostgreSQL vertical slice', () => {
     expect(customer.statusCode).toBe(201);
     expect(customer.json()).toMatchObject({ status: 'DRAFT', ownerUserId: actorId, businessGroupId: groupId, version: 1 });
 
+    const submitted = await http.inject({
+      method: 'POST',
+      url: `/api/v1/customers/${customer.json().id}/submit-approval`,
+      headers: { ...headers, 'idempotency-key': 'be-imp-04-customer-submit-1', 'if-match': '"v1"' },
+      payload: { action: 'SUBMIT_APPROVAL' },
+    });
+    expect(submitted.statusCode).toBe(200);
+    expect(submitted.json()).toMatchObject({ status: 'PENDING_APPROVAL', version: 2, approvalSummary: { latestOutcome: 'PENDING' } });
+
     const order = await http.inject({
       method: 'POST',
       url: '/api/v1/orders',

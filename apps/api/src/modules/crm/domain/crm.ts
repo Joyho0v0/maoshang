@@ -9,11 +9,13 @@ export interface ApprovalTransitionInput {
   submitterUserId?: string;
   actorUserId: string;
   reason?: string;
+  contacts?: readonly Record<string, unknown>[];
 }
 
 export function assertApprovalTransition(input: ApprovalTransitionInput): { nextStatus: CustomerStatus; outcome?: 'SUBMITTED' | 'APPROVED' | 'REJECTED' } {
   if (input.action === 'SUBMIT_APPROVAL') {
     if (input.status !== 'DRAFT') throw new Error('CUSTOMER_APPROVAL_STATE_CONFLICT');
+    if (!hasApprovalReadyContact(input.contacts)) throw new Error('CUSTOMER_APPROVAL_CONTACTS_INCOMPLETE');
     return { nextStatus: 'PENDING_APPROVAL', outcome: 'SUBMITTED' };
   }
   if (input.status !== 'PENDING_APPROVAL') throw new Error('CUSTOMER_APPROVAL_STATE_CONFLICT');
@@ -23,6 +25,14 @@ export function assertApprovalTransition(input: ApprovalTransitionInput): { next
     return { nextStatus: 'DRAFT', outcome: 'REJECTED' };
   }
   return { nextStatus: 'APPROVED', outcome: 'APPROVED' };
+}
+
+export function hasApprovalReadyContact(contacts: readonly Record<string, unknown>[] | undefined): boolean {
+  return contacts?.some((contact) => {
+    const countryCode = contact.countryCode;
+    const timezone = contact.timezone;
+    return typeof countryCode === 'string' && /^[A-Z]{2}$/.test(countryCode) && typeof timezone === 'string' && timezone.trim().length > 0;
+  }) === true;
 }
 
 export function customerCapabilities(input: { status: CustomerStatus; canApprove: boolean; canUpdate: boolean }): string[] {

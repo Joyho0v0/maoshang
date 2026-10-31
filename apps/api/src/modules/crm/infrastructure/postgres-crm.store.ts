@@ -4,6 +4,7 @@ import { createCursor, parseCursor, parsePageSize, parseSort } from '../../../co
 import { DomainProblemError } from '../../../common/http/domain-error.js';
 import type { AuthorizationPrincipal } from '../../identity/domain/authz.js';
 import type { CrmStore, CustomerFilters, CustomerPage, CustomerRecord } from '../application/crm.service.js';
+import { hasApprovalReadyContact } from '../domain/crm.js';
 
 interface CustomerRow extends QueryResultRow {
   id: string; organization_id: string; name: string; owner_user_id: string; business_group_id: string | null; status: CustomerRecord['status']; contacts: readonly Record<string, unknown>[]; version: number | string; created_at: Date; updated_at: Date;
@@ -93,7 +94,8 @@ export class PostgresCrmStore implements CrmStore {
   }
 
   private async submitApproval(client: PoolClient, current: CustomerRecord, input: Parameters<CrmStore['commandCustomer']>[1]): Promise<CustomerRecord> {
-    if (current.status !== 'DRAFT' || current.contacts.length === 0) throw new DomainProblemError('CUSTOMER_APPROVAL_STATE_CONFLICT', 409, { customerId: current.id, currentCustomerStatus: current.status, currentVersion: current.version });
+    if (current.status !== 'DRAFT') throw new DomainProblemError('CUSTOMER_APPROVAL_STATE_CONFLICT', 409, { customerId: current.id, currentCustomerStatus: current.status, currentVersion: current.version });
+    if (!hasApprovalReadyContact(current.contacts)) throw new DomainProblemError('VALIDATION_FAILED', 400, { violations: [{ field: 'contacts', code: 'CUSTOMER_APPROVAL_CONTACTS_INCOMPLETE', message: 'At least one contact must include countryCode and timezone.' }] });
     const attempt = await client.query<{ attempt_no: number }>('SELECT COALESCE(MAX(attempt_no), 0) + 1 AS attempt_no FROM crm.customer_approval_attempt WHERE organization_id = $1 AND customer_id = $2', [input.organizationId, input.customerId]);
     const attemptNo = Number(attempt.rows[0]?.attempt_no ?? 1);
     const attemptId = randomUUID();

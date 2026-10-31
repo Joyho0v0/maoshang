@@ -95,7 +95,7 @@ export class CrmController {
     try {
       const principal = principalOf(request);
       const customer = await this.service.commandCustomer(principal, id, etagVersion(request), body as never, requestIdOf(request), transactionOf(request));
-      reply.header('etag', formatEtag(customer.version)).header('content-location', `/api/v1/customers/${id}`).header('cache-control', 'no-store');
+      reply.code(200).header('etag', formatEtag(customer.version)).header('content-location', `/api/v1/customers/${id}`).header('cache-control', 'no-store');
       return toCustomerApi(customer, principal);
     } catch (error) {
       throw problemForBackend(error, request, `/api/v1/customers/${id}`);

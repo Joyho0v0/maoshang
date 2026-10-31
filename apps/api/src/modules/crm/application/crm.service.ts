@@ -73,11 +73,11 @@ export class CrmService {
     if (customer.version !== expectedVersion) throw this.versionConflict(customer);
     if (input.action !== 'REASSIGN') {
       try {
-        assertApprovalTransition({ status: customer.status, action: input.action, ...(typeof customer.approvalSummary?.submitterUserId === 'string' ? { submitterUserId: customer.approvalSummary.submitterUserId } : {}), actorUserId: principal.userId, ...(input.reason === undefined ? {} : { reason: input.reason }) });
+        assertApprovalTransition({ status: customer.status, action: input.action, ...(typeof customer.approvalSummary?.submitterUserId === 'string' ? { submitterUserId: customer.approvalSummary.submitterUserId } : {}), actorUserId: principal.userId, ...(input.reason === undefined ? {} : { reason: input.reason }), contacts: customer.contacts });
       } catch (error) {
         const message = error instanceof Error ? error.message : '';
         if (message === 'submitter-approver-separation') throw new DomainProblemError('PERMISSION_DENIED', 403);
-        if (message === 'REJECTION_REASON_REQUIRED') throw new DomainProblemError('VALIDATION_FAILED', 400);
+        if (message === 'REJECTION_REASON_REQUIRED' || message === 'CUSTOMER_APPROVAL_CONTACTS_INCOMPLETE') throw new DomainProblemError('VALIDATION_FAILED', 400);
         throw new DomainProblemError('CUSTOMER_APPROVAL_STATE_CONFLICT', 409, { customerId, currentCustomerStatus: customer.status, currentVersion: customer.version });
       }
     }

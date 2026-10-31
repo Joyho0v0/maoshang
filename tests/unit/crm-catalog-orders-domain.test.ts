@@ -13,6 +13,8 @@ describe('CRM, Catalog and Orders domain invariants', () => {
   it('keeps customer approval duties separated and exposes only valid capabilities', () => {
     expect(() => assertApprovalTransition({ status: 'PENDING_APPROVAL', action: 'APPROVE', submitterUserId: 'same', actorUserId: 'same' })).toThrow('submitter-approver-separation');
     expect(assertApprovalTransition({ status: 'PENDING_APPROVAL', action: 'REJECT', submitterUserId: 'seller', actorUserId: 'manager', reason: 'Incomplete address' })).toEqual({ nextStatus: 'DRAFT', outcome: 'REJECTED' });
+    expect(() => assertApprovalTransition({ status: 'DRAFT', action: 'SUBMIT_APPROVAL', actorUserId: 'seller', contacts: [{ name: 'Primary', countryCode: 'CN' }] })).toThrow('CUSTOMER_APPROVAL_CONTACTS_INCOMPLETE');
+    expect(assertApprovalTransition({ status: 'DRAFT', action: 'SUBMIT_APPROVAL', actorUserId: 'seller', contacts: [{ name: 'Primary', countryCode: 'CN', timezone: 'Asia/Shanghai' }] })).toEqual({ nextStatus: 'PENDING_APPROVAL', outcome: 'SUBMITTED' });
     expect(customerCapabilities({ status: 'DRAFT', canApprove: true, canUpdate: true })).toContain('customer.submit-approval');
     expect(customerCapabilities({ status: 'APPROVED', canApprove: true, canUpdate: true })).not.toContain('customer.submit-approval');
   });
