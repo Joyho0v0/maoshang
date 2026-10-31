@@ -32,6 +32,8 @@ describe('CRM/Catalog/Orders migration', () => {
     expect(sql).toMatch(/customer_approval_attempt_transition/i);
     expect(sql).toMatch(/order_organization_updated_idx/i);
     expect(sql).toMatch(/order_organization_created_idx/i);
+    expect(sql).toMatch(/order_organization_updated_idx .*ON orders\.order_header \(organization_id, updated_at, id\)/i);
+    expect(sql).toMatch(/order_organization_created_idx .*ON orders\.order_header \(organization_id, created_at, id\)/i);
     expect(down).not.toMatch(/DROP SCHEMA/i);
     expect(down).not.toMatch(/CASCADE/i);
   });
@@ -119,6 +121,64 @@ describe('CRM/Catalog/Orders migration', () => {
       await client.query('SAVEPOINT terminal_delete');
       await expect(client.query(`DELETE FROM crm.customer_approval_attempt WHERE id = $1`, [attemptId])).rejects.toThrow('append-only');
       await client.query('ROLLBACK TO SAVEPOINT terminal_delete');
+      const rejectedAttemptId = randomUUID();
+      await client.query(`INSERT INTO crm.customer_approval_attempt (id, organization_id, customer_id, attempt_no, submitter_user_id) VALUES ($1, $2, $3, 2, $4)`, [rejectedAttemptId, organizationId, customerId, submitterId]);
+      await client.query('SAVEPOINT rejected_without_reason');
+      await expect(client.query(`UPDATE crm.customer_approval_attempt SET outcome = 'REJECTED', decided_by = $2, decided_at = clock_timestamp() WHERE id = $1`, [rejectedAttemptId, approverId])).rejects.toThrow(/invalid|reason/i);
+      await client.query('ROLLBACK TO SAVEPOINT rejected_without_reason');
+      await client.query('SAVEPOINT rejected_blank_reason');
+      await expect(client.query(`UPDATE crm.customer_approval_attempt SET outcome = 'REJECTED', reason = '   ', decided_by = $2, decided_at = clock_timestamp() WHERE id = $1`, [rejectedAttemptId, approverId])).rejects.toThrow(/invalid|reason/i);
+      await client.query('ROLLBACK TO SAVEPOINT rejected_blank_reason');
+      await client.query(`UPDATE crm.customer_approval_attempt SET outcome = 'REJECTED', reason = 'Incomplete address', decided_by = $2, decided_at = clock_timestamp() WHERE id = $1`, [rejectedAttemptId, approverId]);
+      await expect(client.query(`SELECT outcome, reason FROM crm.customer_approval_attempt WHERE id = $1`, [rejectedAttemptId])).resolves.toMatchObject({ rows: [{ outcome: 'REJECTED', reason: 'Incomplete address' }] });
+      await client.query('SAVEPOINT rejected_second_decision');
+      await expect(client.query(`UPDATE crm.customer_approval_attempt SET outcome = 'APPROVED' WHERE id = $1`, [rejectedAttemptId])).rejects.toThrow('immutable');
+      await client.query('ROLLBACK TO SAVEPOINT rejected_second_decision');
+      await client.query('SAVEPOINT rejected_delete');
+      await expect(client.query(`DELETE FROM crm.customer_approval_attempt WHERE id = $1`, [rejectedAttemptId])).rejects.toThrow('append-only');
+      await client.query('ROLLBACK TO SAVEPOINT rejected_delete');
+      await client.query('ROLLBACK');
+      transactionOpen = false;
+    } finally {
+      if (transactionOpen) await client.query('ROLLBACK').catch(() => undefined);
+      client.release();
+      await pool.end();
+    }
+  });
+
+  it.skipIf(process.env.DATABASE_URL === undefined)('uses complete keyset indexes for both directions and repeated timestamps', async () => {
+    const databaseUrl = process.env.DATABASE_URL;
+    if (databaseUrl === undefined) return;
+    const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
+    const client = await pool.connect();
+    const organizationId = randomUUID();
+    const userId = randomUUID();
+    const customerId = randomUUID();
+    const migrations = await Promise.all([
+      readFile(new URL('../../packages/database/migrations/001_foundation.sql', import.meta.url), 'utf8'),
+      readFile(new URL('../../packages/database/migrations/002_identity_authorization.sql', import.meta.url), 'utf8'),
+      readFile(new URL('../../packages/database/migrations/003_files.sql', import.meta.url), 'utf8'),
+      readFile(new URL('../../packages/database/migrations/004_crm_catalog_orders.sql', import.meta.url), 'utf8'),
+    ]);
+    let transactionOpen = false;
+    try {
+      await client.query('BEGIN');
+      transactionOpen = true;
+      for (const migration of migrations) await client.query(migration);
+      await client.query(`INSERT INTO org.organization (id, code, name) VALUES ($1, $2, 'Keyset plan test')`, [organizationId, `KEYSET-${organizationId.slice(0, 8)}`]);
+      await client.query(`INSERT INTO iam.user_account (id, organization_id, provider, provider_subject, username_normalized, display_name) VALUES ($1, $2, 'LOCAL_PASSWORD', $3, $4, 'Keyset User')`, [userId, organizationId, `${userId}-subject`, `${userId}@test.invalid`]);
+      await client.query(`INSERT INTO crm.customer (id, organization_id, name, owner_user_id) VALUES ($1, $2, 'Keyset customer', $3)`, [customerId, organizationId, userId]);
+      await client.query(`INSERT INTO orders.order_header (id, organization_id, customer_id, order_no, owner_user_id, currency, created_at, updated_at) SELECT format('00000000-0000-4000-8000-%s', lpad(g::text, 12, '0'))::uuid, $1, $2, 'KEYSET-' || g::text, $3, 'CNY', '2026-01-01T00:00:00Z'::timestamptz, '2026-01-01T00:00:00Z'::timestamptz FROM generate_series(1, 1000) AS g`, [organizationId, customerId, userId]);
+      await client.query('ANALYZE orders.order_header');
+      const plans: pg.QueryResult<{ 'QUERY PLAN': string }>[] = [];
+      for (const ordering of ['updated_at ASC, id ASC', 'updated_at DESC, id DESC', 'created_at ASC, id ASC', 'created_at DESC, id DESC']) {
+        plans.push(await client.query<{ 'QUERY PLAN': string }>(`EXPLAIN (ANALYZE, BUFFERS, COSTS OFF) SELECT id FROM orders.order_header WHERE organization_id = $1 ORDER BY ${ordering} LIMIT 100`, [organizationId]));
+      }
+      for (const [plan, indexName] of plans.map((value, index) => [value, index < 2 ? 'order_organization_updated_idx' : 'order_organization_created_idx'] as const)) {
+        const text = plan.rows.map((row) => row['QUERY PLAN']).join('\n');
+        expect(text).toContain(indexName);
+        expect(text).not.toMatch(/Sort|Incremental Sort/);
+      }
       await client.query('ROLLBACK');
       transactionOpen = false;
     } finally {

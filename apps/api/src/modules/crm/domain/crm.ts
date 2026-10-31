@@ -35,10 +35,10 @@ export function hasApprovalReadyContact(contacts: readonly Record<string, unknow
   }) === true;
 }
 
-export function customerCapabilities(input: { status: CustomerStatus; canApprove: boolean; canUpdate: boolean }): string[] {
+export function customerCapabilities(input: { status: CustomerStatus; canApprove: boolean; canUpdate: boolean; isCurrentAttemptSubmitter?: boolean }): string[] {
   const capabilities: string[] = [];
   if (input.canUpdate && input.status === 'DRAFT') capabilities.push('customer.update', 'customer.submit-approval');
-  if (input.canApprove && input.status === 'PENDING_APPROVAL') capabilities.push('customer.approve', 'customer.reject');
+  if (input.canApprove && !input.isCurrentAttemptSubmitter && input.status === 'PENDING_APPROVAL') capabilities.push('customer.approve', 'customer.reject');
   return capabilities;
 }
 

@@ -17,6 +17,8 @@ describe('CRM, Catalog and Orders domain invariants', () => {
     expect(assertApprovalTransition({ status: 'DRAFT', action: 'SUBMIT_APPROVAL', actorUserId: 'seller', contacts: [{ name: 'Primary', countryCode: 'CN', timezone: 'Asia/Shanghai' }] })).toEqual({ nextStatus: 'PENDING_APPROVAL', outcome: 'SUBMITTED' });
     expect(customerCapabilities({ status: 'DRAFT', canApprove: true, canUpdate: true })).toContain('customer.submit-approval');
     expect(customerCapabilities({ status: 'APPROVED', canApprove: true, canUpdate: true })).not.toContain('customer.submit-approval');
+    expect(customerCapabilities({ status: 'PENDING_APPROVAL', canApprove: true, canUpdate: false, isCurrentAttemptSubmitter: true })).toEqual([]);
+    expect(customerCapabilities({ status: 'PENDING_APPROVAL', canApprove: true, canUpdate: false, isCurrentAttemptSubmitter: false })).toEqual(['customer.approve', 'customer.reject']);
   });
 
   it('allows only adjacent order stage transitions and no transition from terminal stages', () => {

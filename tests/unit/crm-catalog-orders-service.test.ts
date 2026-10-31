@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PoolClient } from 'pg';
 import type { AuthorizationPrincipal } from '../../apps/api/src/modules/identity/domain/authz.js';
+import { DomainProblemError } from '../../apps/api/src/common/http/domain-error.js';
 import { CrmService, type CrmStore, toCustomerApi } from '../../apps/api/src/modules/crm/application/crm.service.js';
 import { CatalogService, type CatalogStore } from '../../apps/api/src/modules/catalog/application/catalog.service.js';
 import { calculateOrderTotal, OrdersService, type OrdersStore } from '../../apps/api/src/modules/orders/application/orders.service.js';
@@ -133,6 +134,37 @@ describe('CRM/Catalog/Orders application services', () => {
     expect(fetched.approvalSummary).toEqual(listed.data[0]?.approvalSummary);
     expect(toCustomerApi(fetched, readOnly)).toMatchObject({ name: 'Acme' });
     expect(toCustomerApi(fetched, readOnly).approvalSummary).not.toHaveProperty('reason');
+  });
+
+  it('does not advertise approval actions to the current approval submitter', async () => {
+    const customer = {
+      id: 'customer-submit-1', organizationId: orgId, name: 'Acme', ownerUserId: actorId, businessGroupId: groupId,
+      status: 'PENDING_APPROVAL' as const, contacts: [], version: 2,
+      createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+      approvalSummary: { latestOutcome: 'PENDING', attemptId: 'attempt-1', attemptNo: 1, submitterUserId: actorId, canResubmit: false },
+    };
+    const approver = principal({ userId: actorId, permissions: new Set(['customer.read', 'customer.approve']) });
+    expect(toCustomerApi(customer, approver).capabilities).toEqual([]);
+    expect(toCustomerApi({ ...customer, approvalSummary: { ...customer.approvalSummary, submitterUserId: attackerId } }, approver).capabilities).toEqual(['customer.approve', 'customer.reject']);
+  });
+
+  it('audits a store-side scope denial without treating it as a successful command', async () => {
+    const audit = vi.fn().mockResolvedValue(undefined);
+    const customer = {
+      id: 'customer-reassign-1', organizationId: orgId, name: 'Acme', ownerUserId: actorId, businessGroupId: groupId,
+      status: 'DRAFT' as const, contacts: [], version: 1,
+      createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const store = {
+      findCustomer: vi.fn().mockResolvedValue(customer),
+      commandCustomer: vi.fn().mockRejectedValue(new DomainProblemError('PERMISSION_DENIED', 403)),
+      recordAudit: audit,
+    } as unknown as CrmStore;
+    const service = new CrmService(store);
+    const actor = principal({ permissions: new Set(['customer.read', 'customer.reassign']) });
+    await expect(service.commandCustomer(actor, customer.id, 1, { action: 'REASSIGN', assigneeUserId: attackerId }, 'request-scope-denied', {} as PoolClient))
+      .rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'customer.reassign', outcome: 'DENIED', reason: 'permission-or-scope-denied', requestId: 'request-scope-denied', resourceId: customer.id }));
   });
 
   it('maps deterministic decimal input failures to validation problems', async () => {

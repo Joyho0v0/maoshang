@@ -80,13 +80,17 @@ const EXPECTED_STATUS: Record<string, number | readonly number[]> = {
   INTERNAL_ERROR: [500, 502, 503],
 };
 
+export type ProblemDisposition = 'TERMINAL' | 'RECOVERABLE';
+
 export class ProblemError extends Error {
   readonly problem: ProblemDocument;
+  readonly disposition: ProblemDisposition;
 
-  constructor(problem: ProblemDocument) {
+  constructor(problem: ProblemDocument, disposition: ProblemDisposition = 'TERMINAL') {
     super(problem.title);
     this.name = 'ProblemError';
     this.problem = problem;
+    this.disposition = disposition;
   }
 
   get status(): number {
@@ -95,6 +99,13 @@ export class ProblemError extends Error {
 
   get code(): string {
     return this.problem.code;
+  }
+}
+
+export class RecoverableProblemError extends ProblemError {
+  constructor(problem: ProblemDocument) {
+    super(problem, 'RECOVERABLE');
+    this.name = 'RecoverableProblemError';
   }
 }
 

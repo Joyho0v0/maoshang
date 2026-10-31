@@ -70,8 +70,9 @@ export class CrmService {
 
   async commandCustomer(principal: AuthorizationPrincipal, customerId: string, expectedVersion: number, input: { action: ApprovalAction | 'REASSIGN'; reason?: string; assigneeUserId?: string }, requestId: string, client: PoolClient): Promise<CustomerRecord> {
     const permission = input.action === 'REASSIGN' ? 'customer.reassign' : input.action === 'APPROVE' || input.action === 'REJECT' ? 'customer.approve' : 'customer.update';
+    const action = `customer.${input.action.toLowerCase()}`;
     await this.require(principal, permission, requestId, customerId, `customer.${input.action.toLowerCase()}`);
-    const customer = await this.requireVisible(principal, customerId, client, requestId, `customer.${input.action.toLowerCase()}`);
+    const customer = await this.requireVisible(principal, customerId, client, requestId, action);
     if (customer.version !== expectedVersion) throw await this.versionConflict(principal, customer, requestId, `customer.${input.action.toLowerCase()}`);
     if (input.action !== 'REASSIGN') {
       try {
@@ -84,7 +85,23 @@ export class CrmService {
       }
     }
     const customerScope = principal.scopes.get('CUSTOMER');
-    return this.store.commandCustomer(client, { organizationId: principal.organizationId, customerId, expectedVersion, action: input.action, actorUserId: principal.userId, requestId, ...(customerScope === undefined ? {} : { customerScope }), ...(input.reason === undefined ? {} : { reason: input.reason }), ...(input.assigneeUserId === undefined ? {} : { assigneeUserId: input.assigneeUserId }) });
+    try {
+      return await this.store.commandCustomer(client, { organizationId: principal.organizationId, customerId, expectedVersion, action: input.action, actorUserId: principal.userId, requestId, ...(customerScope === undefined ? {} : { customerScope }), ...(input.reason === undefined ? {} : { reason: input.reason }), ...(input.assigneeUserId === undefined ? {} : { assigneeUserId: input.assigneeUserId }) });
+    } catch (error) {
+      if (error instanceof DomainProblemError && AUDITABLE_COMMAND_FAILURES.has(error.code)) {
+        const reason = input.action === 'REASSIGN' && error.code === 'PERMISSION_DENIED'
+          ? 'permission-or-scope-denied'
+          : error.code === 'VERSION_CONFLICT'
+            ? 'version-conflict'
+            : error.code === 'RESOURCE_NOT_FOUND'
+              ? 'scope-denied'
+              : error.code === 'CUSTOMER_APPROVAL_STATE_CONFLICT'
+                ? 'approval-state-conflict'
+                : 'command-failed';
+        await this.recordDenied(principal, action, customerId, requestId, reason, error.code === 'VERSION_CONFLICT' ? 'FAILED' : 'DENIED');
+      }
+      throw error;
+    }
   }
 
   private async requireVisible(principal: AuthorizationPrincipal, customerId: string, client: PoolClient | undefined, requestId: string, action: string): Promise<CustomerRecord> {
@@ -114,8 +131,13 @@ export class CrmService {
 }
 
 export function toCustomerApi(customer: CustomerRecord, principal: AuthorizationPrincipal): Record<string, unknown> {
-  const capabilities = customerCapabilities({ status: customer.status, canApprove: principal.permissions.has('customer.approve'), canUpdate: principal.permissions.has('customer.update') });
   const summary = customer.approvalSummary;
+  const capabilities = customerCapabilities({
+    status: customer.status,
+    canApprove: principal.permissions.has('customer.approve'),
+    canUpdate: principal.permissions.has('customer.update'),
+    isCurrentAttemptSubmitter: typeof summary?.submitterUserId === 'string' && summary.submitterUserId === principal.userId,
+  });
   const publicSummary = summary === undefined ? undefined : {
     latestOutcome: summary.latestOutcome,
     attemptId: summary.attemptId,
@@ -127,3 +149,5 @@ export function toCustomerApi(customer: CustomerRecord, principal: Authorization
   };
   return { id: customer.id, organizationId: customer.organizationId, name: customer.name, version: customer.version, createdAt: customer.createdAt, updatedAt: customer.updatedAt, status: customer.status, ...(customer.ownerUserId === undefined ? {} : { ownerUserId: customer.ownerUserId }), ...(customer.businessGroupId === undefined ? {} : { businessGroupId: customer.businessGroupId }), contacts: customer.contacts, ...(publicSummary === undefined ? {} : { approvalSummary: publicSummary }), capabilities };
 }
+
+const AUDITABLE_COMMAND_FAILURES = new Set(['PERMISSION_DENIED', 'RESOURCE_NOT_FOUND', 'VERSION_CONFLICT', 'CUSTOMER_APPROVAL_STATE_CONFLICT']);

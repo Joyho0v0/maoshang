@@ -293,11 +293,15 @@ export class PostgresIdempotencyRepository {
             return { kind: 'failure' as const, error };
           }
           if (error instanceof ProblemError) {
-            // A ProblemError is a deterministic, client-observable terminal
-            // outcome. The savepoint has already rolled back business writes;
-            // persist the exact problem so the same key/body replays it.
-            await this.fail(client, claim.commandId, claim.ownerToken as Buffer, error.problem);
-            return { kind: 'failure' as const, error };
+            if (error.disposition === 'TERMINAL') {
+              // Deterministic client-observable outcomes are terminal. The
+              // savepoint has already rolled back business writes; persist the
+              // exact problem so the same key/body replays it.
+              await this.fail(client, claim.commandId, claim.ownerToken as Buffer, error.problem);
+              return { kind: 'failure' as const, error };
+            }
+            await this.releaseForRecovery(client, claim.commandId, claim.ownerToken as Buffer, error.problem.code);
+            return { kind: 'transient' as const, error };
           }
           await this.releaseForRecovery(client, claim.commandId, claim.ownerToken as Buffer, error instanceof Error ? error.name : 'UNKNOWN_FAILURE');
           return { kind: 'transient' as const, error: error instanceof Error ? error : new Error('Unknown idempotency failure') };

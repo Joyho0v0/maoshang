@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS crm.customer_approval_attempt (
   FOREIGN KEY (organization_id, customer_id) REFERENCES crm.customer (organization_id, id) ON DELETE RESTRICT,
   FOREIGN KEY (organization_id, submitter_user_id) REFERENCES iam.user_account (organization_id, id) ON DELETE RESTRICT,
   FOREIGN KEY (organization_id, decided_by) REFERENCES iam.user_account (organization_id, id) ON DELETE RESTRICT,
-  CHECK ((outcome = 'PENDING' AND decided_at IS NULL AND reason IS NULL) OR (outcome <> 'PENDING' AND decided_at IS NOT NULL)),
+  CHECK ((outcome = 'PENDING' AND decided_at IS NULL AND reason IS NULL) OR (outcome = 'APPROVED' AND decided_at IS NOT NULL) OR (outcome = 'REJECTED' AND decided_at IS NOT NULL AND reason IS NOT NULL AND length(btrim(reason)) BETWEEN 1 AND 2048)),
   CHECK (decided_by IS NULL OR decided_by <> submitter_user_id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS customer_approval_pending_uq ON crm.customer_approval_attempt (organization_id, customer_id) WHERE outcome = 'PENDING';
@@ -212,8 +212,8 @@ CREATE INDEX IF NOT EXISTS order_organization_owner_idx ON orders.order_header (
 CREATE INDEX IF NOT EXISTS order_organization_group_idx ON orders.order_header (organization_id, business_group_id, updated_at DESC, id);
 CREATE INDEX IF NOT EXISTS order_organization_status_idx ON orders.order_header (organization_id, status, updated_at DESC, id);
 CREATE INDEX IF NOT EXISTS order_organization_stage_idx ON orders.order_header (organization_id, stage, updated_at DESC, id);
-CREATE INDEX IF NOT EXISTS order_organization_updated_idx ON orders.order_header (organization_id, updated_at DESC, id);
-CREATE INDEX IF NOT EXISTS order_organization_created_idx ON orders.order_header (organization_id, created_at DESC, id);
+CREATE INDEX IF NOT EXISTS order_organization_updated_idx ON orders.order_header (organization_id, updated_at, id);
+CREATE INDEX IF NOT EXISTS order_organization_created_idx ON orders.order_header (organization_id, created_at, id);
 
 CREATE TABLE IF NOT EXISTS orders.order_item (
   id uuid PRIMARY KEY,
@@ -312,7 +312,8 @@ BEGIN
      OR NEW.submitter_user_id <> OLD.submitter_user_id
      OR NEW.submitted_at <> OLD.submitted_at
      OR NEW.decided_by IS NULL
-     OR NEW.decided_at IS NULL THEN
+     OR NEW.decided_at IS NULL
+     OR (NEW.outcome = 'REJECTED' AND (NEW.reason IS NULL OR length(btrim(NEW.reason)) NOT BETWEEN 1 AND 2048)) THEN
     RAISE EXCEPTION 'CRM approval attempt transition is immutable or invalid';
   END IF;
   RETURN NEW;

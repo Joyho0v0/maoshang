@@ -15,6 +15,7 @@ import { createContractValidator } from '../../packages/contracts/openapi/runtim
 import { IdempotencyExecutionInterceptor } from '../../apps/api/src/common/security/idempotency-execution.interceptor.js';
 import { ContractResponseValidationInterceptor } from '../../apps/api/src/common/http/contract-response.interceptor.js';
 import { ProblemExceptionFilter } from '../../apps/api/src/common/http/problem.filter.js';
+import { problemForBackend } from '../../apps/api/src/common/http/backend-controller.js';
 import { requireIdempotencyTransaction } from '../../apps/api/src/common/security/idempotency-transaction-context.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
@@ -25,11 +26,13 @@ class PostgresCustomerController {
   static executions = 0;
   static backendPids: number[] = [];
   static invalidResponse = false;
+  static temporaryFailure = false;
   static ownerBarrier: { started: () => void; released: Promise<void> } | undefined;
 
   @Post()
   @HttpCode(201)
   async create(@Req() request: FastifyRequest & { user?: { userId: string; organizationId: string } }, @Res({ passthrough: true }) response: FastifyReply): Promise<Record<string, unknown>> {
+    if (PostgresCustomerController.temporaryFailure) throw problemForBackend(new Error('temporary database disconnect'), request);
     PostgresCustomerController.executions += 1;
     const { client } = requireIdempotencyTransaction(request);
     const pid = await client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
@@ -324,6 +327,39 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
       await expect(repository.withTransaction((client) => repository.statusByKey(client, { actorId, organizationId, operationId: 'createCustomer', idempotencyKey }))).resolves.toMatchObject({ state: 'FAILED', httpStatus: 500 });
     } finally {
       PostgresCustomerController.invalidResponse = false;
+      await app.close();
+    }
+  });
+
+  it('keeps an unknown HTTP 500 recoverable until a later owner can complete the command', async () => {
+    PostgresCustomerController.executions = 0;
+    PostgresCustomerController.temporaryFailure = true;
+    const recoveryRepository = new PostgresIdempotencyRepository(pool, { leaseDurationMs: 5 });
+    const contract = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
+    const validator = createContractValidator(contract);
+    const app = await NestFactory.create<NestFastifyApplication>(PostgresCustomerModule, new FastifyAdapter({ logger: false }));
+    app.setGlobalPrefix('api/v1');
+    app.useGlobalGuards(new PostgresPrincipalGuard(actorId, organizationId));
+    app.useGlobalFilters(new ProblemExceptionFilter(validator));
+    app.useGlobalInterceptors(new ContractResponseValidationInterceptor(validator), new IdempotencyExecutionInterceptor(recoveryRepository, validator));
+    await app.init();
+    const idempotencyKey = `http-postgres-unknown-500-${randomUUID()}`;
+    const request = { method: 'POST' as const, url: '/api/v1/customers', headers: { 'idempotency-key': idempotencyKey, 'x-csrf-token': 'csrf-token-value' }, payload: { name: 'Recoverable customer' } };
+    try {
+      const first = await app.getHttpAdapter().getInstance().inject(request);
+      expect(first.statusCode).toBe(500);
+      await expect(recoveryRepository.withTransaction((client) => recoveryRepository.statusByKey(client, { actorId, organizationId, operationId: 'createCustomer', idempotencyKey }))).resolves.toMatchObject({ state: 'RECOVERY_REQUIRED', httpStatus: null });
+      await pool.query("UPDATE integration.idempotency_record SET lease_expires_at = now() - interval '1 second' WHERE organization_id = $1 AND actor_user_id = $2 AND operation_id = 'createCustomer' AND state = 'IN_PROGRESS'", [organizationId, actorId]);
+      PostgresCustomerController.temporaryFailure = false;
+      const recovered = await app.getHttpAdapter().getInstance().inject(request);
+      expect(recovered.statusCode).toBe(201);
+      expect(PostgresCustomerController.executions).toBe(1);
+      await expect(recoveryRepository.withTransaction((client) => recoveryRepository.statusByKey(client, { actorId, organizationId, operationId: 'createCustomer', idempotencyKey }))).resolves.toMatchObject({ state: 'SUCCEEDED', httpStatus: 201 });
+      const conflict = await app.getHttpAdapter().getInstance().inject({ ...request, payload: { name: 'Different body' } });
+      expect(conflict.statusCode).toBe(409);
+      expect(conflict.json()).toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
+    } finally {
+      PostgresCustomerController.temporaryFailure = false;
       await app.close();
     }
   });

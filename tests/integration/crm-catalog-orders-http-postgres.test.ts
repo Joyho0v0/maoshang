@@ -240,6 +240,46 @@ describe('CRM/Catalog/Orders HTTP PostgreSQL vertical slice', () => {
       await pool.query('DELETE FROM org.business_group WHERE id = $1', [targetGroupId]);
     }
   });
+
+  it.skipIf(process.env.DATABASE_URL === undefined)('audits an HTTP target-scope denial without committing customer, history or outbox writes', async () => {
+    if (app === undefined || pool === undefined) return;
+    const targetGroupId = randomUUID();
+    const targetUserId = randomUUID();
+    const customerId = randomUUID();
+    const requestId = randomUUID();
+    const idempotencyKey = `be-imp-04-reassign-scope-audit-${randomUUID()}`;
+    const http = app.getHttpAdapter().getInstance();
+    await pool.query('INSERT INTO org.business_group (id, organization_id, code, name) VALUES ($1, $2, $3, $4)', [targetGroupId, organizationId, `BE-IMP-04-C-${targetGroupId.slice(0, 8)}`, 'HTTP out of scope group']);
+    await pool.query(`INSERT INTO iam.user_account (id, organization_id, provider, provider_subject, username_normalized, display_name) VALUES ($1, $2, 'LOCAL_PASSWORD', $3, $4, 'HTTP out of scope user')`, [targetUserId, organizationId, `${targetUserId}-subject`, `${targetUserId}@example.test`]);
+    await pool.query('INSERT INTO org.membership (id, organization_id, user_id, business_group_id) VALUES ($1, $2, $3, $4)', [randomUUID(), organizationId, targetUserId, targetGroupId]);
+    await pool.query(`INSERT INTO crm.customer (id, organization_id, name, owner_user_id, business_group_id) VALUES ($1, $2, 'HTTP scope boundary customer', $3, $4)`, [customerId, organizationId, actorId, groupId]);
+    const scope = await pool.query<{ id: string }>('SELECT id FROM iam.user_data_scope WHERE organization_id = $1 AND user_id = $2 AND resource_type = \'CUSTOMER\'', [organizationId, actorId]);
+    const scopeId = scope.rows[0]?.id;
+    if (scopeId === undefined) throw new Error('Seed Customer scope is missing.');
+    await pool.query('UPDATE iam.user_data_scope SET scope_type = \'GROUP_SET\', version = version + 1, updated_at = clock_timestamp() WHERE id = $1', [scopeId]);
+    await pool.query('INSERT INTO iam.data_scope_group (scope_id, organization_id, group_id) VALUES ($1, $2, $3)', [scopeId, organizationId, groupId]);
+    try {
+      const response = await http.inject({
+        method: 'POST',
+        url: `/api/v1/customers/${customerId}/reassign`,
+        headers: { cookie, 'x-csrf-token': csrfToken, 'idempotency-key': idempotencyKey, 'if-match': '"v1"', 'x-request-id': requestId },
+        payload: { action: 'REASSIGN', assigneeUserId: targetUserId, reason: 'Cross-scope reassignment probe' },
+      });
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toMatchObject({ code: 'PERMISSION_DENIED', status: 403 });
+      await expect(pool.query<{ business_group_id: string; owner_user_id: string; version: number }>('SELECT business_group_id, owner_user_id, version FROM crm.customer WHERE id = $1', [customerId])).resolves.toMatchObject({ rows: [{ business_group_id: groupId, owner_user_id: actorId, version: 1 }] });
+      await expect(pool.query('SELECT 1 FROM crm.customer_assignment_history WHERE customer_id = $1', [customerId])).resolves.toMatchObject({ rowCount: 0 });
+      await expect(pool.query('SELECT 1 FROM integration.outbox_event WHERE aggregate_id = $1', [customerId])).resolves.toMatchObject({ rowCount: 0 });
+      await expect(pool.query<{ action: string; outcome: string; reason: string; request_id: string }>('SELECT action, outcome, reason, request_id FROM audit.audit_event WHERE organization_id = $1 AND request_id = $2', [organizationId, requestId])).resolves.toMatchObject({ rows: [expect.objectContaining({ action: 'customer.reassign', outcome: 'DENIED', reason: 'permission-or-scope-denied', request_id: requestId })] });
+    } finally {
+      await pool.query('DELETE FROM iam.data_scope_group WHERE scope_id = $1', [scopeId]);
+      await pool.query('UPDATE iam.user_data_scope SET scope_type = \'ALL_ORG\', version = version + 1, updated_at = clock_timestamp() WHERE id = $1', [scopeId]);
+      await pool.query('DELETE FROM crm.customer WHERE id = $1', [customerId]);
+      await pool.query('DELETE FROM org.membership WHERE user_id = $1', [targetUserId]);
+      await pool.query('DELETE FROM iam.user_account WHERE id = $1', [targetUserId]);
+      await pool.query('DELETE FROM org.business_group WHERE id = $1', [targetGroupId]);
+    }
+  });
 });
 
 async function seed(pool: pg.Pool): Promise<void> {
