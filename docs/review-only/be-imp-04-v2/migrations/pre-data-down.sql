@@ -14,6 +14,7 @@ BEGIN
   FOREACH durable_table_name IN ARRAY ARRAY[
     'migration_v2.backfill_item',
     'migration_v2.backfill_manifest',
+    'migration_v2.policy_fact_evidence',
     'migration_v2.backfill_count',
     'migration_v2.approved_legacy_sku_mapping',
     'migration_v2.approved_price_policy_mapping',
@@ -79,6 +80,12 @@ BEGIN
   IF to_regclass('orders.fx_snapshot_v2') IS NOT NULL THEN
     EXECUTE 'DROP TRIGGER IF EXISTS fx_snapshot_v2_immutable ON orders.fx_snapshot_v2';
   END IF;
+  IF to_regclass('migration_v2.backfill_manifest') IS NOT NULL THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS backfill_manifest_frozen ON migration_v2.backfill_manifest';
+  END IF;
+  IF to_regclass('migration_v2.policy_fact_evidence') IS NOT NULL THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS policy_fact_evidence_immutable ON migration_v2.policy_fact_evidence';
+  END IF;
 END $$;
 
 DO $$
@@ -86,6 +93,7 @@ BEGIN
   IF to_regnamespace('migration_v2') IS NOT NULL THEN
     EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.assert_price_policy_lifecycle()';
     EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.prevent_snapshot_mutation()';
+    EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.prevent_policy_fact_evidence_mutation()';
     EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.begin_backfill_run(uuid, bytea, uuid, text)';
     EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.guard_backfill_manifest()';
     EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.apply_backfill_item(uuid, uuid, uuid)';
@@ -94,6 +102,7 @@ BEGIN
 END $$;
 
 DROP TABLE IF EXISTS migration_v2.backfill_manifest;
+DROP TABLE IF EXISTS migration_v2.policy_fact_evidence;
 ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_image_file_fk;
 ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_fx_snapshot_fk;
 ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_price_snapshot_fk;

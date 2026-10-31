@@ -17,24 +17,24 @@ BEGIN
   IF octet_length(p_input_sha256) <> 32 OR length(p_source_ref) NOT BETWEEN 1 AND 512 THEN
     RAISE EXCEPTION 'invalid backfill run metadata' USING ERRCODE = '22023';
   END IF;
+  INSERT INTO migration_v2.backfill_run (run_id, input_sha256, approved_by, source_ref, status, total_count)
+  VALUES (p_run_id, p_input_sha256, p_approved_by, p_source_ref, 'RUNNING', 0)
+  ON CONFLICT DO NOTHING;
   SELECT * INTO existing FROM migration_v2.backfill_run WHERE run_id = p_run_id FOR UPDATE;
-  IF FOUND AND existing.input_sha256 <> p_input_sha256 THEN
-    RAISE EXCEPTION 'run id is already bound to another input digest' USING ERRCODE = '23P01';
-  END IF;
   IF FOUND THEN
-    IF existing.approved_by <> p_approved_by OR existing.source_ref <> p_source_ref THEN
-      RAISE EXCEPTION 'resume metadata does not match the original approved input' USING ERRCODE = '23P01';
+    IF existing.run_id <> p_run_id
+       OR existing.input_sha256 <> p_input_sha256
+       OR existing.approved_by <> p_approved_by
+       OR existing.source_ref <> p_source_ref THEN
+      RAISE EXCEPTION 'resume metadata does not match the final persisted approved input' USING ERRCODE = '23P01';
     END IF;
     RETURN existing.status;
   END IF;
   SELECT * INTO existing FROM migration_v2.backfill_run WHERE input_sha256 = p_input_sha256 FOR UPDATE;
-  IF FOUND AND existing.run_id <> p_run_id THEN
-    RAISE EXCEPTION 'input digest must resume its original run id' USING ERRCODE = '23P01';
+  IF FOUND THEN
+    RAISE EXCEPTION 'input digest is already bound to another run id' USING ERRCODE = '23P01';
   END IF;
-  INSERT INTO migration_v2.backfill_run (run_id, input_sha256, approved_by, source_ref, status, total_count)
-  VALUES (p_run_id, p_input_sha256, p_approved_by, p_source_ref, 'RUNNING', 0)
-  ON CONFLICT (run_id) DO NOTHING;
-  RETURN 'RUNNING';
+  RAISE EXCEPTION 'backfill run insert did not produce a persisted row' USING ERRCODE = '40001';
 END;
 $$;
 
@@ -54,7 +54,10 @@ DECLARE
   price_map migration_v2.approved_price_fx_mapping%ROWTYPE;
   sku_map migration_v2.approved_legacy_sku_mapping%ROWTYPE;
   policy_map migration_v2.approved_price_policy_mapping%ROWTYPE;
-  policy_id uuid;
+  policy_row catalog.price_policy%ROWTYPE;
+  policy_evidence migration_v2.policy_fact_evidence%ROWTYPE;
+  v_policy_id uuid;
+  policy_applied_version integer;
   manifest_row migration_v2.backfill_manifest%ROWTYPE;
   new_price_snapshot_id uuid;
   new_fx_snapshot_id uuid;
@@ -167,14 +170,56 @@ BEGIN
     IF NOT FOUND THEN
       gap_reason := 'APPROVED_PRICE_POLICY_MAPPING_MISSING';
     ELSE
-      SELECT pp.id INTO policy_id
+      SELECT pp.* INTO policy_row
       FROM catalog.price_policy pp
       WHERE pp.organization_id = p_organization_id AND pp.sku_id = item_map.sku_id AND pp.currency = price_map.source_currency
         AND pp.id = policy_map.policy_id
         AND pp.unit_price = price_map.source_unit_price
-        AND pp.version = policy_map.canonical_policy_version
       FOR UPDATE;
-      IF policy_id IS NULL THEN gap_reason := 'PRICE_POLICY_FACT_NOT_FOUND'; END IF;
+      IF NOT FOUND THEN
+        gap_reason := 'PRICE_POLICY_FACT_NOT_FOUND';
+      ELSE
+        v_policy_id := policy_row.id;
+        SELECT * INTO policy_evidence
+        FROM migration_v2.policy_fact_evidence AS evidence
+        WHERE evidence.run_id = p_run_id AND evidence.organization_id = p_organization_id AND evidence.policy_id = v_policy_id
+        FOR UPDATE;
+        IF FOUND THEN
+          IF policy_evidence.input_sha256 <> run_row.input_sha256
+             OR policy_evidence.approved_by <> policy_map.approved_by
+             OR policy_evidence.source_ref <> policy_map.source_ref
+             OR policy_evidence.canonical_policy_version <> policy_map.canonical_policy_version
+             OR policy_evidence.target_is_primary IS DISTINCT FROM policy_map.is_primary
+             OR policy_evidence.target_risk_buffer_bps IS DISTINCT FROM policy_map.risk_buffer_bps THEN
+            RAISE EXCEPTION 'policy fact evidence provenance or target facts conflict' USING ERRCODE = '23P01';
+          END IF;
+          IF policy_row.version <> policy_evidence.applied_version
+             OR policy_row.is_primary IS DISTINCT FROM policy_evidence.target_is_primary
+             OR policy_row.risk_buffer_bps IS DISTINCT FROM policy_evidence.target_risk_buffer_bps THEN
+            RAISE EXCEPTION 'policy fact evidence no longer matches the canonical policy row' USING ERRCODE = '40001';
+          END IF;
+        ELSE
+          IF policy_row.version <> policy_map.canonical_policy_version THEN
+            RAISE EXCEPTION 'approved price policy changed during backfill' USING ERRCODE = '40001';
+          END IF;
+          UPDATE catalog.price_policy
+          SET is_primary = policy_map.is_primary,
+              risk_buffer_bps = policy_map.risk_buffer_bps,
+              version = version + 1
+          WHERE organization_id = p_organization_id AND id = v_policy_id
+            AND version = policy_map.canonical_policy_version
+            AND (is_primary IS DISTINCT FROM policy_map.is_primary
+              OR risk_buffer_bps IS DISTINCT FROM policy_map.risk_buffer_bps)
+          RETURNING version INTO policy_applied_version;
+          IF NOT FOUND THEN
+            RAISE EXCEPTION 'approved price policy facts were not changed by the expected CAS' USING ERRCODE = '40001';
+          END IF;
+          INSERT INTO migration_v2.policy_fact_evidence
+            (run_id, organization_id, policy_id, input_sha256, approved_by, source_ref, canonical_policy_version, target_is_primary, target_risk_buffer_bps, applied_version)
+          VALUES
+            (p_run_id, p_organization_id, v_policy_id, run_row.input_sha256, policy_map.approved_by, policy_map.source_ref, policy_map.canonical_policy_version, policy_map.is_primary, policy_map.risk_buffer_bps, policy_applied_version);
+        END IF;
+      END IF;
     END IF;
   END IF;
   IF gap_reason IS NULL AND price_map.fx_raw_market_rate IS NOT NULL AND price_map.fx_risk_buffer_bps IS NULL THEN gap_reason := 'FX_RISK_BUFFER_MISSING'; END IF;
@@ -202,18 +247,6 @@ BEGIN
     IF NOT FOUND THEN
       RAISE EXCEPTION 'approved SKU mapping changed during backfill' USING ERRCODE = '40001';
     END IF;
-    UPDATE catalog.price_policy
-    SET is_primary = policy_map.is_primary,
-        risk_buffer_bps = policy_map.risk_buffer_bps,
-        version = version + CASE
-          WHEN is_primary IS DISTINCT FROM policy_map.is_primary
-            OR risk_buffer_bps IS DISTINCT FROM policy_map.risk_buffer_bps
-          THEN 1 ELSE 0 END
-    WHERE organization_id = p_organization_id AND id = policy_id
-      AND version = policy_map.canonical_policy_version;
-    IF NOT FOUND THEN
-      RAISE EXCEPTION 'approved price policy changed during backfill' USING ERRCODE = '40001';
-    END IF;
   END IF;
 
   IF price_map.source_currency = order_row.currency THEN
@@ -235,7 +268,7 @@ BEGIN
 
   price_fingerprint := encode(digest(format('%s|%s|%s|%s|%s|%s|%s|%s', p_organization_id, item_row.id, item_map.approved_mode, item_row.item_name, item_row.unit, price_map.source_currency, price_map.source_unit_price, item_row.item_kind), 'sha256'), 'hex');
   INSERT INTO catalog.price_snapshot_v2 (organization_id, item_kind, sku_id, standardization_mode, item_name, unit, source_kind, source_currency, source_unit_price, source_policy_id, captured_at, fingerprint)
-  VALUES (p_organization_id, item_row.item_kind, item_map.sku_id, item_map.approved_mode, item_row.item_name, item_row.unit, CASE WHEN item_row.item_kind = 'STANDARD' THEN 'CATALOG_POLICY' ELSE 'MANUAL_QUOTE' END, price_map.source_currency, price_map.source_unit_price, policy_id, captured_at, price_fingerprint)
+  VALUES (p_organization_id, item_row.item_kind, item_map.sku_id, item_map.approved_mode, item_row.item_name, item_row.unit, CASE WHEN item_row.item_kind = 'STANDARD' THEN 'CATALOG_POLICY' ELSE 'MANUAL_QUOTE' END, price_map.source_currency, price_map.source_unit_price, v_policy_id, captured_at, price_fingerprint)
   ON CONFLICT (organization_id, fingerprint) DO NOTHING;
   SELECT id INTO new_price_snapshot_id FROM catalog.price_snapshot_v2 WHERE organization_id = p_organization_id AND fingerprint = price_fingerprint;
 

@@ -31,6 +31,9 @@ parse and validate the candidate without promotion:
   manifest used by the rehearsal functions. Counts are derived from that
   frozen key set; target objects are intentionally not foreign-keyed so
   missing-object gaps remain durable.
+- `migration_v2.policy_fact_evidence` is append-only policy-level provenance:
+  the first item performs the canonical-version CAS and records the resulting
+  version, while later items in the same run validate and reuse that evidence.
 
 ## Review-only commands
 

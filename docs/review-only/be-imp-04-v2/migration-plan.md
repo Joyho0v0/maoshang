@@ -116,6 +116,23 @@ resumed by the same run ID after approved inputs are supplied and does not
 increment order versions twice. An incomplete run makes forward-fix refuse
 with an actionable owner-mapping error instead of replaying DDL blindly.
 
+`migration_v2.policy_fact_evidence` is the policy-level durable CAS result. Its
+tenant-scoped key is `(run_id, organization_id, policy_id)` and it records the
+run digest, approved principal/source, expected canonical `version`, target
+`is_primary`/`risk_buffer_bps`, and the single resulting version. The policy row
+is locked before the evidence lookup; the first item requires the expected
+version and a facts-changing `UPDATE ... RETURNING version`, then inserts one
+append-only evidence row. Later items in the same run must match that evidence
+and the current policy facts/version, and reuse it without another bump. A
+different run/digest/provenance or conflicting target facts cannot use a
+same-looking current row as proof and fails before item/snapshot/evidence
+writes.
+
+`begin_backfill_run` uses one `INSERT ... ON CONFLICT DO NOTHING` followed by a
+`FOR UPDATE` read of the final persisted run row. Both the inserted and conflict
+paths compare run ID, digest, approver and source; if the run ID is absent after
+the insert, the digest owner is locked and a different run ID is rejected.
+
 The migration owner must provide the legacy SKU mapping, existing item mode
 overrides, primary policy and risk-buffer values through the Leader's
 `HUMAN_INPUT_REQUIRED` flow. This package intentionally contains no business

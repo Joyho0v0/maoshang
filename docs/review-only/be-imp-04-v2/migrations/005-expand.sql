@@ -120,6 +120,36 @@ CREATE TABLE IF NOT EXISTS migration_v2.backfill_run (
 ALTER TABLE migration_v2.backfill_run
   ADD COLUMN IF NOT EXISTS unexpected_count bigint NOT NULL DEFAULT 0 CHECK (unexpected_count >= 0);
 
+CREATE TABLE IF NOT EXISTS migration_v2.policy_fact_evidence (
+  run_id uuid NOT NULL REFERENCES migration_v2.backfill_run(run_id) ON DELETE RESTRICT,
+  organization_id uuid NOT NULL,
+  policy_id uuid NOT NULL,
+  input_sha256 bytea NOT NULL CHECK (octet_length(input_sha256) = 32),
+  approved_by uuid NOT NULL,
+  source_ref text NOT NULL CHECK (length(source_ref) BETWEEN 1 AND 512),
+  canonical_policy_version integer NOT NULL CHECK (canonical_policy_version > 0),
+  target_is_primary boolean NOT NULL,
+  target_risk_buffer_bps integer NOT NULL CHECK (target_risk_buffer_bps BETWEEN 0 AND 2000),
+  applied_version integer NOT NULL CHECK (applied_version > 0),
+  applied_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY (run_id, organization_id, policy_id),
+  FOREIGN KEY (organization_id, policy_id) REFERENCES catalog.price_policy (organization_id, id) ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS policy_fact_evidence_policy_idx ON migration_v2.policy_fact_evidence (organization_id, policy_id, applied_version, run_id);
+
+CREATE OR REPLACE FUNCTION migration_v2.prevent_policy_fact_evidence_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'policy fact evidence is append-only' USING ERRCODE = '42501';
+END;
+$$;
+DROP TRIGGER IF EXISTS policy_fact_evidence_immutable ON migration_v2.policy_fact_evidence;
+CREATE TRIGGER policy_fact_evidence_immutable
+  BEFORE UPDATE OR DELETE ON migration_v2.policy_fact_evidence
+  FOR EACH ROW EXECUTE FUNCTION migration_v2.prevent_policy_fact_evidence_mutation();
+
 CREATE TABLE IF NOT EXISTS migration_v2.backfill_manifest (
   run_id uuid NOT NULL REFERENCES migration_v2.backfill_run(run_id) ON DELETE RESTRICT,
   organization_id uuid NOT NULL,
