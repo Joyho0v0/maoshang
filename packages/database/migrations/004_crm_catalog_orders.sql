@@ -212,6 +212,8 @@ CREATE INDEX IF NOT EXISTS order_organization_owner_idx ON orders.order_header (
 CREATE INDEX IF NOT EXISTS order_organization_group_idx ON orders.order_header (organization_id, business_group_id, updated_at DESC, id);
 CREATE INDEX IF NOT EXISTS order_organization_status_idx ON orders.order_header (organization_id, status, updated_at DESC, id);
 CREATE INDEX IF NOT EXISTS order_organization_stage_idx ON orders.order_header (organization_id, stage, updated_at DESC, id);
+CREATE INDEX IF NOT EXISTS order_organization_updated_idx ON orders.order_header (organization_id, updated_at DESC, id);
+CREATE INDEX IF NOT EXISTS order_organization_created_idx ON orders.order_header (organization_id, created_at DESC, id);
 
 CREATE TABLE IF NOT EXISTS orders.order_item (
   id uuid PRIMARY KEY,
@@ -295,6 +297,31 @@ BEGIN
 END;
 $$;
 DROP TRIGGER IF EXISTS customer_approval_attempt_immutable ON crm.customer_approval_attempt;
+CREATE OR REPLACE FUNCTION crm.guard_customer_approval_attempt_transition() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'CRM approval attempts are append-only';
+  END IF;
+  IF OLD.outcome <> 'PENDING'
+     OR NEW.outcome NOT IN ('APPROVED', 'REJECTED')
+     OR NEW.id <> OLD.id
+     OR NEW.organization_id <> OLD.organization_id
+     OR NEW.customer_id <> OLD.customer_id
+     OR NEW.attempt_no <> OLD.attempt_no
+     OR NEW.submitter_user_id <> OLD.submitter_user_id
+     OR NEW.submitted_at <> OLD.submitted_at
+     OR NEW.decided_by IS NULL
+     OR NEW.decided_at IS NULL THEN
+    RAISE EXCEPTION 'CRM approval attempt transition is immutable or invalid';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS customer_approval_attempt_transition ON crm.customer_approval_attempt;
+CREATE TRIGGER customer_approval_attempt_transition
+  BEFORE UPDATE OR DELETE ON crm.customer_approval_attempt
+  FOR EACH ROW EXECUTE FUNCTION crm.guard_customer_approval_attempt_transition();
 DROP TRIGGER IF EXISTS customer_assignment_history_immutable ON crm.customer_assignment_history;
 CREATE TRIGGER customer_assignment_history_immutable BEFORE UPDATE OR DELETE ON crm.customer_assignment_history FOR EACH ROW EXECUTE FUNCTION crm.reject_customer_history_mutation();
 

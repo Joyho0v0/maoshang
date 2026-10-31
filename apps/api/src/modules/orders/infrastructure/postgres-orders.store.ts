@@ -4,15 +4,19 @@ import { createCursor, parseCursor, parsePageSize, parseSort } from '../../../co
 import { DomainProblemError } from '../../../common/http/domain-error.js';
 import type { AuthorizationPrincipal } from '../../identity/domain/authz.js';
 import { multiplyDecimalStrings } from '../../catalog/domain/catalog.js';
-import { statusForStage, type OrderStage } from '../domain/orders.js';
+import { assertOrderStageTransition, statusForStage, type OrderStage } from '../domain/orders.js';
 import type { CustomerVisibility } from '../../crm/domain/crm.js';
 import type { OrderLineInput, OrderPage, OrderRecord, OrdersStore } from '../application/orders.service.js';
 
 interface OrderRow extends QueryResultRow { id: string; organization_id: string; version: number | string; created_at: Date; updated_at: Date; customer_id: string; order_no: string; owner_user_id: string; business_group_id: string | null; currency: string; status: OrderRecord['status']; stage: OrderStage; total_amount: string; metadata: Record<string, unknown>; }
-interface ItemRow extends QueryResultRow { sku_id: string; quantity: string; unit_price: string; }
+interface ItemRow extends QueryResultRow { order_id: string; sku_id: string; quantity: string; unit_price: string; }
 
 export class PostgresOrdersStore implements OrdersStore {
   constructor(private readonly pool: Pool) {}
+
+  async recordAudit(input: { organizationId: string; actorUserId: string; action: string; resourceType: string; resourceId?: string; outcome: 'DENIED' | 'FAILED'; requestId: string; reason: string }): Promise<void> {
+    await audit(this.pool, input.organizationId, input.actorUserId, input.action, input.resourceId ?? null, input.requestId, input.outcome, input.reason);
+  }
 
   async resolvePrimaryBusinessGroup(client: PoolClient, organizationId: string, userId: string): Promise<string | undefined> {
     const result = await client.query<{ business_group_id: string }>(`SELECT business_group_id FROM org.membership WHERE organization_id = $1 AND user_id = $2 AND status = 'ACTIVE' AND valid_to IS NULL ORDER BY is_primary DESC, id LIMIT 1`, [organizationId, userId]);
@@ -29,7 +33,7 @@ export class PostgresOrdersStore implements OrdersStore {
     const executor = client ?? this.pool;
     const result = await executor.query<OrderRow>(`SELECT id, organization_id, version, created_at, updated_at, customer_id, order_no, owner_user_id, business_group_id, currency, status, stage, total_amount::text, metadata FROM orders.order_header WHERE organization_id = $1 AND id = $2${client === undefined ? '' : ' FOR UPDATE'}`, [organizationId, id]);
     const row = result.rows[0]; if (row === undefined) return undefined;
-    const items = await executor.query<ItemRow>(`SELECT sku_id, quantity::text, unit_price::text FROM orders.order_item WHERE organization_id = $1 AND order_id = $2 ORDER BY line_no, id`, [organizationId, id]);
+    const items = await executor.query<ItemRow>(`SELECT order_id, sku_id, quantity::text, unit_price::text FROM orders.order_item WHERE organization_id = $1 AND order_id = $2 ORDER BY line_no, id`, [organizationId, id]);
     return mapOrder(row, items.rows.map((item) => ({ skuId: item.sku_id, quantity: item.quantity, unitPrice: item.unit_price })));
   }
 
@@ -44,8 +48,17 @@ export class PostgresOrdersStore implements OrdersStore {
     if (cursor !== undefined) { values.push(cursor.updatedAt, cursor.id); conditions.push(sort.startsWith('-') ? `(o.${sortColumn}, o.id) < ($${++index}::timestamptz, $${++index}::uuid)` : `(o.${sortColumn}, o.id) > ($${++index}::timestamptz, $${++index}::uuid)`); }
     values.push(size + 1);
     const result = await this.pool.query<OrderRow>(`SELECT o.id, o.organization_id, o.version, o.created_at, o.updated_at, o.customer_id, o.order_no, o.owner_user_id, o.business_group_id, o.currency, o.status, o.stage, o.total_amount::text, o.metadata FROM orders.order_header AS o WHERE ${conditions.join(' AND ')} ORDER BY o.${sortColumn} ${sort.startsWith('-') ? 'DESC' : 'ASC'}, o.id ${sort.startsWith('-') ? 'DESC' : 'ASC'} LIMIT $${++index}`, values);
-    const rows = result.rows.slice(0, size); const hasNext = result.rows.length > size; const data: OrderRecord[] = [];
-    for (const row of rows) { const items = await this.pool.query<ItemRow>(`SELECT sku_id, quantity::text, unit_price::text FROM orders.order_item WHERE organization_id = $1 AND order_id = $2 ORDER BY line_no, id`, [principal.organizationId, row.id]); data.push(mapOrder(row, items.rows.map((item) => ({ skuId: item.sku_id, quantity: item.quantity, unitPrice: item.unit_price })))); }
+    const rows = result.rows.slice(0, size); const hasNext = result.rows.length > size;
+    const itemsByOrder = new Map<string, OrderLineInput[]>();
+    if (rows.length > 0) {
+      const itemResult = await this.pool.query<ItemRow>(`SELECT order_id, sku_id, quantity::text, unit_price::text FROM orders.order_item WHERE organization_id = $1 AND order_id = ANY($2::uuid[]) ORDER BY order_id, line_no, id`, [principal.organizationId, rows.map((row) => row.id)]);
+      for (const item of itemResult.rows) {
+        const lines = itemsByOrder.get(item.order_id) ?? [];
+        lines.push({ skuId: item.sku_id, quantity: item.quantity, unitPrice: item.unit_price });
+        itemsByOrder.set(item.order_id, lines);
+      }
+    }
+    const data = rows.map((row) => mapOrder(row, itemsByOrder.get(row.id) ?? []));
     const last = rows.at(-1);
     return { data, page: { hasNext, nextCursor: hasNext && last !== undefined ? createCursor({ updatedAt: (sortColumn === 'created_at' ? last.created_at : last.updated_at).toISOString(), id: last.id }, sort, filter) : null } };
   }
@@ -61,28 +74,38 @@ export class PostgresOrdersStore implements OrdersStore {
     }
     await client.query(`INSERT INTO orders.stage_history (id, organization_id, order_id, from_stage, to_stage, actor_user_id, reason) VALUES ($1, $2, $3, NULL, $4, $5, 'Order created')`, [randomUUID(), input.organizationId, input.id, input.stage, input.actorUserId]);
     await client.query(`INSERT INTO orders.ownership_history (id, organization_id, order_id, to_owner_user_id, to_business_group_id, actor_user_id, reason) VALUES ($1, $2, $3, $4, $5, $6, 'Order created')`, [randomUUID(), input.organizationId, input.id, input.ownerUserId, input.businessGroupId ?? null, input.actorUserId]);
-    await audit(client, input.organizationId, input.actorUserId, 'order.created', input.id, input.requestId, { status: 'DRAFT', stage: input.stage });
+    await audit(client, input.organizationId, input.actorUserId, 'order.created', input.id, input.requestId, 'SUCCEEDED', { status: 'DRAFT', stage: input.stage });
     await outbox(client, input.organizationId, input.id, 'order.created', { orderId: input.id, requestId: input.requestId });
     const value = await this.findOrder(input.organizationId, input.id, client); if (value === undefined) throw new Error('Order insert returned no row.'); return value;
   }
 
   async updateOrder(client: PoolClient, input: { organizationId: string; id: string; expectedVersion: number; status?: OrderRecord['status']; metadata?: Record<string, unknown>; actorUserId: string; requestId: string }): Promise<OrderRecord> {
+    const current = await this.findOrder(input.organizationId, input.id, client);
+    if (current === undefined) throw new DomainProblemError('RESOURCE_NOT_FOUND', 404);
+    if (current.version !== input.expectedVersion) throw await this.versionConflict(client, input.organizationId, input.id);
+    if (current.status === 'CANCELLED' || current.status === 'FULFILLED' || (input.status !== undefined && input.status !== statusForStage(current.stage))) throw new DomainProblemError('STATE_CONFLICT', 409, { resourceType: 'ORDER', resourceId: input.id, currentState: current.status === 'DRAFT' || current.status === 'CONFIRMED' ? current.stage : current.status });
     const result = await client.query(`UPDATE orders.order_header SET status = COALESCE($4, status), metadata = COALESCE($5::jsonb, metadata), version = version + 1, updated_at = clock_timestamp() WHERE organization_id = $1 AND id = $2 AND version = $3`, [input.organizationId, input.id, input.expectedVersion, input.status ?? null, input.metadata === undefined ? null : JSON.stringify(input.metadata)]);
     if (result.rowCount !== 1) throw await this.versionConflict(client, input.organizationId, input.id);
-    await audit(client, input.organizationId, input.actorUserId, 'order.updated', input.id, input.requestId, input.status === undefined ? {} : { status: input.status });
+    await audit(client, input.organizationId, input.actorUserId, 'order.updated', input.id, input.requestId, 'SUCCEEDED', input.status === undefined ? {} : { status: input.status });
     await outbox(client, input.organizationId, input.id, 'order.updated', { orderId: input.id, requestId: input.requestId });
     const value = await this.findOrder(input.organizationId, input.id, client); if (value === undefined) throw new Error('Updated order disappeared.'); return value;
   }
 
   async transitionOrder(client: PoolClient, input: { organizationId: string; id: string; expectedVersion: number; action: string; reason?: string; actorUserId: string; requestId: string }): Promise<OrderRecord> {
     const current = await this.findOrder(input.organizationId, input.id, client); if (current === undefined) throw new DomainProblemError('RESOURCE_NOT_FOUND', 404); if (current.version !== input.expectedVersion) throw await this.versionConflict(client, input.organizationId, input.id);
+    if (current.status === 'CANCELLED' || current.status === 'FULFILLED') throw new DomainProblemError('INVALID_TRANSITION', 409);
     if (input.action === 'CANCEL') {
-      await client.query(`UPDATE orders.order_header SET status = 'CANCELLED', version = version + 1, updated_at = clock_timestamp() WHERE organization_id = $1 AND id = $2 AND version = $3`, [input.organizationId, input.id, input.expectedVersion]);
+      if (current.stage === 'CLOSED') throw new DomainProblemError('INVALID_TRANSITION', 409);
+      const update = await client.query(`UPDATE orders.order_header SET status = 'CANCELLED', version = version + 1, updated_at = clock_timestamp() WHERE organization_id = $1 AND id = $2 AND version = $3`, [input.organizationId, input.id, input.expectedVersion]);
+      if (update.rowCount !== 1) throw await this.versionConflict(client, input.organizationId, input.id);
     } else {
-      const next = input.action as OrderStage; await client.query(`UPDATE orders.order_header SET stage = $4, status = $5, version = version + 1, updated_at = clock_timestamp() WHERE organization_id = $1 AND id = $2 AND version = $3`, [input.organizationId, input.id, input.expectedVersion, next, statusForStage(next)]);
+      const next = input.action as OrderStage;
+      try { assertOrderStageTransition(current.stage, next); } catch { throw new DomainProblemError('INVALID_TRANSITION', 409); }
+      const update = await client.query(`UPDATE orders.order_header SET stage = $4, status = $5, version = version + 1, updated_at = clock_timestamp() WHERE organization_id = $1 AND id = $2 AND version = $3`, [input.organizationId, input.id, input.expectedVersion, next, statusForStage(next)]);
+      if (update.rowCount !== 1) throw await this.versionConflict(client, input.organizationId, input.id);
       await client.query(`INSERT INTO orders.stage_history (id, organization_id, order_id, from_stage, to_stage, actor_user_id, reason) VALUES ($1, $2, $3, $4, $5, $6, $7)`, [randomUUID(), input.organizationId, input.id, current.stage, next, input.actorUserId, input.reason ?? null]);
     }
-    await audit(client, input.organizationId, input.actorUserId, input.action === 'CANCEL' ? 'order.cancelled' : 'order.transitioned', input.id, input.requestId, { action: input.action });
+    await audit(client, input.organizationId, input.actorUserId, input.action === 'CANCEL' ? 'order.cancelled' : 'order.transitioned', input.id, input.requestId, 'SUCCEEDED', { action: input.action });
     await outbox(client, input.organizationId, input.id, input.action === 'CANCEL' ? 'order.cancelled' : 'order.transitioned', { orderId: input.id, action: input.action, requestId: input.requestId });
     const value = await this.findOrder(input.organizationId, input.id, client); if (value === undefined) throw new Error('Transitioned order disappeared.'); return value;
   }
@@ -91,5 +114,5 @@ export class PostgresOrdersStore implements OrdersStore {
 }
 
 function mapOrder(row: OrderRow, lines: readonly OrderLineInput[]): OrderRecord { return { id: row.id, organizationId: row.organization_id, version: Number(row.version), createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString(), customerId: row.customer_id, orderNo: row.order_no, ownerUserId: row.owner_user_id, ...(row.business_group_id === null ? {} : { businessGroupId: row.business_group_id }), currency: row.currency, status: row.status, stage: row.stage, lines, totalAmount: row.total_amount, metadata: row.metadata }; }
-async function audit(client: PoolClient, organizationId: string, actorUserId: string, action: string, resourceId: string, requestId: string, after: Record<string, unknown>): Promise<void> { await client.query(`INSERT INTO audit.audit_event (id, organization_id, actor_user_id, action, resource_type, resource_id, outcome, request_id, after_summary) VALUES ($1, $2, $3, $4, 'ORDER', $5, 'SUCCEEDED', $6, $7::jsonb)`, [randomUUID(), organizationId, actorUserId, action, resourceId, requestId, JSON.stringify(after)]); }
+async function audit(executor: Pool | PoolClient, organizationId: string, actorUserId: string, action: string, resourceId: string | null, requestId: string, outcome: 'SUCCEEDED' | 'DENIED' | 'FAILED' = 'SUCCEEDED', reasonOrAfter: string | Record<string, unknown> = {}): Promise<void> { const isReason = typeof reasonOrAfter === 'string'; await executor.query(`INSERT INTO audit.audit_event (id, organization_id, actor_user_id, action, resource_type, resource_id, outcome, reason, request_id, after_summary) VALUES ($1, $2, $3, $4, 'ORDER', $5, $6, $7, $8, $9::jsonb)`, [randomUUID(), organizationId, actorUserId, action, resourceId, outcome, isReason ? reasonOrAfter : null, requestId, JSON.stringify(isReason ? {} : reasonOrAfter)]); }
 async function outbox(client: PoolClient, organizationId: string, aggregateId: string, eventType: string, payload: Record<string, unknown>): Promise<void> { await client.query(`INSERT INTO integration.outbox_event (id, organization_id, aggregate_type, aggregate_id, event_type, payload) VALUES ($1, $2, 'ORDER', $3, $4, $5::jsonb)`, [randomUUID(), organizationId, aggregateId, eventType, JSON.stringify(payload)]); }

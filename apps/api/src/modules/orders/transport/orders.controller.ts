@@ -21,7 +21,7 @@ export class OrdersController {
       if (size !== undefined) filters.size = Number(size);
       if (sort !== undefined) filters.sort = sort;
       if (statuses !== undefined) filters.statuses = statuses;
-      const page = await this.service.listOrders(principalOf(request), filters);
+      const page = await this.service.listOrders(principalOf(request), filters, requestIdOf(request));
       return { data: page.data.map(toOrderApi), page: page.page };
     } catch (error) {
       throw problemForBackend(error, request);
@@ -43,7 +43,7 @@ export class OrdersController {
   @Get(':id')
   async get(@Req() request: BackendRequest, @Param('id') id: string, @Res({ passthrough: true }) reply: FastifyReply): Promise<unknown> {
     try {
-      const order = await this.service.getOrder(principalOf(request), id);
+      const order = await this.service.getOrder(principalOf(request), id, requestIdOf(request));
       reply.header('etag', formatEtag(order.version)).header('cache-control', 'no-store');
       return toOrderApi(order);
     } catch (error) {
@@ -66,7 +66,7 @@ export class OrdersController {
   async transition(@Req() request: BackendRequest, @Param('id') id: string, @Body() body: Record<string, unknown>, @Res({ passthrough: true }) reply: FastifyReply): Promise<unknown> {
     try {
       const order = await this.service.transitionOrder(principalOf(request), id, etagVersion(request), body as never, requestIdOf(request), transactionOf(request));
-      reply.header('etag', formatEtag(order.version)).header('content-location', `/api/v1/orders/${id}`).header('cache-control', 'no-store');
+      reply.code(200).header('etag', formatEtag(order.version)).header('content-location', `/api/v1/orders/${id}`).header('cache-control', 'no-store');
       return toOrderApi(order);
     } catch (error) {
       throw problemForBackend(error, request, `/api/v1/orders/${id}`);

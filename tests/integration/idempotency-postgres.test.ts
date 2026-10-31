@@ -296,7 +296,7 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
     }
   });
 
-  it('validates the operation response before committing a terminal idempotency row', async () => {
+  it('persists a deterministic response validation problem as a terminal idempotency failure', async () => {
     PostgresCustomerController.executions = 0;
     PostgresCustomerController.invalidResponse = true;
     const contract = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
@@ -313,15 +313,15 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
       const before = await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM integration.outbox_event WHERE organization_id = $1', [organizationId]);
       const rejected = await app.getHttpAdapter().getInstance().inject(request);
       expect(rejected.statusCode).toBe(500);
-      await expect(repository.withTransaction((client) => repository.statusByKey(client, { actorId, organizationId, operationId: 'createCustomer', idempotencyKey }))).resolves.toMatchObject({ state: 'RECOVERY_REQUIRED' });
+      await expect(repository.withTransaction((client) => repository.statusByKey(client, { actorId, organizationId, operationId: 'createCustomer', idempotencyKey }))).resolves.toMatchObject({ state: 'FAILED', httpStatus: 500 });
 
       PostgresCustomerController.invalidResponse = false;
-      const recovered = await app.getHttpAdapter().getInstance().inject(request);
-      expect(recovered.statusCode).toBe(201);
+      const replayedFailure = await app.getHttpAdapter().getInstance().inject(request);
+      expect(replayedFailure.statusCode).toBe(500);
       const after = await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM integration.outbox_event WHERE organization_id = $1', [organizationId]);
-      expect(after.rows[0]?.count).toBe((before.rows[0]?.count ?? 0) + 1);
-      expect(PostgresCustomerController.executions).toBe(2);
-      await expect(repository.withTransaction((client) => repository.statusByKey(client, { actorId, organizationId, operationId: 'createCustomer', idempotencyKey }))).resolves.toMatchObject({ state: 'SUCCEEDED' });
+      expect(after.rows[0]?.count).toBe(before.rows[0]?.count ?? 0);
+      expect(PostgresCustomerController.executions).toBe(1);
+      await expect(repository.withTransaction((client) => repository.statusByKey(client, { actorId, organizationId, operationId: 'createCustomer', idempotencyKey }))).resolves.toMatchObject({ state: 'FAILED', httpStatus: 500 });
     } finally {
       PostgresCustomerController.invalidResponse = false;
       await app.close();

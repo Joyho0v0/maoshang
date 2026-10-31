@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { describe, expect, it } from 'vitest';
 
@@ -28,6 +29,9 @@ describe('CRM/Catalog/Orders migration', () => {
     expect(sql).toMatch(/CREATE INDEX .*customer.*owner/i);
     expect(sql).toMatch(/CREATE INDEX .*order.*customer/i);
     expect(sql).toMatch(/append-only/i);
+    expect(sql).toMatch(/customer_approval_attempt_transition/i);
+    expect(sql).toMatch(/order_organization_updated_idx/i);
+    expect(sql).toMatch(/order_organization_created_idx/i);
     expect(down).not.toMatch(/DROP SCHEMA/i);
     expect(down).not.toMatch(/CASCADE/i);
   });
@@ -74,6 +78,47 @@ describe('CRM/Catalog/Orders migration', () => {
          )
          ORDER BY conname`);
       expect(result.rows).toEqual([]);
+      await client.query('ROLLBACK');
+      transactionOpen = false;
+    } finally {
+      if (transactionOpen) await client.query('ROLLBACK').catch(() => undefined);
+      client.release();
+      await pool.end();
+    }
+  });
+
+  it.skipIf(process.env.DATABASE_URL === undefined)('allows one approval decision and rejects terminal rewrite or delete', async () => {
+    const databaseUrl = process.env.DATABASE_URL;
+    if (databaseUrl === undefined) return;
+    const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
+    const client = await pool.connect();
+    const organizationId = randomUUID();
+    const submitterId = randomUUID();
+    const approverId = randomUUID();
+    const customerId = randomUUID();
+    const attemptId = randomUUID();
+    const migrations = await Promise.all([
+      readFile(new URL('../../packages/database/migrations/001_foundation.sql', import.meta.url), 'utf8'),
+      readFile(new URL('../../packages/database/migrations/002_identity_authorization.sql', import.meta.url), 'utf8'),
+      readFile(new URL('../../packages/database/migrations/003_files.sql', import.meta.url), 'utf8'),
+      readFile(new URL('../../packages/database/migrations/004_crm_catalog_orders.sql', import.meta.url), 'utf8'),
+    ]);
+    let transactionOpen = false;
+    try {
+      await client.query('BEGIN');
+      transactionOpen = true;
+      for (const migration of migrations) await client.query(migration);
+      await client.query(`INSERT INTO org.organization (id, code, name) VALUES ($1, $2, 'Approval trigger test')`, [organizationId, `TRIGGER-${organizationId.slice(0, 8)}`]);
+      await client.query(`INSERT INTO iam.user_account (id, organization_id, provider, provider_subject, username_normalized, display_name) VALUES ($1, $2, 'LOCAL_PASSWORD', $3, $4, 'Submitter'), ($5, $2, 'LOCAL_PASSWORD', $6, $7, 'Approver')`, [submitterId, organizationId, `${submitterId}-subject`, `${submitterId}@test.invalid`, approverId, `${approverId}-subject`, `${approverId}@test.invalid`]);
+      await client.query(`INSERT INTO crm.customer (id, organization_id, name, owner_user_id) VALUES ($1, $2, 'Approval trigger customer', $3)`, [customerId, organizationId, submitterId]);
+      await client.query(`INSERT INTO crm.customer_approval_attempt (id, organization_id, customer_id, attempt_no, submitter_user_id) VALUES ($1, $2, $3, 1, $4)`, [attemptId, organizationId, customerId, submitterId]);
+      await client.query(`UPDATE crm.customer_approval_attempt SET outcome = 'APPROVED', decided_by = $2, decided_at = clock_timestamp() WHERE id = $1`, [attemptId, approverId]);
+      await client.query('SAVEPOINT terminal_rewrite');
+      await expect(client.query(`UPDATE crm.customer_approval_attempt SET outcome = 'REJECTED' WHERE id = $1`, [attemptId])).rejects.toThrow('immutable');
+      await client.query('ROLLBACK TO SAVEPOINT terminal_rewrite');
+      await client.query('SAVEPOINT terminal_delete');
+      await expect(client.query(`DELETE FROM crm.customer_approval_attempt WHERE id = $1`, [attemptId])).rejects.toThrow('append-only');
+      await client.query('ROLLBACK TO SAVEPOINT terminal_delete');
       await client.query('ROLLBACK');
       transactionOpen = false;
     } finally {

@@ -12,7 +12,7 @@ export class CatalogController {
   async listProducts(@Req() request: BackendRequest): Promise<unknown> {
     try {
       const query = queryRecord(request);
-      const page = await this.service.listProducts(principalOf(request), listFilters(query));
+      const page = await this.service.listProducts(principalOf(request), listFilters(query), requestIdOf(request));
       return { data: page.data.map(toProductApi), page: page.page };
     } catch (error) {
       throw problemForBackend(error, request);
@@ -35,7 +35,7 @@ export class CatalogController {
   @Get('products/:id')
   async getProduct(@Req() request: BackendRequest, @Param('id') id: string, @Res({ passthrough: true }) reply: FastifyReply): Promise<unknown> {
     try {
-      const product = await this.service.getProduct(principalOf(request), id);
+      const product = await this.service.getProduct(principalOf(request), id, requestIdOf(request));
       reply.header('etag', formatEtag(product.version)).header('cache-control', 'no-store');
       return toProductApi(product);
     } catch (error) {
@@ -58,7 +58,7 @@ export class CatalogController {
   async listSkus(@Req() request: BackendRequest): Promise<unknown> {
     try {
       const query = queryRecord(request);
-      const page = await this.service.listSkus(principalOf(request), listFilters(query));
+      const page = await this.service.listSkus(principalOf(request), listFilters(query), requestIdOf(request));
       return { data: page.data.map(toSkuApi), page: page.page };
     } catch (error) {
       throw problemForBackend(error, request);
@@ -80,7 +80,7 @@ export class CatalogController {
   @Get('skus/:id')
   async getSku(@Req() request: BackendRequest, @Param('id') id: string, @Res({ passthrough: true }) reply: FastifyReply): Promise<unknown> {
     try {
-      const sku = await this.service.getSku(principalOf(request), id);
+      const sku = await this.service.getSku(principalOf(request), id, requestIdOf(request));
       reply.header('etag', formatEtag(sku.version)).header('cache-control', 'no-store');
       return toSkuApi(sku);
     } catch (error) {

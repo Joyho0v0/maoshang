@@ -10,7 +10,7 @@ import {
   isResourceReference,
   requireResourceReference,
 } from './in-memory-idempotency-store.js';
-import { buildProblem, type ProblemDocument } from '../../../common/http/problem.js';
+import { buildProblem, ProblemError, type ProblemDocument } from '../../../common/http/problem.js';
 
 export { IdempotencyConflictError } from './in-memory-idempotency-store.js';
 
@@ -289,6 +289,13 @@ export class PostgresIdempotencyRepository {
           }
           if (error instanceof IdempotencyOwnershipLostError) return { kind: 'ownership-lost' as const, error };
           if (error instanceof CommandFailureError) {
+            await this.fail(client, claim.commandId, claim.ownerToken as Buffer, error.problem);
+            return { kind: 'failure' as const, error };
+          }
+          if (error instanceof ProblemError) {
+            // A ProblemError is a deterministic, client-observable terminal
+            // outcome. The savepoint has already rolled back business writes;
+            // persist the exact problem so the same key/body replays it.
             await this.fail(client, claim.commandId, claim.ownerToken as Buffer, error.problem);
             return { kind: 'failure' as const, error };
           }

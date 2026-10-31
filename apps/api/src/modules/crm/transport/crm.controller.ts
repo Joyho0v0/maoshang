@@ -26,7 +26,7 @@ export class CrmController {
       if (groupIds !== undefined) filters.groupIds = groupIds;
       if (ownerIds !== undefined) filters.ownerIds = ownerIds;
       const principal = principalOf(request);
-      const page = await this.service.listCustomers(principal, filters);
+      const page = await this.service.listCustomers(principal, filters, requestIdOf(request));
       return { data: page.data.map((customer) => toCustomerApi(customer, principal)), page: page.page };
     } catch (error) {
       throw problemForBackend(error, request);
@@ -50,7 +50,7 @@ export class CrmController {
   async get(@Req() request: BackendRequest, @Param('id') id: string, @Res({ passthrough: true }) reply: FastifyReply): Promise<unknown> {
     try {
       const principal = principalOf(request);
-      const customer = await this.service.getCustomer(principal, id);
+      const customer = await this.service.getCustomer(principal, id, requestIdOf(request));
       reply.header('etag', formatEtag(customer.version)).header('cache-control', 'no-store');
       return toCustomerApi(customer, principal);
     } catch (error) {

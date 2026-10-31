@@ -3,13 +3,25 @@ const DECIMAL_PATTERN = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 export type CatalogStatus = 'ACTIVE' | 'INACTIVE';
 export type TrackingMode = 'NONE' | 'LOT' | 'SERIAL';
 
-export function parseDecimalString(value: string, options: { maxScale?: number; positive?: boolean } = {}): { coefficient: bigint; scale: number; normalized: string } {
-  if (typeof value !== 'string' || !DECIMAL_PATTERN.test(value)) throw new Error('DecimalString is invalid.');
+export class DecimalStringError extends Error {
+  constructor(readonly code: 'INVALID_DECIMAL' | 'DECIMAL_SCALE_EXCEEDED' | 'DECIMAL_MUST_BE_POSITIVE' | 'DECIMAL_MUST_BE_NON_NEGATIVE') {
+    super(code);
+    this.name = 'DecimalStringError';
+  }
+}
+
+export function isDecimalStringError(error: unknown): error is DecimalStringError {
+  return error instanceof DecimalStringError;
+}
+
+export function parseDecimalString(value: string, options: { maxScale?: number; positive?: boolean; nonNegative?: boolean } = {}): { coefficient: bigint; scale: number; normalized: string } {
+  if (typeof value !== 'string' || !DECIMAL_PATTERN.test(value)) throw new DecimalStringError('INVALID_DECIMAL');
   const negative = value.startsWith('-');
-  if (options.positive === true && (negative || /^-?0(?:\.0+)?$/.test(value))) throw new Error('DecimalString must be positive.');
+  if (options.positive === true && (negative || /^-?0(?:\.0+)?$/.test(value))) throw new DecimalStringError('DECIMAL_MUST_BE_POSITIVE');
+  if (options.nonNegative === true && negative) throw new DecimalStringError('DECIMAL_MUST_BE_NON_NEGATIVE');
   const unsigned = negative ? value.slice(1) : value;
   const [integer, fraction = ''] = unsigned.split('.');
-  if (options.maxScale !== undefined && fraction.length > options.maxScale) throw new Error('DecimalString scale is invalid.');
+  if (options.maxScale !== undefined && fraction.length > options.maxScale) throw new DecimalStringError('DECIMAL_SCALE_EXCEEDED');
   const scale = fraction.length;
   const coefficient = BigInt(`${negative ? '-' : ''}${integer}${fraction}`);
   return { coefficient, scale, normalized: formatDecimal(coefficient, scale) };
@@ -28,8 +40,8 @@ export function multiplyDecimalStrings(left: string, right: string): string {
   return formatDecimal(a.coefficient * b.coefficient, a.scale + b.scale);
 }
 
-export function assertDecimal(value: string, maxScale: number, positive = false): string {
-  return parseDecimalString(value, { maxScale, positive }).normalized;
+export function assertDecimal(value: string, maxScale: number, positive = false, nonNegative = false): string {
+  return parseDecimalString(value, { maxScale, positive, nonNegative }).normalized;
 }
 
 function scaleCoefficient(coefficient: bigint, fromScale: number, toScale: number): bigint {

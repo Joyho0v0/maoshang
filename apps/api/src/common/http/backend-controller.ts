@@ -67,6 +67,7 @@ export function problemForBackend(error: unknown, request: FastifyRequest, resou
   }
   if (isPgCode(error, '23505')) return new ProblemError(buildProblem({ status: 409, code: 'DUPLICATE_BUSINESS_KEY', title: 'Business key already exists', requestId, retryable: false }));
   if (isPgCode(error, '23503')) return new ProblemError(buildProblem({ status: 404, code: 'RESOURCE_NOT_FOUND', title: 'Resource not found', requestId, retryable: false }));
+  if (isPgCode(error, '23514') || isPgCode(error, '22P02')) return new ProblemError(buildProblem({ status: 400, code: 'VALIDATION_FAILED', title: 'Validation failed', requestId, retryable: false, meta: { violations: [{ field: 'request', code: 'DATABASE_CONSTRAINT', message: 'The request is invalid.' }] } }));
   if (error instanceof Error && ['INVALID_CURSOR', 'UNKNOWN_SORT', 'INVALID_PAGE_SIZE'].includes(error.message)) {
     return new ProblemError(buildProblem({ status: 400, code: 'VALIDATION_FAILED', title: 'Validation failed', requestId, retryable: false, meta: { violations: [{ field: 'query', code: error.message, message: 'The pagination query is invalid.' }] } }));
   }

@@ -6,6 +6,8 @@ DROP TRIGGER IF EXISTS exchange_rate_snapshot_immutable ON catalog.exchange_rate
 DROP TRIGGER IF EXISTS price_snapshot_immutable ON catalog.price_snapshot;
 DROP FUNCTION IF EXISTS catalog.reject_snapshot_mutation();
 DROP TRIGGER IF EXISTS customer_assignment_history_immutable ON crm.customer_assignment_history;
+DROP TRIGGER IF EXISTS customer_approval_attempt_transition ON crm.customer_approval_attempt;
+DROP FUNCTION IF EXISTS crm.guard_customer_approval_attempt_transition();
 DROP FUNCTION IF EXISTS crm.reject_customer_history_mutation();
 
 DROP TABLE IF EXISTS orders.ownership_history;

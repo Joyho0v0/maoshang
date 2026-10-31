@@ -14,6 +14,10 @@ interface CustomerRow extends QueryResultRow {
 export class PostgresCrmStore implements CrmStore {
   constructor(private readonly pool: Pool) {}
 
+  async recordAudit(input: { organizationId: string; actorUserId: string; action: string; resourceType: string; resourceId?: string; outcome: 'DENIED' | 'FAILED'; requestId: string; reason: string }): Promise<void> {
+    await appendAudit(this.pool, input);
+  }
+
   async resolvePrimaryBusinessGroup(client: PoolClient, organizationId: string, userId: string): Promise<string | undefined> {
     const result = await client.query<{ business_group_id: string }>(`SELECT business_group_id FROM org.membership WHERE organization_id = $1 AND user_id = $2 AND status = 'ACTIVE' AND valid_to IS NULL ORDER BY is_primary DESC, id LIMIT 1`, [organizationId, userId]);
     return result.rows[0]?.business_group_id;
@@ -84,8 +88,10 @@ export class PostgresCrmStore implements CrmStore {
     const nextStatus = input.action === 'APPROVE' ? 'APPROVED' : 'DRAFT';
     const outcome = input.action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
     if (outcome === 'REJECTED' && (input.reason === undefined || input.reason.trim().length === 0)) throw new DomainProblemError('VALIDATION_FAILED', 400);
-    await client.query(`UPDATE crm.customer_approval_attempt SET outcome = $3, reason = $4, decided_by = $5, decided_at = clock_timestamp() WHERE organization_id = $1 AND id = $2 AND outcome = 'PENDING'`, [input.organizationId, pendingAttemptId, outcome, input.reason ?? null, input.actorUserId]);
-    await client.query(`UPDATE crm.customer SET status = $3, version = version + 1, updated_at = clock_timestamp() WHERE organization_id = $1 AND id = $2 AND version = $4`, [input.organizationId, input.customerId, nextStatus, input.expectedVersion]);
+    const decision = await client.query(`UPDATE crm.customer_approval_attempt SET outcome = $3, reason = $4, decided_by = $5, decided_at = clock_timestamp() WHERE organization_id = $1 AND id = $2 AND outcome = 'PENDING'`, [input.organizationId, pendingAttemptId, outcome, input.reason ?? null, input.actorUserId]);
+    if (decision.rowCount !== 1) throw new DomainProblemError('CUSTOMER_APPROVAL_STATE_CONFLICT', 409, { customerId: current.id, currentCustomerStatus: current.status, currentVersion: current.version });
+    const customerUpdate = await client.query(`UPDATE crm.customer SET status = $3, version = version + 1, updated_at = clock_timestamp() WHERE organization_id = $1 AND id = $2 AND version = $4`, [input.organizationId, input.customerId, nextStatus, input.expectedVersion]);
+    if (customerUpdate.rowCount !== 1) throw await this.versionConflict(client, input.organizationId, input.customerId);
     await appendAudit(client, { organizationId: input.organizationId, actorUserId: input.actorUserId, action: `customer.${input.action.toLowerCase()}`, resourceType: 'CUSTOMER', resourceId: input.customerId, outcome: 'SUCCEEDED', requestId: input.requestId, afterSummary: { status: nextStatus, approvalOutcome: outcome } });
     await appendOutbox(client, input.organizationId, input.customerId, `customer.${input.action.toLowerCase()}`, { customerId: input.customerId, approvalAttemptId: pendingAttemptId, requestId: input.requestId });
     const result = await this.findCustomer(input.organizationId, input.customerId, client);
@@ -113,6 +119,11 @@ export class PostgresCrmStore implements CrmStore {
     const membership = await client.query<{ business_group_id: string }>(`SELECT business_group_id FROM org.membership WHERE organization_id = $1 AND user_id = $2 AND status = 'ACTIVE' AND valid_to IS NULL ORDER BY is_primary DESC, id LIMIT 1`, [input.organizationId, input.assigneeUserId]);
     const groupId = membership.rows[0]?.business_group_id;
     if (groupId === undefined) throw new DomainProblemError('PERMISSION_DENIED', 403);
+    const scope = input.customerScope;
+    const scopeAllowsTarget = scope?.scopeType === 'ALL_ORG'
+      || (scope?.scopeType === 'GROUP_SET' && scope.groupIds.length > 0 && scope.groupIds.includes(groupId))
+      || (scope?.scopeType === 'OWN' && input.assigneeUserId === input.actorUserId);
+    if (!scopeAllowsTarget) throw new DomainProblemError('PERMISSION_DENIED', 403);
     await client.query(`UPDATE crm.customer SET owner_user_id = $3, business_group_id = $4, version = version + 1, updated_at = clock_timestamp() WHERE organization_id = $1 AND id = $2 AND version = $5`, [input.organizationId, input.customerId, input.assigneeUserId, groupId, input.expectedVersion]);
     await client.query(`INSERT INTO crm.customer_assignment_history (id, organization_id, customer_id, from_owner_user_id, from_business_group_id, to_owner_user_id, to_business_group_id, actor_user_id, reason) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, [randomUUID(), input.organizationId, input.customerId, current.ownerUserId ?? null, current.businessGroupId ?? null, input.assigneeUserId, groupId, input.actorUserId, input.reason?.trim() || 'Reassigned']);
     await appendAudit(client, { organizationId: input.organizationId, actorUserId: input.actorUserId, action: 'customer.reassigned', resourceType: 'CUSTOMER', resourceId: input.customerId, outcome: 'SUCCEEDED', requestId: input.requestId, afterSummary: { ownerUserId: input.assigneeUserId, businessGroupId: groupId } });
@@ -160,8 +171,8 @@ function mapCustomer(row: CustomerRow): CustomerRecord {
   };
 }
 
-async function appendAudit(client: PoolClient, input: { organizationId: string; actorUserId: string; action: string; resourceType: string; resourceId: string; outcome: 'SUCCEEDED' | 'DENIED' | 'FAILED'; requestId: string; afterSummary?: Record<string, unknown> }): Promise<void> {
-  await client.query(`INSERT INTO audit.audit_event (id, organization_id, actor_user_id, action, resource_type, resource_id, outcome, request_id, after_summary) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`, [randomUUID(), input.organizationId, input.actorUserId, input.action, input.resourceType, input.resourceId, input.outcome, input.requestId, JSON.stringify(input.afterSummary ?? {})]);
+async function appendAudit(executor: Pool | PoolClient, input: { organizationId: string; actorUserId: string; action: string; resourceType: string; resourceId?: string; outcome: 'SUCCEEDED' | 'DENIED' | 'FAILED'; requestId: string; reason?: string; afterSummary?: Record<string, unknown> }): Promise<void> {
+  await executor.query(`INSERT INTO audit.audit_event (id, organization_id, actor_user_id, action, resource_type, resource_id, outcome, reason, request_id, after_summary) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)`, [randomUUID(), input.organizationId, input.actorUserId, input.action, input.resourceType, input.resourceId ?? null, input.outcome, input.reason ?? null, input.requestId, JSON.stringify(input.afterSummary ?? {})]);
 }
 
 async function appendOutbox(client: PoolClient, organizationId: string, aggregateId: string, eventType: string, payload: Record<string, unknown>): Promise<void> {
