@@ -1,0 +1,97 @@
+{
+  "formatVersion": 1,
+  "recordType": "openapi-baseline-promotion",
+  "status": "implemented-awaiting-independent-acceptance",
+  "sourceRevisions": {
+    "exactBase": "4a726e8676e3947b2aa160737606ba6803d93f65",
+    "candidateContent": "520154f9ec5b6cee864e380fd80826067875da06",
+    "promotionMechanism": "406844b3c208c7dda2a4f83fe68d40f407b04d0d",
+    "baselinePromotion": "406844b3c208c7dda2a4f83fe68d40f407b04d0d",
+    "contentIdentityFastPath": "9ba22dddd4ffd8e04cc99339398a9d445854a8ad"
+  },
+  "baselineTransition": {
+    "baselinePath": "packages/contracts/openapi/openapi.baseline.yaml",
+    "fromSha256": "149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984",
+    "toSha256": "aa81c1b5d6de39a808e682fcd2c60cd387ae0719e5bd2ae0ea3ef1e1624bd29f",
+    "candidatePath": "packages/contracts/openapi/openapi.yaml",
+    "candidateSha256": "aa81c1b5d6de39a808e682fcd2c60cd387ae0719e5bd2ae0ea3ef1e1624bd29f"
+  },
+  "liveArtifacts": {
+    "inventory": {
+      "path": "packages/contracts/openapi/breaking-inventory.json",
+      "formatVersion": 3,
+      "sha256": "d901cec868eb19ad4dd62a83f0c5fa71599420567d17f63ea042f78f67fa7c81",
+      "byteLength": 2376,
+      "count": 0
+    },
+    "decisions": {
+      "path": "packages/contracts/openapi/breaking-decisions.json",
+      "formatVersion": 1,
+      "sha256": "242f0ddc0347e4aaa8e850978320713fc2b6852ad8e2cb5193660c84ae6d04eb",
+      "byteLength": 445,
+      "decisionCount": 0
+    }
+  },
+  "archive": {
+    "directory": "packages/contracts/openapi/audit/baseline-promotions/2026-10-30-session-identity",
+    "baseline": {
+      "path": "openapi.baseline.before.yaml",
+      "sha256": "149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984"
+    },
+    "inventory": {
+      "path": "breaking-inventory.before.json",
+      "sha256": "137ae60e8b14caa077f3f7a100c438ac9f2c6f97b7147994fae41da50b5796ab",
+      "count": 12,
+      "uniqueIdentityCount": 12
+    },
+    "decisions": {
+      "path": "breaking-decisions.before.json",
+      "sha256": "9f277c49dc67c0dc9743ca8b11a82ab7b4717b08c67950e796a19eadda88c53b",
+      "acceptSemanticDirectionCount": 12,
+      "rejectCount": 0,
+      "pendingCount": 0,
+      "promotionAuthorizedFalseCount": 12,
+      "promotionAuthorizedTrueCount": 0
+    },
+    "dispositionPackage": {
+      "path": "contract-disposition-package.json",
+      "sha256": "ba76a018cefba00088976e607f9be454b681262547855e8c94105d7f5e6f2c58",
+      "identityCount": 12,
+      "orphanCount": 0,
+      "duplicateCount": 0,
+      "mismatchCount": 0
+    }
+  },
+  "sourceProvenance": {
+    "comparator": {
+      "revision": "9ba22dddd4ffd8e04cc99339398a9d445854a8ad",
+      "sourceSha256": "c0a911f1ab3284aaad1f74de4af51ffa7de66f5c780e106b0e1fa13636a4c699"
+    },
+    "generator": {
+      "revision": "9ba22dddd4ffd8e04cc99339398a9d445854a8ad",
+      "sourceSha256": "bf20cda8721d728fcdc4391935180c073ab124f656824ca2f4ab5248e6d78bef"
+    },
+    "contentIdentity": {
+      "revision": "9ba22dddd4ffd8e04cc99339398a9d445854a8ad",
+      "sourceSha256": "e8884c903f744151641651aba218acdaa3ced430de5e5a9a33b624cb920bff97"
+    },
+    "generatedTypesSha256": "ea9e00ccb78daf8ec8121e2a4e6fe12859beceb20992c764dccc2d74d089944a",
+    "generatedClientSha256": "d4b5144d568a460a1b0bae89772fd519eb95ef6747d3cb95fa04e6e810907044"
+  },
+  "evidence": {
+    "issueId": "01a18cf2-7c01-71f5-9107-065321efe60f",
+    "architectureDecisionCommentId": "01a18ceb-42eb-7045-9f6d-a3ce57c5cf71",
+    "candidateComparatorCount": 12,
+    "candidateComparatorMode": "semantic-comparator",
+    "promotionCmp": "candidate and baseline byte-identical",
+    "secondArchiveGeneration": "timed-out-after-40-minutes"
+  },
+  "gates": {
+    "contractPromotionDoesNotAuthorizeRuntime": true,
+    "runtime": "closed",
+    "liveApi": "closed",
+    "databaseMigration": "closed",
+    "deployment": "closed",
+    "adrAcceptance": "pending-review-qa-leader-completion"
+  }
+}

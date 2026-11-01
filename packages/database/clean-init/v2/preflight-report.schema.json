@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://review.invalid/joyho-33/clean-init/preflight-report.schema.json",
+  "title": "JOYHO-33 clean-init live preflight report",
+  "type": "object",
+  "unevaluatedProperties": false,
+  "required": ["reportVersion", "projectId", "exactRevision", "workspace", "decision", "environment", "database", "migrations", "seed", "ownedTables", "organizations", "activeSessions", "approval", "plan", "verification", "recovery", "strategy"],
+  "properties": {
+    "reportVersion": { "const": 2 },
+    "projectId": { "const": "JOYHO-33" },
+    "exactRevision": { "$ref": "#/$defs/gitRevision" },
+    "workspace": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "decision": { "enum": ["PROCEED", "STOP"] },
+    "stopReasons": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 512 }, "uniqueItems": true },
+    "environment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["class", "projectMarker", "disposable"],
+      "properties": { "class": { "const": "disposable-local" }, "projectMarker": { "const": "JOYHO-33" }, "disposable": { "const": true }, "owner": { "type": "string", "minLength": 1, "maxLength": 256 } }
+    },
+    "database": {
+      "type": "object", "additionalProperties": false,
+      "required": ["host", "port", "name", "oid", "owner", "readOnly", "recovery", "clusterIdentifier", "serverVersion"],
+      "properties": {
+        "host": { "type": "string", "pattern": "^(127\\.0\\.0\\.1|localhost)$" }, "port": { "type": "integer", "minimum": 1, "maximum": 65535 }, "name": { "type": "string", "pattern": "^be_imp_04_cleaninit_[a-z0-9_]+$" }, "oid": { "type": "integer", "minimum": 1 }, "owner": { "type": "string", "minLength": 1, "maxLength": 128 }, "readOnly": { "type": "boolean" }, "recovery": { "type": "boolean" }, "clusterIdentifier": { "type": ["string", "null"], "maxLength": 256 }, "serverVersion": { "type": "string", "pattern": "^16\\." }
+      }
+    },
+    "migrations": {
+      "type": "object", "additionalProperties": false,
+      "required": ["historyDigest", "expectedHistoryDigest", "migrationDigests", "expandDigest"],
+      "properties": { "historyDigest": { "$ref": "#/$defs/sha256" }, "expectedHistoryDigest": { "$ref": "#/$defs/sha256" }, "migrationDigests": { "type": "array", "minItems": 1, "items": { "type": "object", "additionalProperties": false, "required": ["name", "sha256"], "properties": { "name": { "type": "string", "pattern": "^00[1-6]_[a-z0-9_-]+\\.sql$" }, "sha256": { "$ref": "#/$defs/sha256" } } } }, "expandDigest": { "$ref": "#/$defs/sha256" } }
+    },
+    "seed": { "type": "object", "additionalProperties": false, "required": ["manifestDigest", "sqlDigest", "manifestVersion", "synthetic"], "properties": { "manifestDigest": { "$ref": "#/$defs/sha256" }, "sqlDigest": { "$ref": "#/$defs/sha256" }, "manifestVersion": { "const": 1 }, "synthetic": { "const": true } } },
+    "ownedTables": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "object", "additionalProperties": false, "required": ["schema", "table", "present", "requiredAtPreflight", "rowCount", "organizationIds"], "properties": { "schema": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }, "table": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }, "present": { "type": "boolean" }, "requiredAtPreflight": { "type": "boolean" }, "rowCount": { "type": "integer", "minimum": 0 }, "organizationIds": { "type": "array", "items": { "$ref": "#/$defs/uuid" }, "uniqueItems": true } } } },
+    "organizations": { "type": "array", "items": { "$ref": "#/$defs/uuid" }, "uniqueItems": true },
+    "activeSessions": { "type": "object", "additionalProperties": false, "required": ["total", "external"], "properties": { "total": { "type": "integer", "minimum": 1 }, "external": { "type": "integer", "minimum": 0 }, "sources": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 256 } } } },
+    "approval": { "type": "object", "additionalProperties": false, "required": ["approvedBy", "approvedAt", "executedBy"], "properties": { "approvedBy": { "type": "string", "minLength": 1, "maxLength": 256 }, "executedBy": { "type": "string", "minLength": 1, "maxLength": 256 }, "approvedAt": { "type": "string", "format": "date-time" } } },
+    "plan": { "type": "object", "additionalProperties": false, "required": ["verification", "stopAndRecovery"], "properties": { "verification": { "type": "string", "minLength": 1, "maxLength": 2048 }, "stopAndRecovery": { "type": "string", "minLength": 1, "maxLength": 2048 } } },
+    "verification": { "type": "object", "additionalProperties": false, "required": ["migrationDigestMatch", "seedDigestMatch", "ownerAndScopeClear"], "properties": { "migrationDigestMatch": { "type": "boolean" }, "seedDigestMatch": { "type": "boolean" }, "ownerAndScopeClear": { "type": "boolean" } } },
+    "recovery": { "type": "object", "additionalProperties": false, "required": ["mode", "owner"], "properties": { "mode": { "enum": ["DROP_NAMED_DATABASE", "FORWARD_FIX_ONLY"] }, "owner": { "type": "string", "minLength": 1, "maxLength": 256 } } },
+    "strategy": { "const": "NEW_DATABASE" }
+  },
+  "allOf": [
+    { "if": { "properties": { "decision": { "const": "PROCEED" } } }, "then": { "required": ["stopReasons"], "properties": { "stopReasons": { "maxItems": 0 }, "database": { "properties": { "readOnly": { "const": false }, "recovery": { "const": false } } }, "activeSessions": { "properties": { "external": { "const": 0 } } }, "organizations": { "maxItems": 0 }, "ownedTables": { "items": { "allOf": [{ "if": { "properties": { "requiredAtPreflight": { "const": true } } }, "then": { "properties": { "present": { "const": true } } } }, { "properties": { "rowCount": { "const": 0 }, "organizationIds": { "maxItems": 0 } } }] } }, "verification": { "properties": { "migrationDigestMatch": { "const": true }, "seedDigestMatch": { "const": true }, "ownerAndScopeClear": { "const": true } } } } } },
+    { "if": { "properties": { "decision": { "const": "STOP" } } }, "then": { "required": ["stopReasons"], "properties": { "stopReasons": { "minItems": 1 } } } }
+  ],
+  "$defs": { "uuid": { "type": "string", "format": "uuid" }, "gitRevision": { "type": "string", "pattern": "^[a-f0-9]{40}$" }, "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }
+}

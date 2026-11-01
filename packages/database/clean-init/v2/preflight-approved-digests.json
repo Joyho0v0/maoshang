@@ -1,0 +1,12 @@
+{
+  "projectId": "JOYHO-33",
+  "migrationHistoryDigest": "cadb751ee91903546052fc797fd5d3aaf96792b55bb6800d5bab3f025f1bc000",
+  "migrationDigests": [
+    { "name": "001_foundation.sql", "sha256": "9aefbca087e8c962f9add0255baa36881b587b6a7f846669e4d56aead94a9deb" },
+    { "name": "002_identity_authorization.sql", "sha256": "e3c17ba0469f95e75c7abd12d0e3a3f5b00d20f0554e181b646318f32501a9d7" },
+    { "name": "003_files.sql", "sha256": "9ce934a1b5db30bb03f6dc99725ebbbfaaf0ada49ff1436877bd7fd7663b8a99" },
+    { "name": "004_crm_catalog_orders.sql", "sha256": "e6f99fd3aab7742d075b11a0c0c2c3876db3d69509895698193265d23d461796" }
+  ],
+  "expandDigest": "e8cf53239132c3cfa222e5f66f4d4172c07393f3198451340de410dc171b71a4",
+  "seedManifestDigest": "fba455528a90779eb149e55d59ec2f393bbdf2e865f30cd44001e03d4e2f7cef"
+}

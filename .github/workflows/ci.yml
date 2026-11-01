@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  aggregate-gate:
+    name: Node 22 aggregate gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      NO_COLOR: "1"
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node 22.22.3
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.3
+
+      - name: Prepare evidence directory
+        run: mkdir -p ci-evidence
+
+      - name: Bootstrap and verify npm 11.6.2
+        working-directory: ${{ runner.temp }}
+        run: |
+          set -o pipefail
+          npm install --global npm@11.6.2 --ignore-scripts --no-audit --no-fund \
+            2>&1 | tee "${{ github.workspace }}/ci-evidence/npm-bootstrap.log"
+          actual_npm="$(npm --version)"
+          printf '%s\n' "$actual_npm" \
+            | tee "${{ github.workspace }}/ci-evidence/npm-version.txt"
+          test "$actual_npm" = "11.6.2"
+
+      - name: Verify locked toolchain
+        run: |
+          set -o pipefail
+          node --version | tee ci-evidence/node-version.txt
+          node tools/install-locked.mjs --check 2>&1 | tee ci-evidence/toolchain-check.log
+          node tools/install-locked.mjs --self-test 2>&1 | tee ci-evidence/toolchain-self-test.log
+
+      - name: Install root dependencies from root lock
+        run: |
+          set -o pipefail
+          node tools/install-locked.mjs --install 2>&1 | tee ci-evidence/root-install.log
+
+      - name: Install Web dependencies from Web lock
+        run: |
+          set -o pipefail
+          npm ci --prefix apps/web --ignore-scripts --no-audit --no-fund 2>&1 | tee ci-evidence/web-install.log
+          git diff --exit-code -- package-lock.json apps/web/package-lock.json
+
+      - name: Lint root and Web sources
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee ci-evidence/root-lint.log
+          npm --prefix apps/web run lint 2>&1 | tee ci-evidence/web-lint.log
+
+      - name: Run split and aggregate typechecks
+        run: |
+          set -o pipefail
+          npm run typecheck:node 2>&1 | tee ci-evidence/typecheck-node.log
+          npm run typecheck:web 2>&1 | tee ci-evidence/typecheck-web.log
+          npm run typecheck 2>&1 | tee ci-evidence/typecheck-aggregate.log
+
+      - name: Run root tests
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee ci-evidence/root-tests.log
+
+      - name: Run Web tests
+        run: |
+          set -o pipefail
+          npm --prefix apps/web test 2>&1 | tee ci-evidence/web-tests.log
+
+      - name: Run OpenAPI and contract gates
+        run: |
+          set -o pipefail
+          npm run lint:openapi 2>&1 | tee ci-evidence/openapi-lint.log
+          npm run test:contract 2>&1 | tee ci-evidence/contract-tests.log
+          npm run contract:breaking 2>&1 | tee ci-evidence/contract-breaking.log
+          npm run contract:breaking:inventory 2>&1 | tee ci-evidence/contract-inventory.log
+
+      - name: Verify contract inventory and frozen artifacts
+        run: |
+          set -o pipefail
+          cmp packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml
+          npm run generate:client 2>&1 | tee ci-evidence/client-generation.log
+          git diff --exit-code -- \
+            packages/contracts/openapi/breaking-inventory.json \
+            packages/contracts/openapi/openapi.yaml \
+            packages/contracts/openapi/generated.ts \
+            packages/contracts/openapi/generated-client.ts
+          sha256sum \
+            packages/contracts/openapi/openapi.yaml \
+            packages/contracts/openapi/generated.ts \
+            packages/contracts/openapi/generated-client.ts \
+            | tee ci-evidence/frozen-artifacts.sha256
+
+      - name: Run split and aggregate builds
+        run: |
+          set -o pipefail
+          npm run build:node 2>&1 | tee ci-evidence/build-node.log
+          npm run build:web 2>&1 | tee ci-evidence/build-web.log
+          npm run build 2>&1 | tee ci-evidence/build-aggregate.log
+
+      - name: Record build manifest
+        run: |
+          find dist apps/web/dist -type f -print0 \
+            | sort -z \
+            | xargs -0 sha256sum \
+            > ci-evidence/build-artifacts.sha256
+          git status --short --untracked-files=all \
+            | tee ci-evidence/final-git-status.txt
+
+      - name: Upload CI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-evidence-${{ github.sha }}
+          path: |
+            ci-evidence/
+            dist/
+            apps/web/dist/
+          if-no-files-found: warn
+          retention-days: 14

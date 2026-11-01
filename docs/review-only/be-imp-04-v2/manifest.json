@@ -1,0 +1,56 @@
+{
+  "status": "PENDING_REVIEW",
+  "basePath": "/api/v2",
+  "artifactNamespace": "catalog-orders-v2-review",
+  "generatedTypesNamespace": "@autoflow/contracts-v2-review/types",
+  "generatedClientNamespace": "@autoflow/contracts-v2-review/client",
+  "operationCount": 18,
+  "operationIds": [
+    "getCsrfTokenV2",
+    "getCurrentSessionV2",
+    "getCommandStatusV2",
+    "listProductsV2",
+    "createProductV2",
+    "getProductV2",
+    "updateProductV2",
+    "listSkusV2",
+    "createSkuV2",
+    "getSkuV2",
+    "updateSkuV2",
+    "listOrdersV2",
+    "createOrderV2",
+    "getOrderV2",
+    "updateOrderV2",
+    "transitionOrderV2",
+    "getFileStatusV2",
+    "createFileDownloadIntentV2"
+  ],
+  "v1Digests": {
+    "openapi": "a3e5168ac3346ac72d3d06aa9d67b4c52f893398c64ed80da71973e923be843c",
+    "generatedTypes": "0cf5340ae26aecfd24d0f7a1ce433ccd2450c9c65f1183dd5b19ea9d910d4821",
+    "generatedClient": "b4a017cef65a11018f70321f624e3456708d55fdea638b9683a57fb610b5712c"
+  },
+  "candidateDigests": {
+    "openapi": "48028d048352d97266b8974c9f21279ea02b79ea1c9a1f3877d823ca23a445b6",
+    "generatedTypes": "f1e4b47b471607a41f5823a5d4004c337a7e2e6dacd819b2f3a7edaa25699888",
+    "generatedClient": "22222f9dda47e73fc380df0bd94bd79c867c915a289fa2c047c5f3dfcc04064c"
+  },
+  "initialization": {
+    "mode": "CLEAN_INIT",
+    "preflightSchema": "clean-init/preflight-report.schema.json",
+    "ownedObjectManifest": "clean-init/owned-object-manifest.json",
+    "ownedObjectManifestSchema": "clean-init/owned-object-manifest.schema.json",
+    "seedManifestSchema": "clean-init/seed-manifest.schema.json",
+    "seedSql": "clean-init/seed.sql",
+    "smokeSql": "clean-init/smoke.sql",
+    "inventorySql": "clean-init/inventory.sql",
+    "rehearsal": "clean-init/rehearse.mjs",
+    "requiresUniqueDisposableDatabase": true,
+    "allowsReset": false
+  },
+  "promotionRules": [
+    "Do not overwrite v1 artifact or generated files.",
+    "Promote only after backend and frontend architecture narrow review.",
+    "Do not implement v2 writer or execute 005+ from this review directory."
+  ]
+}

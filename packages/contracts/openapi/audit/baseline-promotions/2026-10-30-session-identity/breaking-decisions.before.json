@@ -1,0 +1,118 @@
+{
+  "formatVersion": 1,
+  "baselineDigest": "149e4bbde325ec8ceb4dad3f550af1fa75c2a98dcf8ea882de4f41215b057984",
+  "candidateDigest": "aa81c1b5d6de39a808e682fcd2c60cd387ae0719e5bd2ae0ea3ef1e1624bd29f",
+  "comparatorRevision": "9ba22dddd4ffd8e04cc99398a9d445854a8ad",
+  "comparatorSourceSha256": "c0a911f1ab3284aaad1f74de4af51ffa7de66f5c780e106b0e1fa13636a4c699",
+  "inventoryDigest": "137ae60e8b14caa077f3f7a100c438ac9f2c6f97b7147994fae41da50b5796ab",
+  "decisions": {
+    "root.paths./auth/sessions.post.responses.201.content.application/json.schema.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b": {
+      "disposition": "accept-semantic-direction",
+      "evidenceGroup": "JOYHO-22-P1-R1",
+      "priorDisposition": "pending",
+      "inventoryId": "BRK-001",
+      "exactComparatorIdentity": "root.paths./auth/sessions.post.responses.201.content.application/json.schema.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+      "explicitRationale": "Approved required Session identity guarantee: top-level organizationId plus required authzVersion/sessionEpoch; the consumer boundary must fail closed.",
+      "promotionAuthorized": false
+    },
+    "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b": {
+      "disposition": "accept-semantic-direction",
+      "evidenceGroup": "JOYHO-22-P1-R1",
+      "priorDisposition": "pending",
+      "inventoryId": "BRK-002",
+      "exactComparatorIdentity": "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+      "explicitRationale": "Approved required Session identity guarantee: top-level organizationId plus required authzVersion/sessionEpoch; the consumer boundary must fail closed.",
+      "promotionAuthorized": false
+    },
+    "root.components.responses.Session.content.application/json.schema.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b": {
+      "disposition": "accept-semantic-direction",
+      "evidenceGroup": "JOYHO-22-P1-R1",
+      "priorDisposition": "pending",
+      "inventoryId": "BRK-003",
+      "exactComparatorIdentity": "root.components.responses.Session.content.application/json.schema.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+      "explicitRationale": "Approved required Session identity guarantee: top-level organizationId plus required authzVersion/sessionEpoch; the consumer boundary must fail closed.",
+      "promotionAuthorized": false
+    },
+    "root.components.schemas.Session.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b": {
+      "disposition": "accept-semantic-direction",
+      "evidenceGroup": "JOYHO-22-P1-R1",
+      "priorDisposition": "pending",
+      "inventoryId": "BRK-004",
+      "exactComparatorIdentity": "root.components.schemas.Session.organizationId.required#previous.components.responses.Session.content.application/json.schema#organizationId#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+      "explicitRationale": "Approved required Session identity guarantee: top-level organizationId plus required authzVersion/sessionEpoch; the consumer boundary must fail closed.",
+      "promotionAuthorized": false
+    },
+    "root.paths./auth/sessions.post.responses.201.content.application/json.schema.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b": {
+      "disposition": "accept-semantic-direction",
+      "evidenceGroup": "JOYHO-22-P1-R1",
+      "priorDisposition": "pending",
+      "inventoryId": "BRK-005",
+      "exactComparatorIdentity": "root.paths./auth/sessions.post.responses.201.content.application/json.schema.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+      "explicitRationale": "Approved required Session identity guarantee: top-level organizationId plus required authzVersion/sessionEpoch; the consumer boundary must fail closed.",
+      "promotionAuthorized": false
+    },
+    "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b": {
+      "disposition": "accept-semantic-direction",
+      "evidenceGroup": "JOYHO-22-P1-R1",
+      "priorDisposition": "pending",
+      "inventoryId": "BRK-006",
+      "exactComparatorIdentity": "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+      "explicitRationale": "Approved required Session identity guarantee: top-level organizationId plus required authzVersion/sessionEpoch; the consumer boundary must fail closed.",
+      "promotionAuthorized": false
+    },
+    "root.components.responses.Session.content.application/json.schema.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b": {
+      "disposition": "accept-semantic-direction",
+      "evidenceGroup": "JOYHO-22-P1-R1",
+      "priorDisposition": "pending",
+      "inventoryId": "BRK-007",
+      "exactComparatorIdentity": "root.components.responses.Session.content.application/json.schema.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+      "explicitRationale": "Approved required Session identity guarantee: top-level organizationId plus required authzVersion/sessionEpoch; the consumer boundary must fail closed.",
+      "promotionAuthorized": false
+    },
+    "root.components.schemas.Session.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b": {
+      "disposition": "accept-semantic-direction",
+      "evidenceGroup": "JOYHO-22-P1-R1",
+      "priorDisposition": "pending",
+      "inventoryId": "BRK-008",
+      "exactComparatorIdentity": "root.components.schemas.Session.authzVersion.required#previous.components.responses.Session.content.application/json.schema#authzVersion#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+      "explicitRationale": "Approved required Session identity guarantee: top-level organizationId plus required authzVersion/sessionEpoch; the consumer boundary must fail closed.",
+      "promotionAuthorized": false
+    },
+    "root.paths./auth/sessions.post.responses.201.content.application/json.schema.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b": {
+      "disposition": "accept-semantic-direction",
+      "evidenceGroup": "JOYHO-22-P1-R1",
+      "priorDisposition": "pending",
+      "inventoryId": "BRK-009",
+      "exactComparatorIdentity": "root.paths./auth/sessions.post.responses.201.content.application/json.schema.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+      "explicitRationale": "Approved required Session identity guarantee: top-level organizationId plus required authzVersion/sessionEpoch; the consumer boundary must fail closed.",
+      "promotionAuthorized": false
+    },
+    "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b": {
+      "disposition": "accept-semantic-direction",
+      "evidenceGroup": "JOYHO-22-P1-R1",
+      "priorDisposition": "pending",
+      "inventoryId": "BRK-010",
+      "exactComparatorIdentity": "root.paths./auth/sessions/current.get.responses.200.content.application/json.schema.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+      "explicitRationale": "Approved required Session identity guarantee: top-level organizationId plus required authzVersion/sessionEpoch; the consumer boundary must fail closed.",
+      "promotionAuthorized": false
+    },
+    "root.components.responses.Session.content.application/json.schema.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b": {
+      "disposition": "accept-semantic-direction",
+      "evidenceGroup": "JOYHO-22-P1-R1",
+      "priorDisposition": "pending",
+      "inventoryId": "BRK-011",
+      "exactComparatorIdentity": "root.components.responses.Session.content.application/json.schema.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+      "explicitRationale": "Approved required Session identity guarantee: top-level organizationId plus required authzVersion/sessionEpoch; the consumer boundary must fail closed.",
+      "promotionAuthorized": false
+    },
+    "root.components.schemas.Session.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b": {
+      "disposition": "accept-semantic-direction",
+      "evidenceGroup": "JOYHO-22-P1-R1",
+      "priorDisposition": "pending",
+      "inventoryId": "BRK-012",
+      "exactComparatorIdentity": "root.components.schemas.Session.sessionEpoch.required#previous.components.responses.Session.content.application/json.schema#sessionEpoch#89db859aff237d942973b3f8fba538421dd0be154e485715ef71bdfff91afbd0#fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa->b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+      "explicitRationale": "Approved required Session identity guarantee: top-level organizationId plus required authzVersion/sessionEpoch; the consumer boundary must fail closed.",
+      "promotionAuthorized": false
+    }
+  }
+}

@@ -1,0 +1,92 @@
+import { parseUrlState, serializeUrlState } from './url-state';
+
+describe('URL state privacy boundary', () => {
+  it('round-trips the frozen opaque cursor, multi-field sort, and UUIDv7 owner id contract', () => {
+    const sort = '-updatedAt,-id';
+    const cursor = 'x'.repeat(512);
+    const ownerId = '018f3c2e-7b1a-7abc-8def-0123456789ab';
+    const state = { sort, cursor, filter: { ownerId } };
+
+    const serialized = serializeUrlState(state);
+    expect(serialized.get('sort')).toBe(sort);
+    expect(serialized.get('cursor')).toBe(cursor);
+    expect(serialized.get('filter[ownerId]')).toBe(ownerId);
+    expect(parseUrlState(serialized)).toEqual(state);
+  });
+
+  it('serializes only allowlisted non-sensitive filter state', () => {
+    const query = serializeUrlState({
+      tab: 'orders',
+      sort: 'updatedAt',
+      cursor: 'cursor-2',
+      filter: {
+        status: 'OPEN',
+        type: 'export',
+        q: 'private contact@example.test',
+        filename: 'secret.pdf',
+      },
+    });
+
+    expect(query.toString()).toBe(
+      'tab=orders&sort=updatedAt&cursor=cursor-2&filter%5Bstatus%5D=OPEN&filter%5Btype%5D=export',
+    );
+    expect(query.toString()).not.toContain('private');
+    expect(query.toString()).not.toContain('secret.pdf');
+    expect(window.history.length).toBe(1);
+  });
+
+  it('keeps the catalog resource tab in the non-sensitive allowlist', () => {
+    const query = serializeUrlState({ tab: 'catalog-skus' });
+
+    expect(query.get('tab')).toBe('catalog-skus');
+    expect(parseUrlState(query)).toEqual({ tab: 'catalog-skus' });
+  });
+
+  it('round-trips the customer pending-approval filter', () => {
+    const query = serializeUrlState({ filter: { status: 'PENDING_APPROVAL' } });
+
+    expect(query.get('filter[status]')).toBe('PENDING_APPROVAL');
+    expect(parseUrlState(query)).toEqual({ filter: { status: 'PENDING_APPROVAL' } });
+  });
+
+  it('ignores unknown and sensitive query keys when reading state', () => {
+    const state = parseUrlState(
+      new URLSearchParams(
+        'tab=orders&sort=updatedAt&filter%5Bstatus%5D=OPEN&filter%5Bq%5D=private&contact=person@example.test',
+      ),
+    );
+
+    expect(state).toEqual({
+      tab: 'orders',
+      sort: 'updatedAt',
+      filter: { status: 'OPEN' },
+    });
+  });
+
+  it.each([
+    { state: { tab: 'person@example.test' }, key: 'tab' },
+    { state: { sort: 'contact name' }, key: 'sort' },
+    { state: { cursor: '' }, key: 'cursor' },
+    { state: { cursor: 'x'.repeat(513) }, key: 'cursor' },
+    { state: { filter: { status: 'secret filename.pdf' } }, key: 'filter[status]' },
+    { state: { filter: { type: 'contact@example.test' } }, key: 'filter[type]' },
+    { state: { filter: { state: 'free text with spaces' } }, key: 'filter[state]' },
+    { state: { filter: { ownerId: 'person@example.test' } }, key: 'filter[ownerId]' },
+  ])('drops unsafe values for $key instead of persisting them', ({ state, key }) => {
+    const query = serializeUrlState(state);
+    expect(query.has(key)).toBe(false);
+    expect(query.toString()).not.toMatch(/@|filename|contact|secret|%20|\+/i);
+  });
+
+  it('fails closed when parsing values outside the route codecs', () => {
+    const state = parseUrlState(new URLSearchParams([
+      ['tab', 'customer@example.test'],
+      ['sort', 'free text'],
+      ['cursor', ''],
+      ['filter[status]', 'secret filename.pdf'],
+      ['filter[ownerId]', 'not-a-uuid'],
+    ]));
+
+    expect(state).toEqual({});
+  });
+});

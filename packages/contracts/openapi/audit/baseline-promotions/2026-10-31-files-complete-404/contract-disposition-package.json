@@ -1,0 +1,24 @@
+{
+  "formatVersion": 1,
+  "recordType": "files-complete-upload-404-disposition",
+  "semanticDisposition": "The Chief Web Systems Architect approved one operation-specific additive 404 Problem response for completeUpload. Existing completeUpload responses and every other operation remain unchanged.",
+  "issueId": "01a18e8a-053e-798f-8cb6-f6df57e29058",
+  "architectureDecisionCommentId": "01a18ee1-3df6-70ce-9ca1-603563706b6b",
+  "frontendReviewCommentId": "01a18ef5-1d57-7c01-82f7-bae8a44a5bd0",
+  "candidateDigest": "a3e5168ac3346ac72d3d06aa9d67b4c52f893398c64ed80da71973e923be843c",
+  "baselineBeforeDigest": "aa81c1b5d6de39a808e682fcd2c60cd387ae0719e5bd2ae0ea3ef1e1624bd29f",
+  "affectedOperation": "completeUpload",
+  "fieldDiff": {
+    "path": "paths./files/{id}/complete.post.responses.404",
+    "before": "absent",
+    "after": { "$ref": "#/components/responses/Problem" }
+  },
+  "preservedResponses": ["200", "202", "400", "401", "403", "409", "428", "429", "500", "502", "503"],
+  "unchangedBoundaries": ["fileCommand", "updateCommand", "createUploadIntent", "getFile", "createDownloadIntent", "components.schemas.Problem", "apps/web/**"],
+  "identityCount": 0,
+  "orphanCount": 0,
+  "duplicateCount": 0,
+  "mismatchCount": 0,
+  "decisions": {},
+  "promotionAuthorized": true
+}
