@@ -135,6 +135,7 @@ function independentLint(document, dereferenced) {
   assert(schema(dereferenced, 'RiskBufferBps').maximum === 2000, 'risk buffer has no approved upper bound');
 
   for (const name of ['Problem400', 'Problem401', 'Problem403', 'Problem404', 'Problem409', 'Problem428', 'Problem429', 'Problem500', 'Problem502', 'Problem503']) schema(dereferenced, name);
+  for (const name of ['Problem429Mutation', 'Problem500Mutation']) assert(document.components.responses[name], `${name} response variant is missing`);
   assert(propertyFromSchema(schema(dereferenced, 'ProblemInternalRecoverable'), 'retryable').const === true, 'recoverable 500 is not retryable');
   assert(propertyFromSchema(schema(dereferenced, 'ProblemInternalTerminal'), 'retryable').const === false, 'terminal 500 is retryable');
   assert(propertyFromSchema(schema(dereferenced, 'Problem502'), 'retryable').const === true && propertyFromSchema(schema(dereferenced, 'Problem503'), 'retryable').const === true, 'dependency failures are not recoverable');
@@ -201,6 +202,11 @@ function independentLint(document, dereferenced) {
   for (const name of ['ProductCreated', 'SkuCreated', 'OrderCreated']) assert(!document.components.responses[name].headers['Content-Location'], `${name} must forbid Content-Location`);
   for (const name of ['Problem400', 'Problem401', 'Problem403', 'Problem404', 'Problem409', 'Problem428', 'Problem429', 'Problem500', 'Problem502', 'Problem503']) assert(document.components.responses[name].headers['Cache-Control'], `${name} lacks required no-store Cache-Control`);
   for (const name of ['Problem400Mutation', 'Problem401Mutation', 'Problem403Mutation', 'Problem404Mutation', 'Problem409Mutation', 'Problem428Mutation']) assert(document.components.responses[name].headers['Idempotent-Replay'], `${name} lacks mutation replay header`);
+  assert(document.components.responses.Problem429Mutation.headers['Idempotent-Replay'] && document.components.responses.Problem500Mutation.headers['Idempotent-Replay'], 'terminal mutation Problem replay variants are missing');
+  for (const [path, method] of [['/products', 'post'], ['/products/{id}', 'patch'], ['/skus', 'post'], ['/skus/{id}', 'patch'], ['/orders', 'post'], ['/orders/{id}', 'patch'], ['/orders/{id}/transitions', 'post']]) {
+    const operation = document.paths[path][method];
+    assert(operation.responses['429'].$ref.endsWith('/Problem429Mutation') && operation.responses['500'].$ref.endsWith('/Problem500Mutation'), `${operation.operationId} does not use mutation Problem replay variants`);
+  }
   assert(document.paths['/products/{id}']?.patch?.responses?.['200']?.$ref?.endsWith('/ProductUpdated'), 'product mutation does not use mutation response header matrix');
   assert(document.paths['/skus/{id}']?.patch?.responses?.['200']?.$ref?.endsWith('/SkuUpdated'), 'SKU mutation does not use mutation response header matrix');
   assert(document.paths['/orders/{id}']?.patch?.responses?.['200']?.$ref?.endsWith('/OrderUpdated'), 'order mutation does not use mutation response header matrix');
@@ -306,6 +312,21 @@ function hasDuplicateActivePrimaryPolicy(value) {
   });
 }
 
+function orderStateFixture(base, name) {
+  const writable = [{ action: 'ADVANCE', toStage: 'QUOTING' }, { action: 'CANCEL' }];
+  const baseWritable = { ...base, status: 'DRAFT', stage: 'INITIAL_CONTACT', capabilities: ['order.update', 'order.transition'], allowedTransitions: writable };
+  if (name === 'writableAdjacent') return baseWritable;
+  if (name === 'readOnlyEmpty') return { ...baseWritable, stage: 'QUOTING', capabilities: [], allowedTransitions: [] };
+  if (name === 'cancelledEmpty') return { ...baseWritable, status: 'CANCELLED', capabilities: [], allowedTransitions: [] };
+  if (name === 'fulfilledEmpty') return { ...baseWritable, status: 'FULFILLED', stage: 'CLOSED', capabilities: [], allowedTransitions: [] };
+  if (name === 'fulfilledWithCapabilities') return { ...baseWritable, status: 'FULFILLED', stage: 'CLOSED' };
+  if (name === 'cancelledWithTransitions') return { ...baseWritable, status: 'CANCELLED', allowedTransitions: writable };
+  if (name === 'reversedTransitions') return { ...baseWritable, allowedTransitions: [{ action: 'CANCEL' }, { action: 'ADVANCE', toStage: 'QUOTING' }] };
+  if (name === 'nonAdjacentTransition') return { ...baseWritable, allowedTransitions: [{ action: 'ADVANCE', toStage: 'CLOSED' }, { action: 'CANCEL' }] };
+  if (name === 'partialCapabilityState') return { ...baseWritable, capabilities: [] };
+  throw new Error(`unknown order state fixture ${name}`);
+}
+
 function assertDecimalArithmeticBoundaries() {
   const quantityMax = scaled('999999999999.999999', 6);
   const quantityOverflow = scaled('1000000000000', 6);
@@ -379,6 +400,22 @@ async function runGeneratedGate() {
     const runtimeFixtures = ['fileStatus', 'fileDownloadIntent', 'commandInProgress', 'commandRecovery', 'commandSucceeded', 'commandFailed', 'problemCsrfFailed', 'problemDependencyFailure', 'problemDependencyUnavailable', 'skuUnclassifiedStateConflict', 'orderResponse']
       .map((name) => [name, validator.validate(name === 'fileStatus' ? 'FileStatusV2' : name === 'fileDownloadIntent' ? 'FileDownloadIntentV2' : name.startsWith('command') ? 'CommandStatus' : name === 'problemDependencyFailure' ? 'Problem502' : name === 'problemDependencyUnavailable' ? 'Problem503' : name === 'skuUnclassifiedStateConflict' ? 'Problem409' : name === 'orderResponse' ? 'OrderV2' : 'Problem403', fixtures.valid[name])]);
     assert(runtimeFixtures.every(([, valid]) => valid), 'generated runtime validator rejected valid fixtures: ' + JSON.stringify(validator.errors));
+    const stateHeaders = { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', etag: '"v1"', 'cache-control': 'no-store' };
+    for (const name of fixtures.orderStateRehearsal.valid) {
+      const stateValue = orderStateFixture(fixtures.valid.orderResponse, name);
+      assert(validator.validate('OrderV2', stateValue), `generated runtime validator rejected valid order state ${name}: ${JSON.stringify(validator.errors)}`);
+      const stateClient = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(stateValue), { status: 200, headers: stateHeaders }) });
+      await stateClient.call('getOrderV2', { pathParams: { id: fixtures.valid.orderResponse.id }, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
+    }
+    for (const name of fixtures.orderStateRehearsal.invalid) {
+      const stateValue = orderStateFixture(fixtures.valid.orderResponse, name);
+      assert(!validator.validate('OrderV2', stateValue), `generated runtime validator accepted invalid order state ${name}`);
+      let rejected = false;
+      const stateClient = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(stateValue), { status: 200, headers: stateHeaders }) });
+      try { await stateClient.call('getOrderV2', { pathParams: { id: fixtures.valid.orderResponse.id }, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch (error) { rejected = /order (capabilities|state)|Invalid response schema OrderV2/i.test(error?.message ?? ''); }
+      assert(rejected, `generated response state gate accepted ${name}`);
+    }
+    console.log(`ORDER_STATE_RUNTIME_GATE exit=0 valid=${fixtures.orderStateRehearsal.valid.length} invalid=${fixtures.orderStateRehearsal.invalid.length}`);
     const fileId = fixtures.valid.fileStatus.id;
     let observed;
     const client = new clientModule.GeneratedV2Client({
@@ -459,6 +496,35 @@ async function runGeneratedGate() {
       && orderObserved.headers['content-type'] === 'application/json'
       && orderObserved.headers['idempotency-key'] === 'r1-generation-key'
       && JSON.parse(orderObserved.body).orderNo === 'V2-STD-SAME', 'generated client did not serialize the command body/headers correctly');
+    const problemBase = (status, code, retryable) => ({ type: `urn:autoflow:problem:${code.toLowerCase().replaceAll('_', '-')}`, title: code, status, code, requestId: '77777777-7777-4777-8777-777777777777', retryable });
+    const mutationHeaders = (replay) => ({ 'content-type': 'application/problem+json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store', ...(replay ? { 'idempotent-replay': 'true' } : {}) });
+    const terminal500 = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(problemBase(500, 'INTERNAL_ERROR', false)), { status: 500, headers: mutationHeaders(true) }) });
+    let terminal500Replay = false;
+    try { await terminal500.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'terminal-500-key' }, body: orderBody }); } catch (error) { terminal500Replay = error?.status === 500 && error?.headers?.['Idempotent-Replay'] === 'true'; }
+    assert(terminal500Replay, 'terminal mutation 500 replay was not accepted with its declared header variant');
+    const recoverable500 = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(problemBase(500, 'INTERNAL_ERROR', true)), { status: 500, headers: mutationHeaders(false) }) });
+    let recoverable500Observed = false;
+    try { await recoverable500.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'recoverable-500-key' }, body: orderBody }); } catch (error) { recoverable500Observed = error?.status === 500 && error?.problem?.retryable === true; }
+    assert(recoverable500Observed, 'recoverable mutation 500 did not preserve retryable wire semantics');
+    const recoverable500Replay = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(problemBase(500, 'INTERNAL_ERROR', true)), { status: 500, headers: mutationHeaders(true) }) });
+    let recoverable500ReplayRejected = false;
+    try { await recoverable500Replay.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'recoverable-500-replay-key' }, body: orderBody }); } catch (error) { recoverable500ReplayRejected = /recoverable problem cannot be replayed/i.test(error?.message ?? ''); }
+    assert(recoverable500ReplayRejected, 'recoverable 500 accepted terminal replay header');
+    for (const [status, code] of [[502, 'DEPENDENCY_FAILURE'], [503, 'DEPENDENCY_UNAVAILABLE']]) {
+      const dependencyClient = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(problemBase(status, code, true)), { status, headers: mutationHeaders(true) }) });
+      let rejected = false;
+      try { await dependencyClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': `dependency-${status}-key` }, body: orderBody }); } catch (error) { rejected = /Forbidden response header|recoverable problem cannot be replayed/i.test(error?.message ?? ''); }
+      assert(rejected, `recoverable ${status} accepted Idempotent-Replay`);
+    }
+    const rateLimited = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(problemBase(429, 'RATE_LIMITED', true)), { status: 429, headers: { ...mutationHeaders(true), 'retry-after': '5' } }) });
+    let rateReplay = false;
+    try { await rateLimited.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'rate-key' }, body: orderBody }); } catch (error) { rateReplay = error?.status === 429 && error?.headers?.['Idempotent-Replay'] === 'true'; }
+    assert(rateReplay, 'mutation 429 replay variant was not machine-consistent');
+    const readRateLimited = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(problemBase(429, 'RATE_LIMITED', true)), { status: 429, headers: { 'content-type': 'application/problem+json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store', 'retry-after': '5', 'idempotent-replay': 'true' } }) });
+    let readRateReplayRejected = false;
+    try { await readRateLimited.call('getProductV2', { pathParams: { id: fixtures.valid.orderResponse.id }, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch (error) { readRateReplayRejected = /Forbidden response header Idempotent-Replay/i.test(error?.message ?? ''); }
+    assert(readRateReplayRejected, 'read/exempt 429 incorrectly accepted terminal replay header');
+    console.log('PROBLEM_HEADER_RUNTIME_GATE exit=0 terminal500Replay=1 recoverable500=1 recoverable502=1 recoverable503=1 mutation429Replay=1 read429ReplayRejected=1');
     let errorObserved = false;
     const errorClient = new clientModule.GeneratedV2Client({
       validator,

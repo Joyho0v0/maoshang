@@ -20,8 +20,8 @@ code requires it). Validation violations have exactly one authoritative home:
 | 409 | `DUPLICATE_BUSINESS_KEY` | false | terminal replay | no internal constraint name |
 | 409 | `FILE_NOT_READY` | true | `FAILED` terminal replay | `fileId`, `state`, `statusHref=/api/v2/files/{fileId}`; retry with a new key after AVAILABLE |
 | 428 | `PRECONDITION_REQUIRED` | false | terminal replay | no meta; only operations that require an absent precondition expose it |
-| 429 | `RATE_LIMITED` | true | terminal replay | `Retry-After` response header |
-| 500 | `INTERNAL_ERROR` terminal branch | false | terminal replay | only deterministic response-contract failure |
+| 429 | `RATE_LIMITED` | true | terminal replay for idempotent mutation; no ledger row for read/exempt | `Retry-After` and `Cache-Control: no-store`; mutation replay may set `Idempotent-Replay: true` |
+| 500 | `INTERNAL_ERROR` terminal branch | false | terminal replay | only deterministic response-contract failure; mutation response may set `Idempotent-Replay: true` |
 | 500 | `INTERNAL_ERROR` recoverable branch | true | `RECOVERY_REQUIRED` | takeover/status is server-side; no false success claim |
 | 502 | `DEPENDENCY_FAILURE` | true | `RECOVERY_REQUIRED` | dependency name is not exposed in detail |
 | 503 | `DEPENDENCY_UNAVAILABLE` | true | `RECOVERY_REQUIRED` | `Retry-After` may be returned |

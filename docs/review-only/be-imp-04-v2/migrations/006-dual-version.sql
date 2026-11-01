@@ -4,6 +4,11 @@ BEGIN;
 SET LOCAL lock_timeout = '2s';
 SET LOCAL statement_timeout = '30s';
 
+-- Close the install-time race with v1 writers.  SHARE ROW EXCLUSIVE conflicts
+-- with INSERT/UPDATE/DELETE while remaining explicit about the bounded lock
+-- acquisition budget; the same lock is held until COMMIT below.
+LOCK TABLE catalog.price_policy IN SHARE ROW EXCLUSIVE MODE;
+
 -- Installation is fail-closed: v1 rows written before this review-only trigger
 -- must not leave an existing cross-currency overlapping-primary ambiguity.
 DO $$
@@ -77,6 +82,29 @@ DROP TRIGGER IF EXISTS price_policy_v2_window_guard ON catalog.price_policy;
 CREATE TRIGGER price_policy_v2_window_guard
   BEFORE INSERT OR UPDATE ON catalog.price_policy
   FOR EACH ROW EXECUTE FUNCTION catalog.enforce_v2_price_policy_window();
+
+-- Re-check after the trigger/constraint installation while the table lock is
+-- still held.  This is intentionally duplicated instead of relying on the
+-- pre-install scan: it documents and proves the final invariant at the same
+-- serialization point as the new writer guard.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM catalog.price_policy a
+    JOIN catalog.price_policy b
+      ON b.organization_id = a.organization_id
+     AND b.sku_id = a.sku_id
+     AND b.id > a.id
+     AND b.is_primary IS TRUE
+     AND tstzrange(b.valid_from, COALESCE(b.valid_to, 'infinity'::timestamptz), '[)')
+       && tstzrange(a.valid_from, COALESCE(a.valid_to, 'infinity'::timestamptz), '[)')
+    WHERE a.is_primary IS TRUE
+      AND a.currency <> b.currency
+  ) THEN
+    RAISE EXCEPTION 'post-install cross-currency overlapping primary price policy requires owner forward-fix' USING ERRCODE = '55000';
+  END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION catalog.enforce_v2_price_policy_version()
 RETURNS trigger

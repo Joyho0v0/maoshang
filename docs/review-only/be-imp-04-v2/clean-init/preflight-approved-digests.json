@@ -7,6 +7,6 @@
     { "name": "003_files.sql", "sha256": "9ce934a1b5db30bb03f6dc99725ebbbfaaf0ada49ff1436877bd7fd7663b8a99" },
     { "name": "004_crm_catalog_orders.sql", "sha256": "e6f99fd3aab7742d075b11a0c0c2c3876db3d69509895698193265d23d461796" }
   ],
-  "expandDigest": "e3b130e2d838aab8493ff8fcd200b25d506d34ca3d2dbddd5b3a12bba65bcbbb",
+  "expandDigest": "7192a69c899bc21132c2326d2da36451588ac89de4771cad3496ee031f918764",
   "seedManifestDigest": "fba455528a90779eb149e55d59ec2f393bbdf2e865f30cd44001e03d4e2f7cef"
 }

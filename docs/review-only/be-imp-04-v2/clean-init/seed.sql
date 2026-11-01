@@ -16,13 +16,17 @@ BEGIN
     RAISE EXCEPTION 'clean-init seed refused: live preflight binding is missing' USING ERRCODE = '55000';
   END IF;
   SELECT * INTO binding FROM pg_temp.review_v2_seed_binding;
+  IF to_regclass('pg_temp.review_v2_owned_object_manifest') IS NULL THEN
+    RAISE EXCEPTION 'clean-init seed refused: canonical owned-object manifest is missing' USING ERRCODE = '55000';
+  END IF;
   IF binding.database_name IS DISTINCT FROM current_database()
      OR binding.database_oid IS DISTINCT FROM (SELECT oid FROM pg_database WHERE datname = current_database())
      OR binding.cluster_identifier IS DISTINCT FROM (pg_control_system()).system_identifier::text
      OR binding.project_id IS DISTINCT FROM 'JOYHO-33'
+     OR binding.owned_object_manifest_digest IS DISTINCT FROM '57b8bab4685653705b095851bb3683404190b27f3ef43b693155cbb44d368b7a'
      OR binding.disposable IS DISTINCT FROM true
      OR binding.manifest_digest IS DISTINCT FROM 'fba455528a90779eb149e55d59ec2f393bbdf2e865f30cd44001e03d4e2f7cef'
-     OR binding.seed_sql_digest IS DISTINCT FROM '596b75db57c4f26184f7f6d5f3d5b0f65ef7d9917ef86e1d5b70b65540e9248c'
+     OR binding.seed_sql_digest IS DISTINCT FROM '307782f92f7c5b05cd72cff57e2814e6ae94e452aa577d1e20304b36a1bd6841'
      OR binding.manifest_digest !~ '^[a-f0-9]{64}$'
      OR binding.seed_sql_digest !~ '^[a-f0-9]{64}$'
      OR binding.policy_id IS DISTINCT FROM 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid
@@ -31,21 +35,10 @@ BEGIN
      OR binding.source_policy_id IS DISTINCT FROM 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid THEN
     RAISE EXCEPTION 'clean-init seed refused: live identity, digest, or approved synthetic fact mismatch' USING ERRCODE = '55000';
   END IF;
-  FOREACH owned_table IN ARRAY ARRAY[
-    'core.organization', 'core.user_account', 'integration.idempotency_record', 'integration.outbox_event', 'integration.inbox_consumption',
-    'audit.event', 'audit.audit_event', 'audit.authentication_event', 'integration.identity_outbox_event', 'integration.login_attempt_bucket',
-    'org.organization', 'org.business_group', 'org.membership', 'org.position_history', 'iam.user_account', 'iam.session',
-    'iam.user_role_binding', 'iam.user_data_scope', 'iam.data_scope_group',
-    'files.file_object', 'files.upload_intent', 'files.file_link', 'files.scan_result',
-    'crm.customer', 'crm.customer_contact', 'crm.customer_approval_attempt', 'crm.customer_assignment_history',
-    'catalog.product', 'catalog.sku', 'catalog.price_policy', 'catalog.price_snapshot', 'catalog.exchange_rate_snapshot',
-    'catalog.price_snapshot_v2', 'orders.fx_snapshot_v2', 'orders.order_header', 'orders.order_item', 'orders.stage_history', 'orders.ownership_history'
-  ] LOOP
-    IF to_regclass(owned_table) IS NOT NULL THEN
-      EXECUTE format('SELECT count(*) FROM %s', owned_table) INTO row_count;
-      IF row_count <> 0 THEN
-        RAISE EXCEPTION 'clean-init seed refused: % has % existing rows', owned_table, row_count USING ERRCODE = '55000';
-      END IF;
+  FOR owned_table IN SELECT format('%I.%I', schema_name, table_name) FROM pg_temp.review_v2_owned_object_manifest ORDER BY schema_name, table_name LOOP
+    EXECUTE format('SELECT count(*) FROM %s', owned_table) INTO row_count;
+    IF row_count <> 0 THEN
+      RAISE EXCEPTION 'clean-init seed refused: % has % existing rows', owned_table, row_count USING ERRCODE = '55000';
     END IF;
   END LOOP;
 END $$;

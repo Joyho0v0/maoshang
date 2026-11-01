@@ -18,7 +18,8 @@ The package is intentionally self-contained:
   examples must be rejected before the generated client calls `fetch`.
 - `clean-init/` contains the fail-closed preflight and synthetic seed schemas,
   redacted examples, an exact empty-database seed SQL fixture, schema
-  inventory SQL, and the dual-version consumer harness. It contains no real
+  inventory SQL, the canonical `owned-object-manifest.json` used by both live
+  preflight and seed guards, and the dual-version consumer harness. It contains no real
   business data, credentials, object keys, or production values.
 - `migrations/005-expand.sql` and `migrations/006-dual-version.sql` are exact
   review-only expand/validation rehearsal SQL. They add only nullable v2
@@ -70,6 +71,15 @@ facts. It never uses upsert. A non-empty or identity-mismatched target fails
 before any write. The synthetic seed gives every orderable SKU an explicit
 standardization mode, active primary policy, currency, validity, and risk
 buffer; it does not imply production pricing.
+
+The preflight and seed use one version-controlled owned-object manifest rather
+than a representative-table sample. Live preflight enumerates every listed
+table (including `core.organization`, Catalog, Files, CRM, integration and
+audit), counts each table independently, and collects that table's own
+organization IDs. The rehearsal includes committed isolated negative rows in
+each of those domains; each is stopped by preflight itself before seed. Missing
+expand-only v2 tables are represented as zero during the 001–004 preflight and
+are required by the seed after 005/006 has been applied.
 
 `clean-init/smoke.sql` checks the seeded immutable snapshot shape, no legacy
 null in the synthetic seed, and the remaining legacy-null `UNCLASSIFIED`
@@ -136,6 +146,10 @@ statuses require `Retry-After`, while terminal statuses forbid it. Every
 Problem response requires `Cache-Control: no-store`; deterministic terminal
 Problems returned by an idempotent mutation may additionally carry
 `Idempotent-Replay: true` only on replay.
+Mutation 429 and deterministic terminal 500 responses use explicit replay
+components; recoverable 500/502/503 responses forbid replay while preserving
+their retryable wire value. The generated runtime gate enforces this distinction
+and the `Cache-Control: no-store` requirement.
 All origin-relative href headers are `/api/v2/...` with no query or fragment.
 The generated client reads each declared header by its canonical key and
 rejects undeclared known headers.
@@ -162,6 +176,14 @@ pre-data down guard checks snapshot tables and every v2 durable column with
 drop. The post-data forward-fix validates constraints only and stops on
 invalid facts. No reset is hidden in migration, application startup, or test
 bootstrap.
+
+The order-edit rehearsal is fixture-driven rather than scenario-name-driven:
+it reads 21 concrete replacement/failure requests, models ordered line
+replacement, immutable append-and-repoint snapshots, same/cross-currency FX,
+NON_STANDARD pricing, image add/replace/remove, and independently counts audit,
+outbox, ledger, rollback, recovery and replay effects. Failed and unknown-result
+cases leave all durable model state unchanged; replay does not duplicate side
+effects.
 
 ## Frozen compatibility facts
 

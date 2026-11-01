@@ -1,7 +1,7 @@
 /* global URL, process, console */
 import { createHash, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv from 'ajv/dist/2020.js';
@@ -18,6 +18,7 @@ const container = `be_imp_04_cleaninit_pg16_${suffix}`;
 const freshDb = `be_imp_04_cleaninit_${suffix}_fresh`;
 const upgradeDb = `be_imp_04_cleaninit_${suffix}_upgrade`;
 const overlapDb = `be_imp_04_cleaninit_${suffix}_overlap`;
+const raceDb = `be_imp_04_cleaninit_${suffix}_race`;
 const image = process.env.CLEAN_INIT_POSTGRES_IMAGE ?? 'postgres:16-alpine';
 const password = `review_${suffix}`;
 let started = false;
@@ -42,6 +43,18 @@ function sql(db, text, options = {}) {
   return docker(['exec', '-i', container, 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', db], { input: text, ...options });
 }
 
+function sqlAsync(db, text) {
+  return new Promise((resolveResult) => {
+    const child = spawn('docker', ['exec', '-i', container, 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', db], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('close', (status) => resolveResult({ status, stdout, stderr }));
+    child.stdin.end(text);
+  });
+}
+
 function scalar(db, query) {
   const result = docker(['exec', container, 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', db, '-At', '-F', '|', '-c', query]);
   return (result.stdout ?? '').trim();
@@ -52,10 +65,10 @@ function sha256(value) {
 }
 
 function canonicalSeedSql(value) {
-  return value.replaceAll('596b75db57c4f26184f7f6d5f3d5b0f65ef7d9917ef86e1d5b70b65540e9248c', '__SEED_SQL_CANONICAL_DIGEST__');
+  return value.replaceAll('307782f92f7c5b05cd72cff57e2814e6ae94e452aa577d1e20304b36a1bd6841', '__SEED_SQL_CANONICAL_DIGEST__');
 }
 
-async function livePreflightReport(db, identity, manifestDigest, seedSqlDigest) {
+async function livePreflightReport(db, identity, manifestDigest, seedSqlDigest, ownedObjectManifest) {
   const migrationNames = ['001_foundation.sql', '002_identity_authorization.sql', '003_files.sql', '004_crm_catalog_orders.sql'];
   const migrationDigests = [];
   for (const name of migrationNames) migrationDigests.push({ name, sha256: sha256(await readFile(join(migrationRoot, name))) });
@@ -67,18 +80,27 @@ async function livePreflightReport(db, identity, manifestDigest, seedSqlDigest) 
     && expandDigest === approved.expandDigest
     && JSON.stringify(migrationDigests) === JSON.stringify(approved.migrationDigests);
   const exactRevision = run('git', ['rev-parse', 'HEAD']).stdout.trim();
-  const organizationIds = JSON.parse(scalar(db, "SELECT COALESCE(json_agg(id::text ORDER BY id), '[]'::json) FROM org.organization"));
   const tables = [];
-  for (const [schemaName, tableName] of [['org', 'organization'], ['catalog', 'sku'], ['orders', 'order_item']]) {
-    tables.push({ schema: schemaName, table: tableName, rowCount: Number(scalar(db, `SELECT count(*) FROM ${schemaName}.${tableName}`)), organizationIds });
+  for (const object of ownedObjectManifest.objects) {
+    const qualified = `${object.schema}.${object.table}`;
+    const exists = scalar(db, `SELECT to_regclass(${quote(qualified)}) IS NOT NULL`);
+    const present = exists === 't';
+    const rowCount = present ? Number(scalar(db, `SELECT count(*) FROM ${qualified}`)) : 0;
+    const organizationIds = !present || object.organizationColumn === null
+      ? []
+      : JSON.parse(scalar(db, `SELECT COALESCE(json_agg(DISTINCT ${object.organizationColumn}::text ORDER BY ${object.organizationColumn}::text) FILTER (WHERE ${object.organizationColumn} IS NOT NULL), '[]'::json) FROM ${qualified}`));
+    tables.push({ schema: object.schema, table: object.table, present, requiredAtPreflight: object.requiredAtPreflight, rowCount, organizationIds });
   }
+  const organizationIds = [...new Set(tables.flatMap((table) => table.organizationIds))].sort();
+  const inventoryComplete = tables.every((table) => table.present || table.requiredAtPreflight === false);
   const rowsEmpty = tables.every((table) => table.rowCount === 0 && table.organizationIds.length === 0) && organizationIds.length === 0;
-  const ownerAndScopeClear = identity.readOnly === false && identity.recovery === false && identity.externalSessions === 0 && rowsEmpty;
-  const seedDigestMatch = manifestDigest === approved.seedManifestDigest && seedSqlDigest === '596b75db57c4f26184f7f6d5f3d5b0f65ef7d9917ef86e1d5b70b65540e9248c';
+  const ownerAndScopeClear = identity.readOnly === false && identity.recovery === false && identity.externalSessions === 0 && inventoryComplete && rowsEmpty;
+  const seedDigestMatch = manifestDigest === approved.seedManifestDigest && seedSqlDigest === '307782f92f7c5b05cd72cff57e2814e6ae94e452aa577d1e20304b36a1bd6841';
   const verification = { migrationDigestMatch, seedDigestMatch, ownerAndScopeClear };
   const stopReasons = [];
   if (!migrationDigestMatch) stopReasons.push('migration history or expand digest mismatch');
   if (!seedDigestMatch) stopReasons.push('seed manifest or SQL digest mismatch');
+  if (!inventoryComplete) stopReasons.push('required owned table is missing from live schema');
   if (!ownerAndScopeClear) stopReasons.push('database is not empty, writable, non-recovery, or externally occupied');
   const report = {
     reportVersion: 2,
@@ -201,19 +223,38 @@ try {
   await createDatabase(freshDb);
   await createDatabase(upgradeDb);
   await createDatabase(overlapDb);
+  await createDatabase(raceDb);
   const preflightIdentity = liveIdentity(freshDb, mappedPort);
   const upgradeIdentity = liveIdentity(upgradeDb, mappedPort);
   assert(preflightIdentity.name === freshDb && preflightIdentity.readOnly === false && preflightIdentity.recovery === false && preflightIdentity.externalSessions === 0, 'live preflight did not prove an isolated writable database');
   assert(upgradeIdentity.name === upgradeDb && upgradeIdentity.readOnly === false && upgradeIdentity.recovery === false && upgradeIdentity.externalSessions === 0, 'upgrade preflight did not prove an isolated writable database');
   const manifest = JSON.parse(await file('clean-init/seed-manifest.example.json'));
+  const ownedObjectManifest = JSON.parse(await file('clean-init/owned-object-manifest.json'));
+  assert(ownedObjectManifest.version === 1 && ownedObjectManifest.projectId === 'JOYHO-33' && ownedObjectManifest.objects.length > 30, 'canonical owned-object manifest is incomplete');
   const seedSql = await file('clean-init/seed.sql');
   const manifestDigest = sha256(JSON.stringify(manifest));
   const seedSqlDigest = sha256(canonicalSeedSql(seedSql));
-  const report = await livePreflightReport(freshDb, preflightIdentity, manifestDigest, seedSqlDigest);
+  const report = await livePreflightReport(freshDb, preflightIdentity, manifestDigest, seedSqlDigest, ownedObjectManifest);
   assert(report.decision === 'PROCEED' && Object.values(report.verification).every(Boolean), `live preflight stopped: ${report.stopReasons.join('; ')}`);
   assert(report.database.oid === Number(preflightIdentity.oid) && report.database.clusterIdentifier === String(preflightIdentity.clusterIdentifier), 'live preflight report identity was not bound to the connection');
   console.log(`CLEAN_INIT_PREFLIGHT_LIVE exit=0 decision=${report.decision} database=${report.database.name} oid=${report.database.oid} cluster=${report.database.clusterIdentifier} externalSessions=${report.activeSessions.external} reportValidated=1`);
-  const bindingFor = (identity, overrides = {}) => `BEGIN;\nCREATE TEMP TABLE review_v2_seed_binding (database_name text, database_oid oid, cluster_identifier text, manifest_digest text, seed_sql_digest text, project_id text, disposable boolean, policy_id uuid, unit_price numeric, risk_buffer_bps integer, source_policy_id uuid) ON COMMIT DROP;\nINSERT INTO review_v2_seed_binding VALUES (${quote(identity.name)}, ${Number(identity.oid)}, ${quote(String(identity.clusterIdentifier))}, ${quote(overrides.manifestDigest ?? manifestDigest)}, ${quote(overrides.seedSqlDigest ?? seedSqlDigest)}, 'JOYHO-33', true, ${quote(overrides.policyId ?? 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')}, ${overrides.unitPrice ?? '19.9900'}, ${overrides.riskBufferBps ?? 25}, ${quote(overrides.sourcePolicyId ?? 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')});\n`;
+  const ownedPreflightNegatives = [
+    ['core.organization', `INSERT INTO core.organization (id, name) VALUES ('41414141-4141-4141-8141-414141414141', 'isolated core row');`, `DELETE FROM core.organization WHERE id = '41414141-4141-4141-8141-414141414141';`],
+    ['catalog.product', `INSERT INTO org.organization (id, code, name, status, version) VALUES ('42424242-4242-4242-8242-424242424242', 'PREFLIGHT-PRODUCT-ORG', 'preflight product org', 'ACTIVE', 1); INSERT INTO catalog.product (id, organization_id, product_code, name, unit, status, metadata, version) VALUES ('43434343-4343-4343-8343-434343434343', '42424242-4242-4242-8242-424242424242', 'PREFLIGHT-PRODUCT', 'preflight product', 'piece', 'ACTIVE', '{}', 1);`, `DELETE FROM catalog.product WHERE id = '43434343-4343-4343-8343-434343434343'; DELETE FROM org.organization WHERE id = '42424242-4242-4242-8242-424242424242'; DELETE FROM core.organization WHERE id = '42424242-4242-4242-8242-424242424242';`],
+    ['files.file_object', `INSERT INTO org.organization (id, code, name, status, version) VALUES ('44444444-4444-4444-8444-444444444444', 'PREFLIGHT-FILE-ORG', 'preflight file org', 'ACTIVE', 1); INSERT INTO iam.user_account (id, organization_id, provider, provider_subject, username_normalized, display_name, status, version, authz_version, session_epoch) VALUES ('45454545-4545-4545-8545-454545454545', '44444444-4444-4444-8444-444444444444', 'OIDC_SSO', 'preflight-file-user', 'preflight-file@example.invalid', 'preflight file user', 'ACTIVE', 1, 1, 1); INSERT INTO files.file_object (id, organization_id, created_by, object_key, original_name, declared_content_type, declared_size_bytes, status) VALUES ('46464646-4646-4646-8464-464646464646', '44444444-4444-4444-8444-444444444444', '45454545-4545-4545-8545-454545454545', 'preflight-file-object-key-0000000000000001', 'preflight.txt', 'text/plain', 1, 'PENDING_UPLOAD');`, `DELETE FROM files.file_object WHERE id = '46464646-4646-4646-8464-464646464646'; DELETE FROM iam.user_account WHERE id = '45454545-4545-4545-8545-454545454545'; DELETE FROM core.user_account WHERE id = '45454545-4545-4545-8545-454545454545'; DELETE FROM org.organization WHERE id = '44444444-4444-4444-8444-444444444444'; DELETE FROM core.organization WHERE id = '44444444-4444-4444-8444-444444444444';`],
+    ['crm.customer', `INSERT INTO org.organization (id, code, name, status, version) VALUES ('47474747-4747-4747-8474-474747474747', 'PREFLIGHT-CRM-ORG', 'preflight CRM org', 'ACTIVE', 1); INSERT INTO org.business_group (id, organization_id, code, name, status, version) VALUES ('48484848-4848-4848-8484-484848484848', '47474747-4747-4747-8474-474747474747', 'PREFLIGHT-GROUP', 'preflight group', 'ACTIVE', 1); INSERT INTO iam.user_account (id, organization_id, provider, provider_subject, username_normalized, display_name, status, version, authz_version, session_epoch) VALUES ('49494949-4949-4949-8494-494949494949', '47474747-4747-4747-8474-474747474747', 'OIDC_SSO', 'preflight-crm-user', 'preflight-crm@example.invalid', 'preflight CRM user', 'ACTIVE', 1, 1, 1); INSERT INTO crm.customer (id, organization_id, name, owner_user_id, business_group_id, status, contacts, version) VALUES ('4a4a4a4a-4a4a-4a4a-8a4a-4a4a4a4a4a4a', '47474747-4747-4747-8474-474747474747', 'preflight customer', '49494949-4949-4949-8494-494949494949', '48484848-4848-4848-8484-484848484848', 'DRAFT', '[]', 1);`, `DELETE FROM crm.customer WHERE id = '4a4a4a4a-4a4a-4a4a-8a4a-4a4a4a4a4a4a'; DELETE FROM iam.user_account WHERE id = '49494949-4949-4949-8494-494949494949'; DELETE FROM core.user_account WHERE id = '49494949-4949-4949-8494-494949494949'; DELETE FROM org.business_group WHERE id = '48484848-4848-4848-8484-484848484848'; DELETE FROM org.organization WHERE id = '47474747-4747-4747-8474-474747474747'; DELETE FROM core.organization WHERE id = '47474747-4747-4747-8474-474747474747';`],
+  ];
+  for (const [label, insert, cleanup] of ownedPreflightNegatives) {
+    const inserted = await sql(upgradeDb, `BEGIN;\n${insert}\nCOMMIT;`);
+    assertOutput(inserted, 'COMMIT', `${label} preflight negative setup`);
+    const negativeReport = await livePreflightReport(upgradeDb, upgradeIdentity, manifestDigest, seedSqlDigest, ownedObjectManifest);
+    assert(negativeReport.decision === 'STOP' && negativeReport.ownedTables.some((table) => table.rowCount > 0), `${label} did not stop at live preflight`);
+    const removed = await sql(upgradeDb, `BEGIN;\n${cleanup}\nCOMMIT;`);
+    assertOutput(removed, 'COMMIT', `${label} preflight negative cleanup`);
+  }
+  console.log(`CLEAN_INIT_PREFLIGHT_OWNED_NEGATIVES exit=0 cases=${ownedPreflightNegatives.length} tables=core.organization|catalog.product|files.file_object|crm.customer decision=STOP`);
+  const ownedObjectManifestDigest = sha256(JSON.stringify(ownedObjectManifest));
+  const bindingFor = (identity, overrides = {}) => `BEGIN;\nCREATE TEMP TABLE review_v2_seed_binding (database_name text, database_oid oid, cluster_identifier text, manifest_digest text, seed_sql_digest text, owned_object_manifest_digest text, project_id text, disposable boolean, policy_id uuid, unit_price numeric, risk_buffer_bps integer, source_policy_id uuid) ON COMMIT DROP;\nCREATE TEMP TABLE review_v2_owned_object_manifest (schema_name text, table_name text, organization_column text) ON COMMIT DROP;\nINSERT INTO review_v2_owned_object_manifest VALUES ${ownedObjectManifest.objects.map((object) => `(${quote(object.schema)}, ${quote(object.table)}, ${object.organizationColumn === null ? 'NULL' : quote(object.organizationColumn)})`).join(', ')};\nINSERT INTO review_v2_seed_binding VALUES (${quote(identity.name)}, ${Number(identity.oid)}, ${quote(String(identity.clusterIdentifier))}, ${quote(overrides.manifestDigest ?? manifestDigest)}, ${quote(overrides.seedSqlDigest ?? seedSqlDigest)}, ${quote(overrides.ownedObjectManifestDigest ?? ownedObjectManifestDigest)}, 'JOYHO-33', true, ${quote(overrides.policyId ?? 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')}, ${overrides.unitPrice ?? '19.9900'}, ${overrides.riskBufferBps ?? 25}, ${quote(overrides.sourcePolicyId ?? 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')});\n`;
   const wrongBinding = bindingFor(upgradeIdentity, { unitPrice: '19.9800' });
   const mutationGuard = await sql(upgradeDb, wrongBinding + seedSql, { allowFailure: true });
   if (mutationGuard.status === 0 || scalar(upgradeDb, "SELECT count(*) FROM catalog.product;") !== '0') throw new Error('seed mutation-before-write guard did not fail closed');
@@ -239,6 +280,25 @@ try {
   const overlapPairs = scalar(overlapDb, "SELECT count(*)::text FROM catalog.price_policy a JOIN catalog.price_policy b ON b.organization_id = a.organization_id AND b.sku_id = a.sku_id AND b.id > a.id AND b.is_primary IS TRUE AND tstzrange(b.valid_from, COALESCE(b.valid_to, 'infinity'::timestamptz), '[)') && tstzrange(a.valid_from, COALESCE(a.valid_to, 'infinity'::timestamptz), '[)') WHERE a.is_primary IS TRUE AND a.currency <> b.currency;");
   if (overlapInstall.status === 0 || overlapForward.status === 0 || overlapPairs !== '1') throw new Error('existing cross-currency primary ambiguity did not fail closed');
   console.log(`REVIEW_EXISTING_CROSS_CURRENCY_PRIMARY apply006=${overlapInstall.status} forward_fix=${overlapForward.status} overlapping_pairs=${overlapPairs}`);
+  await applyReviewMigration(raceDb, '005-expand.sql');
+  const raceSetup = await sql(raceDb, `BEGIN;
+INSERT INTO org.organization (id, code, name, status, version) VALUES ('31313131-3131-4131-8131-313131313131', 'SYN-RACE-ORG', 'Synthetic Race Organization', 'ACTIVE', 1);
+INSERT INTO catalog.product (id, organization_id, product_code, name, unit, status, metadata, version) VALUES ('32323232-3232-4232-8232-323232323232', '31313131-3131-4131-8131-313131313131', 'SYN-RACE-PROD', 'Synthetic Race Product', 'piece', 'ACTIVE', '{}', 1);
+INSERT INTO catalog.sku (id, organization_id, product_id, sku_code, name, unit, base_unit, tracking_mode, low_stock_threshold, price, status, metadata, version) VALUES ('33333333-3333-4333-8333-333333333333', '31313131-3131-4131-8131-313131313131', '32323232-3232-4232-8232-323232323232', 'SYN-RACE-SKU', 'Synthetic Race SKU', 'piece', 'piece', 'NONE', 0, 10.0000, 'ACTIVE', '{}', 1);
+INSERT INTO catalog.price_policy (id, organization_id, sku_id, currency, unit_price, valid_from, valid_to, version, is_primary, risk_buffer_bps) VALUES ('34343434-3434-4434-8434-343434343434', '31313131-3131-4131-8131-313131313131', '33333333-3333-4333-8333-333333333333', 'USD', 10.0000, '2026-11-01T00:00:00Z', '2026-11-20T00:00:00Z', 1, true, 25);
+COMMIT;`);
+  assertOutput(raceSetup, 'COMMIT', 'race setup');
+  const writerSql = `BEGIN;
+INSERT INTO catalog.price_policy (id, organization_id, sku_id, currency, unit_price, valid_from, valid_to, version, is_primary, risk_buffer_bps) VALUES ('35353535-3535-4535-8535-353535353535', '31313131-3131-4131-8131-313131313131', '33333333-3333-4333-8333-333333333333', 'EUR', 11.0000, '2026-11-10T00:00:00Z', '2026-11-30T00:00:00Z', 1, true, 25);
+SELECT pg_sleep(3);
+ROLLBACK;`;
+  const writerPromise = sqlAsync(raceDb, writerSql);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+  const raceMigrationPromise = sqlAsync(raceDb, await file('migrations/006-dual-version.sql'));
+  const [writerRace, migrationRace] = await Promise.all([writerPromise, raceMigrationPromise]);
+  const racePairs = scalar(raceDb, "SELECT count(*)::text FROM catalog.price_policy a JOIN catalog.price_policy b ON b.organization_id = a.organization_id AND b.sku_id = a.sku_id AND b.id > a.id AND b.is_primary IS TRUE AND tstzrange(b.valid_from, COALESCE(b.valid_to, 'infinity'::timestamptz), '[)') && tstzrange(a.valid_from, COALESCE(a.valid_to, 'infinity'::timestamptz), '[)') WHERE a.is_primary IS TRUE AND a.currency <> b.currency;");
+  if (writerRace.status !== 0 || migrationRace.status === 0 || racePairs !== '0') throw new Error(`policy lifecycle install race was not closed: writer=${writerRace.status} migration=${migrationRace.status} pairs=${racePairs}`);
+  console.log(`REVIEW_POLICY_INSTALL_RACE writer=${writerRace.status} migration=${migrationRace.status} overlapping_pairs=${racePairs}`);
   const legacy = await sql(upgradeDb, await file('clean-init/legacy-null.sql'));
   assertOutput(legacy, 'COMMIT', 'legacy-null v1 write');
   await applyReviewMigration(upgradeDb, '005-expand.sql');
@@ -293,15 +353,16 @@ try {
   docker(['exec', container, 'dropdb', '-U', 'postgres', '--if-exists', freshDb]);
   docker(['exec', container, 'dropdb', '-U', 'postgres', '--if-exists', upgradeDb]);
   docker(['exec', container, 'dropdb', '-U', 'postgres', '--if-exists', overlapDb]);
+  docker(['exec', container, 'dropdb', '-U', 'postgres', '--if-exists', raceDb]);
   const cleanupQuery = docker(['exec', container, 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'postgres', '-Atc', `SELECT count(*) FROM pg_database WHERE datname LIKE 'be_imp_04_cleaninit_%'`]);
   assert(cleanupQuery.stdout.trim() === '0', `database cleanup query was not exactly zero: ${JSON.stringify(cleanupQuery.stdout)}`);
 
-  console.log(`CLEAN_INIT_REHEARSAL exit=0 image=${image} container=${container} databases=${freshDb},${upgradeDb},${overlapDb} fresh=001-006+up/up+validate+seed+smoke+forward-fix+data-down-guard upgrade=001-004+005/006+up/up+validate+down/down overlap=006+forward-fix-fail-closed residual-check=0`);
+  console.log(`CLEAN_INIT_REHEARSAL exit=0 image=${image} container=${container} databases=${freshDb},${upgradeDb},${overlapDb},${raceDb} fresh=001-006+up/up+validate+seed+smoke+forward-fix+data-down-guard upgrade=001-004+005/006+up/up+validate+down/down overlap=006+forward-fix-fail-closed race=lock-timeout+rollback residual-check=0`);
 } finally {
   if (started) {
     const removed = docker(['rm', '-f', container], { allowFailure: true });
     if (removed.status !== 0) console.error(`CLEAN_INIT_CLEANUP status=${removed.status} container=${container} output=${removed.stderr ?? removed.stdout ?? ''}`);
-    else console.log(`CLEAN_INIT_CLEANUP exit=0 container=${container} removed=1 databases=${freshDb},${upgradeDb},${overlapDb}`);
+    else console.log(`CLEAN_INIT_CLEANUP exit=0 container=${container} removed=1 databases=${freshDb},${upgradeDb},${overlapDb},${raceDb}`);
   }
 }
 

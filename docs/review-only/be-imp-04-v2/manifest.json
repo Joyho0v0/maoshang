@@ -31,13 +31,15 @@
     "generatedClient": "b4a017cef65a11018f70321f624e3456708d55fdea638b9683a57fb610b5712c"
   },
   "candidateDigests": {
-    "openapi": "e2891ebc060d94610e50ede5c71651fabc49f563cdd3555f3c3faae689a97a48",
-    "generatedTypes": "c6deeff9591faeaf8a407ca3f5c3ace64cba245b07576848fcfe7217f1d6a169",
-    "generatedClient": "f32f0c31ca83d78e34329bcaca70f30d611b17d0e695ff7b1138c97af1f6013f"
+    "openapi": "d3c33ffe293d75408f9c21e9ea1bd35538ea8c1c3eac15ca362c49d3e0cb0c4c",
+    "generatedTypes": "30623a4ed715a46838f18d72fb8d583401f490c2b7ecce857a3bf99ea6f5efd5",
+    "generatedClient": "385cb6ec447fac8033742a5a7431952bd53b92dbdf9a029c1cf8e64a90d3646f"
   },
   "initialization": {
     "mode": "CLEAN_INIT",
     "preflightSchema": "clean-init/preflight-report.schema.json",
+    "ownedObjectManifest": "clean-init/owned-object-manifest.json",
+    "ownedObjectManifestSchema": "clean-init/owned-object-manifest.schema.json",
     "seedManifestSchema": "clean-init/seed-manifest.schema.json",
     "seedSql": "clean-init/seed.sql",
     "smokeSql": "clean-init/smoke.sql",

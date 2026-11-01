@@ -360,7 +360,41 @@
       "imageAdd", "imageReplace", "imageRemove", "externalLineId", "disappearedLineId", "itemKindSwitch",
       "lateStage", "terminal", "staleEtag", "policyRecheck", "fileNotFound", "fileNotReady",
       "unknown500Rollback", "dependency502Rollback", "dependency503Rollback", "idempotentReplayNoDuplicateSideEffects"
+    ],
+    "initial": {
+      "version": 7,
+      "lines": [
+        { "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "snapshotId": "old-snapshot", "imageFileId": null, "fxSnapshot": null },
+        { "lineId": "removed-line", "itemKind": "STANDARD", "skuId": "sku-removed", "snapshotId": "removed-snapshot", "imageFileId": null, "fxSnapshot": null }
+      ]
+    },
+    "cases": [
+      { "name": "omissionRemove", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": null }] }, "outcome": "COMMIT", "expectedLineIds": ["old-line"], "removedLineIds": ["removed-line"] },
+      { "name": "standardAddReprice", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": null }, { "lineId": null, "itemKind": "STANDARD", "skuId": "sku-new", "imageFileId": null }] }, "outcome": "COMMIT", "expectedLineIds": ["old-line", "new-line"], "priceSource": "CATALOG_POLICY", "expectedPrice": "20.0000" },
+      { "name": "sameCurrency", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": null }] }, "outcome": "COMMIT", "expectedLineIds": ["old-line"], "fx": null, "expectedPrice": "19.9900" },
+      { "name": "crossCurrency", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": null, "fxSnapshot": { "baseCurrency": "EUR", "quoteCurrency": "USD", "rawMarketRate": "1.080000000000" } }] }, "outcome": "COMMIT", "expectedLineIds": ["old-line"], "fx": { "baseCurrency": "EUR", "quoteCurrency": "USD", "rawMarketRate": "1.080000000000" }, "expectedPrice": "21.6000" },
+      { "name": "nonStandardSnapshot", "body": { "lines": [{ "lineId": null, "itemKind": "NON_STANDARD", "name": "Manual replacement", "unit": "piece", "imageFileId": null }] }, "outcome": "COMMIT", "expectedLineIds": ["new-line"], "priceSource": "MANUAL_QUOTE", "fx": null, "expectedPrice": "5.0000" },
+      { "name": "imageAdd", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": "image-a" }] }, "outcome": "COMMIT", "expectedLineIds": ["old-line"], "expectedImages": ["image-a"] },
+      { "name": "imageReplace", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": "image-b" }] }, "outcome": "COMMIT", "expectedLineIds": ["old-line"], "expectedImages": ["image-b"] },
+      { "name": "imageRemove", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": null }] }, "outcome": "COMMIT", "expectedLineIds": ["old-line"], "expectedImages": [] },
+      { "name": "externalLineId", "body": { "lines": [{ "lineId": "external-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": null }] }, "outcome": "ROLLBACK", "failure": "EXTERNAL_LINE_ID" },
+      { "name": "disappearedLineId", "body": { "lines": [{ "lineId": "removed-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": null }] }, "outcome": "ROLLBACK", "failure": "LINE_DISAPPEARED" },
+      { "name": "itemKindSwitch", "body": { "lines": [{ "lineId": "old-line", "itemKind": "NON_STANDARD", "name": "switch", "unit": "piece", "imageFileId": null }] }, "outcome": "ROLLBACK", "failure": "ITEM_KIND_SWITCH" },
+      { "name": "lateStage", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": null }] }, "state": { "stage": "DEPOSIT_PENDING" }, "outcome": "ROLLBACK", "failure": "LATE_STAGE" },
+      { "name": "terminal", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": null }] }, "state": { "status": "CANCELLED" }, "outcome": "ROLLBACK", "failure": "TERMINAL" },
+      { "name": "staleEtag", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": null }] }, "ifMatch": "\"v6\"", "outcome": "ROLLBACK", "failure": "STALE_ETAG" },
+      { "name": "policyRecheck", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": null }] }, "policyVersion": 8, "outcome": "ROLLBACK", "failure": "POLICY_RECHECK" },
+      { "name": "fileNotFound", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": "missing-image" }] }, "fileState": "MISSING", "outcome": "ROLLBACK", "failure": "RESOURCE_NOT_FOUND" },
+      { "name": "fileNotReady", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": "pending-image" }] }, "fileState": "SCANNING", "outcome": "ROLLBACK", "failure": "FILE_NOT_READY" },
+      { "name": "unknown500Rollback", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": null }] }, "externalFailure": "INTERNAL_ERROR", "outcome": "ROLLBACK", "failure": "INTERNAL_ERROR", "recovery": true },
+      { "name": "dependency502Rollback", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": null }] }, "externalFailure": "DEPENDENCY_FAILURE", "outcome": "ROLLBACK", "failure": "DEPENDENCY_FAILURE", "recovery": true },
+      { "name": "dependency503Rollback", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": null }] }, "externalFailure": "DEPENDENCY_UNAVAILABLE", "outcome": "ROLLBACK", "failure": "DEPENDENCY_UNAVAILABLE", "recovery": true },
+      { "name": "idempotentReplayNoDuplicateSideEffects", "body": { "lines": [{ "lineId": "old-line", "itemKind": "STANDARD", "skuId": "sku-old", "imageFileId": null }] }, "outcome": "COMMIT", "replay": true, "expectedLineIds": ["old-line"] }
     ]
+  },
+  "orderStateRehearsal": {
+    "valid": ["writableAdjacent", "readOnlyEmpty", "cancelledEmpty", "fulfilledEmpty"],
+    "invalid": ["fulfilledWithCapabilities", "cancelledWithTransitions", "reversedTransitions", "nonAdjacentTransition", "partialCapabilityState"]
   },
   "query": {
     "valid": {
