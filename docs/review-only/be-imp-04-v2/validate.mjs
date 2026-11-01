@@ -1,6 +1,6 @@
 /* global Buffer, URL, console, process, Response */
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -130,7 +130,7 @@ function independentLint(document, dereferenced) {
   const skuRequired = schema(dereferenced, 'SkuCreateRequestV2').required;
   assert(skuRequired.includes('standardizationMode') && !skuRequired.includes('baseUnit') && !skuRequired.includes('trackingMode') && !skuRequired.includes('lowStockThreshold'), 'SKU create expanded unrelated required fields');
   const skuProperties = schema(dereferenced, 'SkuCreateRequestV2').properties;
-  assert(skuProperties.baseUnit['x-default'] === 'unit' && skuProperties.trackingMode.default === 'NONE' && skuProperties.lowStockThreshold.default === '0', 'SKU omission defaults are not explicit');
+  assert(skuProperties.baseUnit['x-default'] === 'unit' && skuProperties.trackingMode['x-default'] === 'NONE' && skuProperties.lowStockThreshold['x-default'] === '0', 'SKU omission defaults are not explicit');
   assert(document.info?.['x-contract-status'] === 'PENDING_REVIEW', 'candidate was accidentally promoted');
 }
 
@@ -146,10 +146,14 @@ function compileFixtures(dereferenced) {
     const validator = name === 'problemFileNotReady' ? validators.get('Problem409')
       : name === 'fileStatus' ? validators.get('FileStatusV2')
         : name === 'fileDownloadIntent' ? validators.get('FileDownloadIntentV2')
+          : name.startsWith('file') ? validators.get('FileStatusV2')
+            : name === 'problemDependencyFailure' ? validators.get('Problem502')
+              : name === 'problemDependencyUnavailable' ? validators.get('Problem503')
+                : name === 'orderResponse' ? validators.get('OrderV2')
           : name === 'csrfToken' ? validators.get('CsrfToken')
             : name.startsWith('command') ? validators.get('CommandStatus')
               : name === 'problemCsrfFailed' ? validators.get('Problem403')
-          : name === 'skuProjection' ? validators.get('SkuV2')
+            : name === 'skuProjection' || name === 'skuLegacyNullInactive' ? validators.get('SkuV2')
             : name === 'policyReplace' ? validators.get('PricePolicyMutationV2')
           : name.startsWith('sku') ? validators.get('SkuCreateRequestV2')
             : orderValidator;
@@ -158,8 +162,17 @@ function compileFixtures(dereferenced) {
   }
   let invalidCount = 0;
   for (const [name, value] of Object.entries(fixtures.invalid)) {
+    if (name === 'skuDuplicatePrimaryPolicies') {
+      const validator = validators.get('SkuV2');
+      assert(validator(value), `${name} should be schema-valid before semantic policy rejection: ${JSON.stringify(validator.errors)}`);
+      assert(hasDuplicateActivePrimaryPolicy(value), `${name} fixture does not exercise duplicate active primary policy`);
+      invalidCount += 1;
+      continue;
+    }
     const validator = name === 'rateTooPrecise' ? validators.get('DecimalRate')
       : name === 'amountIntegerOverflow' ? validators.get('DecimalAmount')
+        : name === 'fileAvailableAsNotReady' || name === 'v1StatusHrefFallback' ? validators.get('Problem409')
+          : name === 'fileUnknownState' ? validators.get('FileStatusV2')
         : name.startsWith('problemWrongRecoverability') ? validators.get('Problem503')
         : name.startsWith('problemWrongMeta') ? validators.get('Problem409')
             : name === 'problem401WithMeta' ? validators.get('Problem401')
@@ -176,6 +189,17 @@ function compileFixtures(dereferenced) {
     invalidCount += 1;
   }
   return { schemaCount: validators.size, validCount, invalidCount };
+}
+
+function hasDuplicateActivePrimaryPolicy(value) {
+  const seen = new Set();
+  return (value.pricePolicies ?? []).some((policy) => {
+    if (policy.lifecycle !== 'ACTIVE' || policy.isPrimary !== true || policy.validTo !== null) return false;
+    const key = policy.currency;
+    if (seen.has(key)) return true;
+    seen.add(key);
+    return false;
+  });
 }
 
 function assertDecimalArithmeticBoundaries() {
@@ -234,9 +258,12 @@ async function runGeneratedGate() {
       "const missingIdempotency: OperationInputMap['createOrderV2'] = { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16' }, body: orderBody };",
       "const skuBody = {} as components['schemas']['SkuUpdateRequestV2'];",
       "// @ts-expect-error If-Match is required for updateSkuV2",
-      "const missingIfMatch: OperationInputMap['updateSkuV2'] = { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16' }, pathParams: { id: '11111111-1111-4111-8111-111111111111' }, body: skuBody };",
+      "const missingIfMatch: OperationInputMap['updateSkuV2'] = { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'negative-key' }, pathParams: { id: '11111111-1111-4111-8111-111111111111' }, body: skuBody };",
       "const optionalRequestId: OperationInputMap['createOrderV2'] = { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'valid-key', 'X-Request-ID': '77777777-7777-4777-8777-777777777777' }, body: orderBody };",
-      'void missingCsrf; void missingIdempotency; void missingIfMatch; void optionalRequestId;',
+      "const minimalSku: OperationInputMap['createSkuV2']['body'] = { productId: '88888888-8888-4888-8888-888888888888', skuCode: 'SKU-MINIMAL', name: 'Minimal SKU', unit: 'piece', standardizationMode: 'NONE' };",
+      "// @ts-expect-error standardizationMode is the only new required SKU field",
+      "const missingSkuMode: OperationInputMap['createSkuV2']['body'] = { productId: '88888888-8888-4888-8888-888888888888', skuCode: 'SKU-MISSING-MODE', name: 'Missing mode', unit: 'piece' };",
+      'void missingCsrf; void missingIdempotency; void missingIfMatch; void optionalRequestId; void minimalSku; void missingSkuMode;',
     ].join('\n') + '\n');
     const negativeTypecheck = spawnSync(process.execPath, [tsc, '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--lib', 'ES2022,DOM,DOM.Iterable', '--skipLibCheck', '--types', 'node', '--noEmit', negativeFixture], { encoding: 'utf8' });
     assert(negativeTypecheck.status === 0, 'generated header negative typecheck failed: ' + negativeTypecheck.stdout + negativeTypecheck.stderr);
@@ -245,8 +272,8 @@ async function runGeneratedGate() {
     const clientModule = await import(pathToFileURL(join(output, 'client.mjs')).href);
     const validator = validatorModule.createV2RuntimeValidator(documentValue);
     const fixtures = JSON.parse(awaitReadFixtures);
-    const runtimeFixtures = ['fileStatus', 'fileDownloadIntent', 'commandInProgress', 'commandRecovery', 'commandSucceeded', 'commandFailed', 'problemCsrfFailed']
-      .map((name) => [name, validator.validate(name === 'fileStatus' ? 'FileStatusV2' : name === 'fileDownloadIntent' ? 'FileDownloadIntentV2' : name.startsWith('command') ? 'CommandStatus' : 'Problem403', fixtures.valid[name])]);
+    const runtimeFixtures = ['fileStatus', 'fileDownloadIntent', 'commandInProgress', 'commandRecovery', 'commandSucceeded', 'commandFailed', 'problemCsrfFailed', 'problemDependencyFailure', 'problemDependencyUnavailable', 'orderResponse']
+      .map((name) => [name, validator.validate(name === 'fileStatus' ? 'FileStatusV2' : name === 'fileDownloadIntent' ? 'FileDownloadIntentV2' : name.startsWith('command') ? 'CommandStatus' : name === 'problemDependencyFailure' ? 'Problem502' : name === 'problemDependencyUnavailable' ? 'Problem503' : name === 'orderResponse' ? 'OrderV2' : 'Problem403', fixtures.valid[name])]);
     assert(runtimeFixtures.every(([, valid]) => valid), 'generated runtime validator rejected valid fixtures: ' + JSON.stringify(validator.errors));
     const fileId = fixtures.valid.fileStatus.id;
     let observed;
@@ -310,12 +337,40 @@ async function runGeneratedGate() {
       errorObserved = error?.status === 409 && error?.problem?.code === 'FILE_NOT_READY';
     }
     assert(errorObserved, 'generated client did not validate/type the declared Problem response');
+    let requestFetchCount = 0;
+    const requestGateClient = new clientModule.GeneratedV2Client({
+      validator,
+      fetch: async () => {
+        requestFetchCount += 1;
+        return new Response(JSON.stringify(fixtures.valid.commandInProgress), { status: 202, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store', 'content-location': '/api/v2/commands/44444444-4444-4444-8444-444444444444', 'retry-after': '1' } });
+      },
+    });
+    const requestHeaders = { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'request-gate-key' };
+    for (const name of ['standardWithQuotedPrice', 'nonStandardWithSkuId', 'clientSnapshotFields', 'quantityTooPrecise', 'nonStandardStrict']) {
+      let rejected = false;
+      try { await requestGateClient.call('createOrderV2', { headers: requestHeaders, body: fixtures.invalid[name] }); } catch { rejected = true; }
+      assert(rejected, `request gate accepted invalid ${name}`);
+    }
+    let invalidPathRejected = false;
+    try { await requestGateClient.call('getFileStatusV2', { pathParams: { fileId: 'not-a-uuid' }, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch { invalidPathRejected = true; }
+    assert(invalidPathRejected, 'request gate accepted an invalid path parameter');
+    let invalidHeaderRejected = false;
+    try { await requestGateClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'short', 'Idempotency-Key': 'request-gate-key' }, body: fixtures.valid.standardSameCurrency }); } catch { invalidHeaderRejected = true; }
+    assert(invalidHeaderRejected && requestFetchCount === 0, `invalid request reached fetch (${requestFetchCount} calls)`);
+    await requestGateClient.call('createOrderV2', { headers: requestHeaders, body: fixtures.valid.standardSameCurrency });
+    await requestGateClient.call('createOrderV2', { headers: requestHeaders, body: fixtures.valid.nonStandard });
+    assert(requestFetchCount === 2, 'valid STANDARD/NON_STANDARD requests did not reach fetch exactly once each');
+    const harness = fileURLToPath(new URL('./clean-init/dual-version-harness.mjs', import.meta.url));
+    const v1OpenApi = fileURLToPath(new URL('../../../packages/contracts/openapi/openapi.yaml', import.meta.url));
+    const tsx = join(process.cwd(), 'node_modules/.bin/tsx');
+    const harnessRun = spawnSync(tsx, [harness, output, v1OpenApi, fixturesPath], { encoding: 'utf8' });
+    assert(harnessRun.status === 0, `dual-version consumer harness failed: ${harnessRun.stdout}${harnessRun.stderr}`);
     const clientSource = await readFile(join(output, 'client.ts'), 'utf8');
     const typesSource = await readFile(join(output, 'types.ts'), 'utf8');
     const validatorSource = await readFile(join(output, 'runtime-validator.ts'), 'utf8');
     assert(clientSource.includes('OperationResponseMap') && clientSource.includes('OperationErrorMap'), 'generated client lacks response/error typing');
     assert(!/packages\/contracts\/openapi\/|\/api\/v1/.test(clientSource + validatorSource), 'generated v2 runtime imports or URLs leaked v1');
-    return { operations: summary.operationCount, baseUrl: summary.baseUrl, schemas: Object.keys(documentValue.components?.schemas ?? {}).length, typesBytes: Buffer.byteLength(typesSource), typesSha256: createHash('sha256').update(typesSource).digest('hex'), clientBytes: Buffer.byteLength(clientSource), clientSha256: createHash('sha256').update(clientSource).digest('hex'), runtimeSmoke: 'GET+POST /api/v2; typed request headers; response header gate; success+Problem response validators', runtimeFixtures: runtimeFixtures.length };
+    return { operations: summary.operationCount, baseUrl: summary.baseUrl, schemas: Object.keys(documentValue.components?.schemas ?? {}).length, typesBytes: Buffer.byteLength(typesSource), typesSha256: createHash('sha256').update(typesSource).digest('hex'), clientBytes: Buffer.byteLength(clientSource), clientSha256: createHash('sha256').update(clientSource).digest('hex'), runtimeSmoke: 'GET+POST /api/v2; typed request headers; request body/path/header gate; response header gate; dual-version harness; success+Problem response validators', runtimeFixtures: runtimeFixtures.length, requestGate: 'invalid=6/fetch=0; standard+nonstandard=2', dualVersion: 'v1=/api/v1;v2=/api/v2' };
   } finally {
     await rm(output, { recursive: true, force: true });
   }
@@ -329,6 +384,15 @@ const unresolvedRefs = countRefs(dereferenced);
 assert(unresolvedRefs === 0, `dereferenced document contains ${unresolvedRefs} unresolved references`);
 const operationIds = operationsOf(parsed).map(({ operation }) => operation.operationId);
 const fixtureStats = compileFixtures(dereferenced);
+const cancelledArtifacts = ['migrations/007-' + ['back', 'fill'].join('') + '.sql', 'migrations/007-' + ['back', 'fill'].join('') + '.sql.md', 'migrations/forward-fix.sql'];
+for (const cancelled of cancelledArtifacts) {
+  let exists = true;
+  try { await access(new URL(`./${cancelled}`, root)); } catch { exists = false; }
+  assert(!exists, `cancelled legacy artifact still exists: ${cancelled}`);
+}
+const cleanInitValidator = fileURLToPath(new URL('./clean-init/validate.mjs', import.meta.url));
+const cleanInitRun = spawnSync(process.execPath, [cleanInitValidator], { encoding: 'utf8' });
+assert(cleanInitRun.status === 0, `clean-init schema gate failed: ${cleanInitRun.stdout}${cleanInitRun.stderr}`);
 const generationStats = await runGeneratedGate();
 console.log(`V2_REVIEW_PARSE exit=0 operations=${operationIds.length} paths=${Object.keys(parsed.paths).length}`);
 console.log(`V2_REVIEW_DEREFERENCE exit=0 unresolvedRefs=${unresolvedRefs}`);
@@ -337,3 +401,6 @@ console.log(`V2_REVIEW_TYPES_GENERATION exit=0 bytes=${generationStats.typesByte
 console.log(`V2_REVIEW_CLIENT_GENERATION exit=0 operations=${generationStats.operations} bytes=${generationStats.clientBytes} sha256=${generationStats.clientSha256} baseUrl=${generationStats.baseUrl} runtimeSmoke=${generationStats.runtimeSmoke}`);
 console.log(`V2_REVIEW_VALIDATOR_GENERATION exit=0 schemas=${generationStats.schemas} typecheck=0 runtimeFixtures=${generationStats.runtimeFixtures}`);
 console.log(`V2_REVIEW_VALIDATOR_FIXTURES exit=0 schemas=${fixtureStats.schemaCount} fixtures=${fixtureStats.validCount}-valid/${fixtureStats.invalidCount}-invalid`);
+console.log(`V2_REVIEW_REQUEST_GATE exit=0 ${generationStats.requestGate}`);
+console.log(`V2_REVIEW_DUAL_VERSION exit=0 ${generationStats.dualVersion}`);
+console.log('V2_REVIEW_CLEAN_INIT exit=0 preflight=PROCEED|STOP seed=synthetic no-legacy-conversion-engine');

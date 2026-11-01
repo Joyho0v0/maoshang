@@ -1,80 +1,128 @@
 # BE-IMP-04 Catalog + Orders v2 review package
 
-Status: `PENDING_REVIEW`. This directory is a review-only candidate. It is not a
-runtime contract, is not included by the v1 generator, and must not be copied
-over `packages/contracts/openapi/openapi.yaml` or either frozen generated
-artifact.
+Status: `PENDING_REVIEW`. This directory is a review-only candidate. It is not
+a runtime contract, is not included by the v1 generator, and must not be
+copied over the frozen v1 artifact or generated files.
 
-The package is deliberately self-contained so that architecture review can
-parse and validate the candidate without promotion:
+The package is intentionally self-contained:
 
-- `openapi.yaml` is a complete OpenAPI 3.1 document with explicit operations,
-  request bodies, parameters, headers, responses, schemas, discriminators and
-  typed Problem branches. The candidate contains 18 operations across 12 paths,
-  including the Files-owned `GET /api/v2/files/{fileId}` and
-  `POST /api/v2/files/{fileId}/download-intents` support surface.
+- `openapi.yaml` is the complete parseable v2 candidate with 18 operations.
+  Four Order/catalog contract decisions remain `HUMAN_INPUT_REQUIRED`; this
+  package does not invent their endpoint or schema semantics.
 - `validate.mjs` is the single review entry point. It performs parser,
-  dereference, independent contract checks, AJV schema compilation, fixture
-  validation, and invokes `generate.mjs` in a temporary directory for real
-  types/client/runtime-validator generation and typecheck. It removes the
-  temporary output and writes no repository artifact.
-- `fixtures.json` contains valid and invalid request/Problem examples. Invalid
-  examples are expected to be rejected by the runtime validator.
-- `problem-matrix.md` is the per-code HTTP/ledger/idempotency matrix. A ledger
-  identity is `(actor, organization, operationId, idempotencyKey)`; the
-  canonical body hash is compared only within that identity.
-- `migrations/005-expand.sql`, `006-dual-version.sql`, `007-backfill.sql`,
-  `pre-data-down.sql`, and `forward-fix.sql` are exact review-only rehearsal
-  SQL. They are not formal migrations and are never run by this change. The
-  adjacent Markdown files explain their lock/scan/recovery contracts.
-- `migration_v2.backfill_manifest` is the digest/approver/source-bound input
-  manifest used by the rehearsal functions. Counts are derived from that
-  frozen key set; target objects are intentionally not foreign-keyed so
-  missing-object gaps remain durable.
-- `migration_v2.policy_fact_evidence` is append-only policy-level provenance:
-  the first item performs the canonical-version CAS and records the resulting
-  version, while later items in the same run validate and reuse that evidence.
+  dereference, independent contract checks, AJV fixture validation, real
+  temporary types/client/runtime-validator generation, request-gate tests,
+  and the v1/v2 consumer harness.
+- `fixtures.json` contains v2 request/response and Problem examples. Invalid
+  examples must be rejected before the generated client calls `fetch`.
+- `clean-init/` contains the fail-closed preflight and synthetic seed schemas,
+  redacted examples, an exact empty-database seed SQL fixture, schema
+  inventory SQL, and the dual-version consumer harness. It contains no real
+  business data, credentials, object keys, or production values.
+- `migrations/005-expand.sql` and `migrations/006-dual-version.sql` are exact
+  review-only expand/validation rehearsal SQL. They add only nullable v2
+  columns, snapshot tables, FK/CHECK/index protections, and immutable snapshot
+  triggers. They are never formal migrations and are never auto-discovered by
+  the repository migration runner.
+- `migrations/pre-data-down.sql` is a guarded, non-destructive pre-data down
+  path. `migrations/post-data-forward-fix.sql` only validates existing facts;
+  neither file resets, truncates, deletes, or invents data.
 
 ## Review-only commands
 
-From the repository root, with the repository's locked dependencies installed:
+Use the repository's pinned Node/npm toolchain from the repository root:
 
 ```bash
+node --version  # Node 22.22.3
+npm --version   # npm 11.6.2
 node docs/review-only/be-imp-04-v2/validate.mjs
 ```
 
-The validator reports parser/dereference status, operation count, unresolved
-references, lint result, fixture result, generated schema/typecheck status,
-real client/runtime smoke status, and SHA-256 values. A reviewer may
-additionally run:
+The validator uses installed dependencies only and creates/removes its
+temporary generation directory itself. It does not install packages, execute
+SQL, select a database, or modify the v1 artifact.
+
+The repository OpenAPI gate remains the authoritative v1 check:
 
 ```bash
-npm exec -- openapi-format check docs/review-only/be-imp-04-v2/openapi.yaml
+npm run lint:openapi
+npm run contract:breaking
 ```
 
-The exact package/tool version and exit code used for review must be recorded
-by the caller. No command in this package targets a database or the v1
-artifact.
+No optional unpinned `npm exec` command is part of this gate.
 
-## Files support boundary
+## Clean initialization boundary
 
-The Chief Web Systems Architect's decision is incorporated: the canonical
-Files-owned status/read href is `/api/v2/files/{fileId}`. The v2 candidate
-declares `GET /api/v2/files/{fileId}` (`getFileStatusV2`) and
-`POST /api/v2/files/{fileId}/download-intents`
-(`createFileDownloadIntentV2`). Upload-intent and complete-upload remain v1
-operations, while v2 status and final download never fall back to v1. Orders
-only consumes the Files schema/href and does not own a Files endpoint.
+This review candidate assumes a new, uniquely named, disposable local
+PostgreSQL 16 database. It does not perform an in-place reset. Before any seed
+statement, `clean-init/preflight-report.schema.json` requires the project
+marker, `disposable=true`, live database identity, owner/recovery/read-only
+facts, cluster identity when available, migration and seed digests, per-table
+row counts, organization set, active-session count, approval and recovery
+strategy. Secrets are excluded by schema-level `additionalProperties: false`.
 
-The candidate does not claim that these Files operations have been implemented
-at runtime; promotion remains pending Files-owner and backend/frontend narrow
-review.
+`clean-init/seed.sql` requires session settings for the project marker and
+disposable target, an exact clean-init database-name pattern, and zero rows in
+the owned-domain table set before inserting synthetic organization, catalog,
+customer, order, price-policy, price-snapshot, and complete v2 order-item
+facts. It never uses upsert. A non-empty or identity-mismatched target fails
+before any write. The synthetic seed gives every orderable SKU an explicit
+standardization mode, active primary policy, currency, validity, and risk
+buffer; it does not imply production pricing.
 
-## R8 compatibility
+`clean-init/smoke.sql` checks the seeded immutable snapshot shape, no legacy
+null in the synthetic seed, and the remaining legacy-null `UNCLASSIFIED`
+fail-closed compatibility path. A clean seed does not justify global NOT NULL:
+v1 writers may still create legacy-null rows during coexistence, while v2
+application validation must return `409 STATE_CONFLICT / UNCLASSIFIED`.
 
-`standardizationMode` is the only new required SKU-create input. `baseUnit`,
-`trackingMode`, and `lowStockThreshold` remain optional request inputs. Their
-explicit defaults are `baseUnit = unit`, `trackingMode = NONE`, and decimal
-`lowStockThreshold = "0"`; omission and explicit-value fixtures are separate.
-These defaults never infer standardization and never apply to legacy backfill.
-The response preserves those v1 fields for compatibility.
+## Dual-version and security boundary
+
+The v1 OpenAPI/generated client/runtime and digest remain byte-identical. The
+review harness loads the actual v1 generated client and validator together
+with the generated v2 client and validator in separate adapters. It proves
+v1 Customer and v2 Order paths/query keys do not cross, idempotency identity
+includes the versioned operation, v2 hrefs never fall back to `/api/v1/`,
+502/503 remain result-unknown/recovery, and only
+`customer.submit-approval` is accepted as the capability token.
+
+The v2 client validates request body, path, query, and header schemas before
+calling `fetch`; discriminator mixing, client price/snapshot/FX/policy fields,
+invalid UUIDs, malformed headers, and unknown body properties therefore have
+`fetchCount=0` evidence.
+
+## Migration rehearsal and ownership
+
+Run only in a newly created, uniquely named local disposable database after
+the real 001–004 history has been applied:
+
+```text
+001 → 004 → 005-expand → 006-dual-version
+004 → 005-expand → 006-dual-version
+005-expand/006-dual-version up twice
+constraint validation → seed.sql → smoke.sql → cleanup
+pre-data-down (empty only) → post-data-forward-fix (data-preserving)
+```
+
+`005` preserves v1 meanings and leaves v2 columns nullable. `006` stages
+checks/FKs as `NOT VALID`; validation is an explicit bounded operation. The
+pre-data down guard checks snapshot tables and every v2 durable column with
+`IS NOT NULL`, including explicit `false` in boolean policy facts, before any
+drop. The post-data forward-fix validates constraints only and stops on
+invalid facts. No reset is hidden in migration, application startup, or test
+bootstrap.
+
+## Frozen compatibility facts
+
+- `trackingMode` remains `NONE | LOT | SERIAL` and is independent of
+  `standardizationMode`.
+- `standardizationMode` is the only new required SKU-create input;
+  `baseUnit`, `trackingMode`, and `lowStockThreshold` remain optional with
+  their explicit defaults.
+- STANDARD/NON_STANDARD, price/FX snapshots, Files live-parent authorization,
+  Problem/recovery semantics, Order edit/cancel, response-header matrix, and
+  sort/filter allowlists are only promoted after their respective exact system
+  decisions and both architecture reviews.
+- H-05 contains no historical conversion input for this clean-init scope. Synthetic seed
+  values are test fixtures only and must never be treated as business or
+  production data.

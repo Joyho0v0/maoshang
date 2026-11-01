@@ -368,7 +368,7 @@ components:
     OrderId: { name: orderId, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
     FileId: { name: fileId, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
     CsrfHeader: { name: X-CSRF-Token, in: header, required: true, schema: { type: string, minLength: 16, maxLength: 512 } }
-    IdempotencyHeader: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 1, maxLength: 128, pattern: '^[\\x21-\\x7E]+$' } }
+    IdempotencyHeader: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 1, maxLength: 128, pattern: '^[\x21-\x7E]+$' } }
     IfMatchHeader: { name: If-Match, in: header, required: true, schema: { type: string, pattern: '^"v[1-9][0-9]*"$' } }
     RequestIdHeader: { name: X-Request-ID, in: header, required: false, schema: { $ref: '#/components/schemas/Uuid' } }
     CommandOperationHeader: { name: X-Command-Operation, in: header, required: true, schema: { type: string, pattern: '^(create|update|transition)(Product|Sku|Order)V2$' } }
@@ -458,7 +458,7 @@ components:
     SkuCreateRequestV2:
       type: object
       required: [productId, skuCode, name, unit, standardizationMode]
-      properties: { productId: { $ref: '#/components/schemas/Uuid' }, skuCode: { type: string, minLength: 1, maxLength: 64 }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, baseUnit: { type: string, description: 'Optional; defaults to unit when omitted.', x-default: unit, minLength: 1, maxLength: 32 }, trackingMode: { $ref: '#/components/schemas/TrackingMode', description: 'Optional; defaults to NONE when omitted.', default: NONE }, standardizationMode: { $ref: '#/components/schemas/StandardizationMode', description: 'Required policy; no default and never inferred from trackingMode.' }, lowStockThreshold: { allOf: [{ $ref: '#/components/schemas/DecimalThreshold' }], description: 'Optional; defaults to DecimalString 0 when omitted.', default: '0' }, metadata: { type: object, additionalProperties: true } }
+      properties: { productId: { $ref: '#/components/schemas/Uuid' }, skuCode: { type: string, minLength: 1, maxLength: 64 }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, baseUnit: { type: string, description: 'Optional; defaults to unit when omitted.', x-default: unit, minLength: 1, maxLength: 32 }, trackingMode: { $ref: '#/components/schemas/TrackingMode', description: 'Optional; defaults to NONE when omitted.', x-default: NONE }, standardizationMode: { $ref: '#/components/schemas/StandardizationMode', description: 'Required policy; no default and never inferred from trackingMode.' }, lowStockThreshold: { allOf: [{ $ref: '#/components/schemas/DecimalThreshold' }], description: 'Optional; defaults to DecimalString 0 when omitted.', x-default: '0' }, metadata: { type: object, additionalProperties: true } }
       additionalProperties: false
     SkuUpdateRequestV2:
       type: object
@@ -701,7 +701,7 @@ components:
     FileNotReadyMeta:
       type: object
       required: [kind, fileId, state, statusHref]
-      properties: { kind: { const: FILE_NOT_READY }, fileId: { $ref: '#/components/schemas/Uuid' }, state: { type: string, minLength: 1 }, statusHref: { $ref: '#/components/schemas/FileHrefV2' } }
+      properties: { kind: { const: FILE_NOT_READY }, fileId: { $ref: '#/components/schemas/Uuid' }, state: { type: string, enum: [PENDING_UPLOAD, UPLOADED, SCANNING, REJECTED, QUARANTINED] }, statusHref: { $ref: '#/components/schemas/FileHrefV2' } }
       additionalProperties: false
     CsrfFailedMeta:
       type: object

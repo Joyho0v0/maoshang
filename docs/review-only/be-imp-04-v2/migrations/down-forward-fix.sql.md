@@ -1,13 +1,13 @@
-# Rehearsal down and forward-fix
+# Rehearsal down and post-data forward-fix
 
-[pre-data-down.sql](./pre-data-down.sql) is the exact, guarded down path for
-a disposable database before v2 data exists. It drops triggers before their
-functions and tables, including `backfill_manifest_frozen` before
-`guard_backfill_manifest()`, checks that no v2 evidence or item data exists,
-and is safe to execute twice.
+`pre-data-down.sql` is an exact, guarded down path for an empty v2 expansion
+on a disposable database. It checks both snapshot tables and every durable v2
+column with `IS NOT NULL` before dropping anything. It explicitly treats
+`is_primary=false` as written data. If any fact exists, it exits non-zero and
+the transaction preserves the data and objects. It never truncates or resets.
 
-[forward-fix.sql](./forward-fix.sql) is the exact post-data recovery entry
-point. It includes the idempotent 005, 006 and 007 SQL in order and is the
-only supported forward-fix path in this review package. The operator must
-provide an isolated DATABASE_URL, record every command and exit code, and
-must not execute either file against shared or production databases.
+`post-data-forward-fix.sql` is the exact data-preserving recovery path. It
+requires the simplified expansion, then validates the staged FK/CHECK
+constraints in one bounded transaction. An invalid fact aborts and leaves the
+database untouched for an owner-approved code or forward-fix change. It does
+not infer values, rewrite rows, or execute a hidden initialization operation.

@@ -1,5 +1,5 @@
--- Review-only rehearsal down path. Run only on an isolated database before
--- any v2 data is present. This file is intentionally not a package migration.
+-- Review-only guarded down path. Run only on a disposable isolated database
+-- before v2 business data exists. It never performs reset or truncation.
 \set ON_ERROR_STOP on
 BEGIN;
 SET LOCAL lock_timeout = '2s';
@@ -7,27 +7,18 @@ SET LOCAL statement_timeout = '30s';
 
 DO $$
 DECLARE
-  durable_table_name text;
   durable_column record;
   has_rows boolean;
+  table_name text;
 BEGIN
-  FOREACH durable_table_name IN ARRAY ARRAY[
-    'migration_v2.backfill_item',
-    'migration_v2.backfill_manifest',
-    'migration_v2.policy_fact_evidence',
-    'migration_v2.backfill_count',
-    'migration_v2.approved_legacy_sku_mapping',
-    'migration_v2.approved_price_policy_mapping',
-    'migration_v2.approved_order_item_mapping',
-    'migration_v2.approved_price_fx_mapping',
-    'catalog.price_snapshot_v2',
-    'orders.fx_snapshot_v2',
-    'migration_v2.backfill_run'
-  ] LOOP
-    IF to_regclass(durable_table_name) IS NOT NULL THEN
-      EXECUTE format('SELECT EXISTS (SELECT 1 FROM %s)', durable_table_name) INTO has_rows;
+  IF to_regnamespace('migration_v2') IS NOT NULL THEN
+    RAISE EXCEPTION 'pre-data down refused: cancelled legacy-initialization schema migration_v2 exists' USING ERRCODE = '55000';
+  END IF;
+  FOREACH table_name IN ARRAY ARRAY['catalog.price_snapshot_v2', 'orders.fx_snapshot_v2'] LOOP
+    IF to_regclass(table_name) IS NOT NULL THEN
+      EXECUTE format('SELECT EXISTS (SELECT 1 FROM %s)', table_name) INTO has_rows;
       IF has_rows THEN
-        RAISE EXCEPTION 'pre-data down refused: durable v2 evidence exists in %', durable_table_name USING ERRCODE = '55000';
+        RAISE EXCEPTION 'pre-data down refused: v2 snapshot data exists in %', table_name USING ERRCODE = '55000';
       END IF;
     END IF;
   END LOOP;
@@ -53,19 +44,17 @@ BEGIN
   LOOP
     IF to_regclass(format('%I.%I', durable_column.schema_name, durable_column.table_name)) IS NOT NULL
        AND EXISTS (
-         SELECT 1 FROM information_schema.columns
-         WHERE table_schema = durable_column.schema_name
-           AND table_name = durable_column.table_name
-           AND column_name = durable_column.column_name
+         SELECT 1 FROM information_schema.columns AS c
+         WHERE c.table_schema = durable_column.schema_name
+           AND c.table_name = durable_column.table_name
+           AND c.column_name = durable_column.column_name
        ) THEN
       EXECUTE format(
         'SELECT EXISTS (SELECT 1 FROM %I.%I WHERE %I IS NOT NULL)',
-        durable_column.schema_name,
-        durable_column.table_name,
-        durable_column.column_name
+        durable_column.schema_name, durable_column.table_name, durable_column.column_name
       ) INTO has_rows;
       IF has_rows THEN
-        RAISE EXCEPTION 'pre-data down refused: durable v2 column fact exists in %.%.%', durable_column.schema_name, durable_column.table_name, durable_column.column_name USING ERRCODE = '55000';
+        RAISE EXCEPTION 'pre-data down refused: v2 column fact exists in %.%.%', durable_column.schema_name, durable_column.table_name, durable_column.column_name USING ERRCODE = '55000';
       END IF;
     END IF;
   END LOOP;
@@ -80,29 +69,9 @@ BEGIN
   IF to_regclass('orders.fx_snapshot_v2') IS NOT NULL THEN
     EXECUTE 'DROP TRIGGER IF EXISTS fx_snapshot_v2_immutable ON orders.fx_snapshot_v2';
   END IF;
-  IF to_regclass('migration_v2.backfill_manifest') IS NOT NULL THEN
-    EXECUTE 'DROP TRIGGER IF EXISTS backfill_manifest_frozen ON migration_v2.backfill_manifest';
-  END IF;
-  IF to_regclass('migration_v2.policy_fact_evidence') IS NOT NULL THEN
-    EXECUTE 'DROP TRIGGER IF EXISTS policy_fact_evidence_immutable ON migration_v2.policy_fact_evidence';
-  END IF;
 END $$;
 
-DO $$
-BEGIN
-  IF to_regnamespace('migration_v2') IS NOT NULL THEN
-    EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.assert_price_policy_lifecycle()';
-    EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.prevent_snapshot_mutation()';
-    EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.prevent_policy_fact_evidence_mutation()';
-    EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.begin_backfill_run(uuid, bytea, uuid, text)';
-    EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.guard_backfill_manifest()';
-    EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.apply_backfill_item(uuid, uuid, uuid)';
-    EXECUTE 'DROP FUNCTION IF EXISTS migration_v2.finish_backfill_run(uuid)';
-  END IF;
-END $$;
-
-DROP TABLE IF EXISTS migration_v2.backfill_manifest;
-DROP TABLE IF EXISTS migration_v2.policy_fact_evidence;
+DROP FUNCTION IF EXISTS catalog.prevent_v2_snapshot_mutation();
 ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_image_file_fk;
 ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_fx_snapshot_fk;
 ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_price_snapshot_fk;
@@ -110,6 +79,13 @@ ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_decimal_ck
 ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_fx_shape_ck;
 ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_price_shape_ck;
 ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_kind_shape_ck;
+DO $$
+BEGIN
+  IF to_regclass('catalog.price_snapshot_v2') IS NOT NULL THEN
+    EXECUTE 'ALTER TABLE catalog.price_snapshot_v2 DROP CONSTRAINT IF EXISTS price_snapshot_v2_shape_ck';
+  END IF;
+END $$;
+
 DROP INDEX IF EXISTS orders.order_item_v2_image_idx;
 DROP INDEX IF EXISTS orders.order_item_v2_fx_snapshot_idx;
 DROP INDEX IF EXISTS orders.order_item_v2_price_snapshot_idx;
@@ -130,17 +106,8 @@ ALTER TABLE orders.order_item
   DROP COLUMN IF EXISTS v2_snapshot_version,
   DROP COLUMN IF EXISTS line_id;
 
-DROP TABLE IF EXISTS migration_v2.backfill_item;
-DROP TABLE IF EXISTS migration_v2.backfill_count;
-DROP INDEX IF EXISTS migration_v2.approved_price_policy_policy_idx;
-DROP TABLE IF EXISTS migration_v2.approved_price_fx_mapping;
-DROP TABLE IF EXISTS migration_v2.approved_order_item_mapping;
-DROP TABLE IF EXISTS migration_v2.approved_price_policy_mapping;
-DROP TABLE IF EXISTS migration_v2.approved_legacy_sku_mapping;
-DROP TABLE IF EXISTS migration_v2.backfill_run;
 DROP TABLE IF EXISTS orders.fx_snapshot_v2;
 DROP TABLE IF EXISTS catalog.price_snapshot_v2;
-
 ALTER TABLE catalog.price_policy DROP CONSTRAINT IF EXISTS price_policy_v2_window_excl;
 DROP INDEX IF EXISTS catalog.price_policy_v2_primary_open_uq;
 ALTER TABLE catalog.price_policy DROP CONSTRAINT IF EXISTS price_policy_v2_risk_buffer_ck;
@@ -150,5 +117,4 @@ ALTER TABLE catalog.price_policy
 ALTER TABLE catalog.sku DROP CONSTRAINT IF EXISTS sku_v2_standardization_mode_ck;
 ALTER TABLE catalog.sku DROP COLUMN IF EXISTS standardization_mode;
 
-DROP SCHEMA IF EXISTS migration_v2;
 COMMIT;

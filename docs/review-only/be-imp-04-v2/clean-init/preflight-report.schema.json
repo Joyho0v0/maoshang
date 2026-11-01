@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://review.invalid/joyho-33/clean-init/preflight-report.schema.json",
+  "title": "JOYHO-33 clean-init preflight report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reportVersion", "projectId", "decision", "environment", "database", "migrations", "seed", "ownedTables", "organizations", "activeSessions", "approval", "strategy"],
+  "properties": {
+    "reportVersion": { "const": 1 },
+    "projectId": { "const": "JOYHO-33" },
+    "decision": { "enum": ["PROCEED", "STOP"] },
+    "stopReasons": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 512 }, "uniqueItems": true },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "projectMarker", "disposable"],
+      "properties": {
+        "class": { "const": "disposable-local" },
+        "projectMarker": { "const": "JOYHO-33" },
+        "disposable": { "const": true },
+        "owner": { "type": "string", "minLength": 1, "maxLength": 256 }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "port", "name", "oid", "owner", "readOnly", "recovery", "clusterIdentifier"],
+      "properties": {
+        "host": { "type": "string", "pattern": "^(127\\.0\\.0\\.1|localhost)$" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "name": { "type": "string", "pattern": "^be_imp_04_cleaninit_[a-z0-9_]+$" },
+        "oid": { "type": "integer", "minimum": 1 },
+        "owner": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "readOnly": { "const": false },
+        "recovery": { "const": false },
+        "clusterIdentifier": { "type": ["string", "null"], "maxLength": 256 },
+        "serverVersion": { "type": "string", "pattern": "^16\\." }
+      }
+    },
+    "migrations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["historyDigest", "expectedHistoryDigest", "expandDigest"],
+      "properties": {
+        "historyDigest": { "$ref": "#/$defs/sha256" },
+        "expectedHistoryDigest": { "$ref": "#/$defs/sha256" },
+        "expandDigest": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestDigest", "manifestVersion", "synthetic"],
+      "properties": {
+        "manifestDigest": { "$ref": "#/$defs/sha256" },
+        "manifestVersion": { "const": 1 },
+        "synthetic": { "const": true }
+      }
+    },
+    "ownedTables": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema", "table", "rowCount", "organizationIds"],
+        "properties": {
+          "schema": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "table": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "rowCount": { "type": "integer", "minimum": 0 },
+          "organizationIds": { "type": "array", "items": { "$ref": "#/$defs/uuid" }, "uniqueItems": true }
+        }
+      }
+    },
+    "organizations": { "type": "array", "items": { "$ref": "#/$defs/uuid" }, "uniqueItems": true },
+    "activeSessions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "external"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 1 },
+        "external": { "type": "integer", "minimum": 0 },
+        "sources": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 256 } }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approvedBy", "approvedAt", "executedBy", "stopAndRecoveryPlan"],
+      "properties": {
+        "approvedBy": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "approvedAt": { "type": "string", "format": "date-time" },
+        "executedBy": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "stopAndRecoveryPlan": { "type": "string", "minLength": 1, "maxLength": 2048 }
+      }
+    },
+    "strategy": { "const": "NEW_DATABASE" },
+    "$schemaNotes": { "type": "string", "maxLength": 512 }
+  },
+  "$defs": {
+    "uuid": { "type": "string", "format": "uuid" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

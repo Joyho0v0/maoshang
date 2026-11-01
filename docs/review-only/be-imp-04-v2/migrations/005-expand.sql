@@ -1,29 +1,31 @@
 -- Review-only migration rehearsal. Never copy this file into packages/database.
+-- This is expand-only: existing v1 columns remain valid and every v2 column is
+-- nullable until a v2 writer supplies a complete immutable snapshot.
 \set ON_ERROR_STOP on
 BEGIN;
 SET LOCAL lock_timeout = '2s';
 SET LOCAL statement_timeout = '30s';
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE SCHEMA IF NOT EXISTS migration_v2;
 
 ALTER TABLE catalog.sku ADD COLUMN IF NOT EXISTS standardization_mode text;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sku_v2_standardization_mode_ck' AND conrelid = 'catalog.sku'::regclass) THEN
-    ALTER TABLE catalog.sku ADD CONSTRAINT sku_v2_standardization_mode_ck CHECK (standardization_mode IS NULL OR standardization_mode IN ('STRICT', 'SIMPLE', 'NONE')) NOT VALID;
+    ALTER TABLE catalog.sku ADD CONSTRAINT sku_v2_standardization_mode_ck
+      CHECK (standardization_mode IS NULL OR standardization_mode IN ('STRICT', 'SIMPLE', 'NONE')) NOT VALID;
   END IF;
 END $$;
 
--- These are nullable expand columns by design. Existing policy rows are not
--- assigned a guessed primary/risk value; owner-approved mapping is a
--- prerequisite for v2 use and is validated by the dual-version path.
+-- Existing policies are deliberately not assigned guessed values. A v2 writer
+-- must reject a visible legacy-null policy as UNCLASSIFIED/STATE_CONFLICT.
 ALTER TABLE catalog.price_policy ADD COLUMN IF NOT EXISTS is_primary boolean;
 ALTER TABLE catalog.price_policy ADD COLUMN IF NOT EXISTS risk_buffer_bps integer;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'price_policy_v2_risk_buffer_ck' AND conrelid = 'catalog.price_policy'::regclass) THEN
-    ALTER TABLE catalog.price_policy ADD CONSTRAINT price_policy_v2_risk_buffer_ck CHECK (risk_buffer_bps BETWEEN 0 AND 2000) NOT VALID;
+    ALTER TABLE catalog.price_policy ADD CONSTRAINT price_policy_v2_risk_buffer_ck
+      CHECK (risk_buffer_bps IS NULL OR risk_buffer_bps BETWEEN 0 AND 2000) NOT VALID;
   END IF;
 END $$;
 
@@ -46,7 +48,7 @@ CREATE TABLE IF NOT EXISTS catalog.price_snapshot_v2 (
   FOREIGN KEY (organization_id, sku_id) REFERENCES catalog.sku (organization_id, id) ON DELETE RESTRICT,
   FOREIGN KEY (organization_id, source_policy_id) REFERENCES catalog.price_policy (organization_id, id) ON DELETE RESTRICT,
   CHECK (
-    (item_kind = 'STANDARD' AND sku_id IS NOT NULL AND source_kind = 'CATALOG_POLICY' AND source_policy_id IS NOT NULL)
+    (item_kind = 'STANDARD' AND sku_id IS NOT NULL AND standardization_mode IN ('STRICT', 'SIMPLE', 'NONE') AND source_kind = 'CATALOG_POLICY' AND source_policy_id IS NOT NULL)
     OR (item_kind = 'NON_STANDARD' AND sku_id IS NULL AND standardization_mode IN ('SIMPLE', 'NONE') AND source_kind = 'MANUAL_QUOTE' AND source_policy_id IS NULL)
   )
 );
@@ -70,6 +72,8 @@ CREATE TABLE IF NOT EXISTS orders.fx_snapshot_v2 (
 );
 CREATE INDEX IF NOT EXISTS fx_snapshot_v2_pair_idx ON orders.fx_snapshot_v2 (organization_id, base_currency, quote_currency, captured_at DESC, id);
 
+-- Nullable expand columns preserve v1 writer compatibility. v2 validation is
+-- conditional on v2_snapshot_version and is staged in 006 as NOT VALID.
 ALTER TABLE orders.order_item ADD COLUMN IF NOT EXISTS line_id uuid;
 ALTER TABLE orders.order_item ADD COLUMN IF NOT EXISTS v2_snapshot_version integer;
 ALTER TABLE orders.order_item ADD COLUMN IF NOT EXISTS standardization_mode text;
@@ -93,210 +97,17 @@ CREATE INDEX IF NOT EXISTS order_item_v2_image_idx ON orders.order_item (organiz
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'order_item_v2_price_snapshot_fk' AND conrelid = 'orders.order_item'::regclass) THEN
-    ALTER TABLE orders.order_item ADD CONSTRAINT order_item_v2_price_snapshot_fk FOREIGN KEY (organization_id, price_snapshot_v2_id) REFERENCES catalog.price_snapshot_v2 (organization_id, id) ON DELETE RESTRICT NOT VALID;
+    ALTER TABLE orders.order_item ADD CONSTRAINT order_item_v2_price_snapshot_fk
+      FOREIGN KEY (organization_id, price_snapshot_v2_id) REFERENCES catalog.price_snapshot_v2 (organization_id, id) ON DELETE RESTRICT NOT VALID;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'order_item_v2_fx_snapshot_fk' AND conrelid = 'orders.order_item'::regclass) THEN
-    ALTER TABLE orders.order_item ADD CONSTRAINT order_item_v2_fx_snapshot_fk FOREIGN KEY (organization_id, fx_snapshot_v2_id) REFERENCES orders.fx_snapshot_v2 (organization_id, id) ON DELETE RESTRICT NOT VALID;
+    ALTER TABLE orders.order_item ADD CONSTRAINT order_item_v2_fx_snapshot_fk
+      FOREIGN KEY (organization_id, fx_snapshot_v2_id) REFERENCES orders.fx_snapshot_v2 (organization_id, id) ON DELETE RESTRICT NOT VALID;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'order_item_v2_image_file_fk' AND conrelid = 'orders.order_item'::regclass) THEN
-    ALTER TABLE orders.order_item ADD CONSTRAINT order_item_v2_image_file_fk FOREIGN KEY (organization_id, image_file_id) REFERENCES files.file_object (organization_id, id) ON DELETE RESTRICT NOT VALID;
+    ALTER TABLE orders.order_item ADD CONSTRAINT order_item_v2_image_file_fk
+      FOREIGN KEY (organization_id, image_file_id) REFERENCES files.file_object (organization_id, id) ON DELETE RESTRICT NOT VALID;
   END IF;
 END $$;
-
-CREATE TABLE IF NOT EXISTS migration_v2.backfill_run (
-  run_id uuid PRIMARY KEY,
-  input_sha256 bytea NOT NULL CHECK (octet_length(input_sha256) = 32),
-  approved_by uuid NOT NULL,
-  source_ref text NOT NULL CHECK (length(source_ref) BETWEEN 1 AND 512),
-  status text NOT NULL CHECK (status IN ('RUNNING', 'APPLIED', 'GAPS', 'FAILED')),
-  total_count bigint NOT NULL DEFAULT 0 CHECK (total_count >= 0),
-  applied_count bigint NOT NULL DEFAULT 0 CHECK (applied_count >= 0),
-  gap_count bigint NOT NULL DEFAULT 0 CHECK (gap_count >= 0),
-  unexpected_count bigint NOT NULL DEFAULT 0 CHECK (unexpected_count >= 0),
-  started_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-  finished_at timestamptz,
-  UNIQUE (input_sha256)
-);
-ALTER TABLE migration_v2.backfill_run
-  ADD COLUMN IF NOT EXISTS unexpected_count bigint NOT NULL DEFAULT 0 CHECK (unexpected_count >= 0);
-
-CREATE TABLE IF NOT EXISTS migration_v2.policy_fact_evidence (
-  run_id uuid NOT NULL REFERENCES migration_v2.backfill_run(run_id) ON DELETE RESTRICT,
-  organization_id uuid NOT NULL,
-  policy_id uuid NOT NULL,
-  input_sha256 bytea NOT NULL CHECK (octet_length(input_sha256) = 32),
-  approved_by uuid NOT NULL,
-  source_ref text NOT NULL CHECK (length(source_ref) BETWEEN 1 AND 512),
-  canonical_policy_version integer NOT NULL CHECK (canonical_policy_version > 0),
-  target_is_primary boolean NOT NULL,
-  target_risk_buffer_bps integer NOT NULL CHECK (target_risk_buffer_bps BETWEEN 0 AND 2000),
-  applied_version integer NOT NULL CHECK (applied_version > 0),
-  applied_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-  PRIMARY KEY (run_id, organization_id, policy_id),
-  FOREIGN KEY (organization_id, policy_id) REFERENCES catalog.price_policy (organization_id, id) ON DELETE RESTRICT
-);
-CREATE INDEX IF NOT EXISTS policy_fact_evidence_policy_idx ON migration_v2.policy_fact_evidence (organization_id, policy_id, applied_version, run_id);
-
-CREATE OR REPLACE FUNCTION migration_v2.prevent_policy_fact_evidence_mutation()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  RAISE EXCEPTION 'policy fact evidence is append-only' USING ERRCODE = '42501';
-END;
-$$;
-DROP TRIGGER IF EXISTS policy_fact_evidence_immutable ON migration_v2.policy_fact_evidence;
-CREATE TRIGGER policy_fact_evidence_immutable
-  BEFORE UPDATE OR DELETE ON migration_v2.policy_fact_evidence
-  FOR EACH ROW EXECUTE FUNCTION migration_v2.prevent_policy_fact_evidence_mutation();
-
-CREATE TABLE IF NOT EXISTS migration_v2.backfill_manifest (
-  run_id uuid NOT NULL REFERENCES migration_v2.backfill_run(run_id) ON DELETE RESTRICT,
-  organization_id uuid NOT NULL,
-  order_item_id uuid NOT NULL,
-  expected_item_kind text NOT NULL CHECK (expected_item_kind IN ('STANDARD', 'NON_STANDARD', 'UNKNOWN')),
-  approved_by uuid NOT NULL,
-  source_ref text NOT NULL CHECK (length(source_ref) BETWEEN 1 AND 512),
-  input_sha256 bytea NOT NULL CHECK (octet_length(input_sha256) = 32),
-  PRIMARY KEY (run_id, organization_id, order_item_id)
-);
-CREATE INDEX IF NOT EXISTS backfill_manifest_org_idx ON migration_v2.backfill_manifest (run_id, organization_id, expected_item_kind);
-CREATE INDEX IF NOT EXISTS backfill_manifest_item_idx ON migration_v2.backfill_manifest (organization_id, order_item_id, run_id);
-
-CREATE TABLE IF NOT EXISTS migration_v2.backfill_item (
-  run_id uuid NOT NULL REFERENCES migration_v2.backfill_run(run_id) ON DELETE RESTRICT,
-  organization_id uuid NOT NULL,
-  order_item_id uuid NOT NULL,
-  source_sku_id uuid,
-  approved_mode text CHECK (approved_mode IS NULL OR approved_mode IN ('STRICT', 'SIMPLE', 'NONE')),
-  source_price_currency char(3) CHECK (source_price_currency IS NULL OR source_price_currency ~ '^[A-Z]{3}$'),
-  source_unit_price numeric(19,4) CHECK (source_unit_price IS NULL OR source_unit_price >= 0),
-  fx_raw_market_rate numeric(24,12),
-  fx_risk_buffer_bps integer CHECK (fx_risk_buffer_bps IS NULL OR fx_risk_buffer_bps BETWEEN 0 AND 2000),
-  replacement_price_snapshot_v2_id uuid,
-  replacement_fx_snapshot_v2_id uuid,
-  disposition text NOT NULL CHECK (disposition IN ('APPLIED', 'GAP')),
-  reason text,
-  approved_by uuid NOT NULL,
-  source_ref text NOT NULL,
-  applied_at timestamptz,
-  PRIMARY KEY (run_id, organization_id, order_item_id),
-  FOREIGN KEY (organization_id, source_sku_id) REFERENCES catalog.sku (organization_id, id) ON DELETE RESTRICT,
-  FOREIGN KEY (organization_id, replacement_price_snapshot_v2_id) REFERENCES catalog.price_snapshot_v2 (organization_id, id) ON DELETE RESTRICT,
-  FOREIGN KEY (organization_id, replacement_fx_snapshot_v2_id) REFERENCES orders.fx_snapshot_v2 (organization_id, id) ON DELETE RESTRICT,
-  CHECK ((disposition = 'APPLIED' AND reason IS NULL AND approved_mode IS NOT NULL AND source_price_currency IS NOT NULL AND source_unit_price IS NOT NULL AND replacement_price_snapshot_v2_id IS NOT NULL)
-      OR (disposition = 'GAP' AND reason IS NOT NULL AND length(reason) BETWEEN 1 AND 256))
-);
-CREATE INDEX IF NOT EXISTS backfill_item_org_idx ON migration_v2.backfill_item (run_id, organization_id, disposition);
-CREATE INDEX IF NOT EXISTS backfill_item_order_idx ON migration_v2.backfill_item (organization_id, order_item_id, run_id);
-CREATE INDEX IF NOT EXISTS backfill_item_source_sku_idx ON migration_v2.backfill_item (organization_id, source_sku_id, run_id) WHERE source_sku_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS backfill_item_price_snapshot_idx ON migration_v2.backfill_item (organization_id, replacement_price_snapshot_v2_id, run_id) WHERE replacement_price_snapshot_v2_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS backfill_item_fx_snapshot_idx ON migration_v2.backfill_item (organization_id, replacement_fx_snapshot_v2_id, run_id) WHERE replacement_fx_snapshot_v2_id IS NOT NULL;
-
-CREATE OR REPLACE FUNCTION migration_v2.guard_backfill_manifest()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  run_status text;
-BEGIN
-  IF TG_OP <> 'INSERT' THEN
-    RAISE EXCEPTION 'backfill input manifest is append-only and frozen' USING ERRCODE = '42501';
-  END IF;
-  SELECT status INTO run_status
-  FROM migration_v2.backfill_run
-  WHERE run_id = NEW.run_id
-  FOR UPDATE;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'backfill run does not exist' USING ERRCODE = '22023';
-  END IF;
-  IF run_status <> 'RUNNING' THEN
-    RAISE EXCEPTION 'backfill input manifest can only be frozen while run is RUNNING' USING ERRCODE = '55000';
-  END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM migration_v2.backfill_run
-    WHERE run_id = NEW.run_id
-      AND input_sha256 = NEW.input_sha256
-      AND approved_by = NEW.approved_by
-      AND (source_ref = NEW.source_ref OR NEW.source_ref LIKE source_ref || '/%')
-  ) THEN
-    RAISE EXCEPTION 'manifest member provenance does not match its run' USING ERRCODE = '23P01';
-  END IF;
-  IF EXISTS (SELECT 1 FROM migration_v2.backfill_item WHERE run_id = NEW.run_id) THEN
-    RAISE EXCEPTION 'backfill input manifest is frozen after evidence exists' USING ERRCODE = '55000';
-  END IF;
-  RETURN NEW;
-END;
-$$;
-DROP TRIGGER IF EXISTS backfill_manifest_frozen ON migration_v2.backfill_manifest;
-CREATE TRIGGER backfill_manifest_frozen
-  BEFORE INSERT OR UPDATE OR DELETE ON migration_v2.backfill_manifest
-  FOR EACH ROW EXECUTE FUNCTION migration_v2.guard_backfill_manifest();
-
-CREATE TABLE IF NOT EXISTS migration_v2.backfill_count (
-  run_id uuid NOT NULL REFERENCES migration_v2.backfill_run(run_id) ON DELETE RESTRICT,
-  organization_id uuid,
-  item_kind text NOT NULL CHECK (item_kind IN ('STANDARD', 'NON_STANDARD', 'UNKNOWN')),
-  disposition text NOT NULL CHECK (disposition IN ('APPLIED', 'GAP')),
-  row_count bigint NOT NULL CHECK (row_count >= 0),
-  PRIMARY KEY (run_id, organization_id, item_kind, disposition)
-);
-
-CREATE TABLE IF NOT EXISTS migration_v2.approved_legacy_sku_mapping (
-  organization_id uuid NOT NULL,
-  sku_id uuid NOT NULL,
-  approved_mode text NOT NULL CHECK (approved_mode IN ('STRICT', 'SIMPLE', 'NONE')),
-  approved_by uuid NOT NULL,
-  source_ref text NOT NULL,
-  input_sha256 bytea NOT NULL CHECK (octet_length(input_sha256) = 32),
-  PRIMARY KEY (organization_id, sku_id),
-  FOREIGN KEY (organization_id, sku_id) REFERENCES catalog.sku (organization_id, id) ON DELETE RESTRICT
-);
-
-CREATE TABLE IF NOT EXISTS migration_v2.approved_price_policy_mapping (
-  organization_id uuid NOT NULL,
-  sku_id uuid NOT NULL,
-  policy_id uuid NOT NULL,
-  currency char(3) NOT NULL CHECK (currency ~ '^[A-Z]{3}$'),
-  source_unit_price numeric(19,4) NOT NULL CHECK (source_unit_price >= 0),
-  is_primary boolean NOT NULL,
-  risk_buffer_bps integer NOT NULL CHECK (risk_buffer_bps BETWEEN 0 AND 2000),
-  canonical_policy_version integer NOT NULL CHECK (canonical_policy_version > 0),
-  approved_by uuid NOT NULL,
-  source_ref text NOT NULL,
-  input_sha256 bytea NOT NULL CHECK (octet_length(input_sha256) = 32),
-  PRIMARY KEY (organization_id, sku_id, currency),
-  FOREIGN KEY (organization_id, sku_id) REFERENCES catalog.sku (organization_id, id) ON DELETE RESTRICT,
-  FOREIGN KEY (organization_id, policy_id) REFERENCES catalog.price_policy (organization_id, id) ON DELETE RESTRICT
-);
-CREATE INDEX IF NOT EXISTS approved_price_policy_policy_idx ON migration_v2.approved_price_policy_mapping (organization_id, policy_id, canonical_policy_version);
-
-CREATE TABLE IF NOT EXISTS migration_v2.approved_order_item_mapping (
-  organization_id uuid NOT NULL,
-  order_item_id uuid NOT NULL,
-  sku_id uuid,
-  approved_mode text NOT NULL CHECK (approved_mode IN ('STRICT', 'SIMPLE', 'NONE')),
-  approved_by uuid NOT NULL,
-  source_ref text NOT NULL,
-  input_sha256 bytea NOT NULL CHECK (octet_length(input_sha256) = 32),
-  PRIMARY KEY (organization_id, order_item_id),
-  FOREIGN KEY (organization_id, order_item_id) REFERENCES orders.order_item (organization_id, id) ON DELETE RESTRICT,
-  FOREIGN KEY (organization_id, sku_id) REFERENCES catalog.sku (organization_id, id) ON DELETE RESTRICT
-);
-
-CREATE TABLE IF NOT EXISTS migration_v2.approved_price_fx_mapping (
-  organization_id uuid NOT NULL,
-  order_item_id uuid NOT NULL,
-  source_currency char(3) NOT NULL CHECK (source_currency ~ '^[A-Z]{3}$'),
-  source_unit_price numeric(19,4) NOT NULL CHECK (source_unit_price >= 0),
-  fx_raw_market_rate numeric(24,12),
-  fx_risk_buffer_bps integer CHECK (fx_risk_buffer_bps IS NULL OR fx_risk_buffer_bps BETWEEN 0 AND 2000),
-  approved_by uuid NOT NULL,
-  source_ref text NOT NULL,
-  input_sha256 bytea NOT NULL CHECK (octet_length(input_sha256) = 32),
-  PRIMARY KEY (organization_id, order_item_id),
-  FOREIGN KEY (organization_id, order_item_id) REFERENCES orders.order_item (organization_id, id) ON DELETE RESTRICT,
-  CHECK ((fx_raw_market_rate IS NULL AND fx_risk_buffer_bps IS NULL) OR (fx_raw_market_rate IS NOT NULL AND fx_raw_market_rate > 0 AND fx_risk_buffer_bps IS NOT NULL))
-);
 
 COMMIT;

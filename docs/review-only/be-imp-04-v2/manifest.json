@@ -31,9 +31,20 @@
     "generatedClient": "b4a017cef65a11018f70321f624e3456708d55fdea638b9683a57fb610b5712c"
   },
   "candidateDigests": {
-    "openapi": "42b7093480277848e551cb691c0918819a1627e080e5cc5fa9b86c2e8cd7e1f2",
-    "generatedTypes": "4dea7d9786169062aa6a79ae7a5a11e2bc4f325ff1bfdd3e85c0d66c485e9e87",
-    "generatedClient": "48898f6706b2357f283655013a836def23f058e490d1a7cff444fc4a1cdb52a0"
+    "openapi": "c643c55afcfc30e516a4e96debaf813476049f2946d59fe4fa3390eb674da29c",
+    "generatedTypes": "bd8b88b57d1afc9c6cafd7dc5f109f2ab544fc2cecab03a5dfefa632bffdd56f",
+    "generatedClient": "74fdd109fdb0a1512da9602cdb4cdeb2352d11bc1301348d9ee3d27e7fcc0294"
+  },
+  "initialization": {
+    "mode": "CLEAN_INIT",
+    "preflightSchema": "clean-init/preflight-report.schema.json",
+    "seedManifestSchema": "clean-init/seed-manifest.schema.json",
+    "seedSql": "clean-init/seed.sql",
+    "smokeSql": "clean-init/smoke.sql",
+    "inventorySql": "clean-init/inventory.sql",
+    "rehearsal": "clean-init/rehearse.mjs",
+    "requiresUniqueDisposableDatabase": true,
+    "allowsReset": false
   },
   "promotionRules": [
     "Do not overwrite v1 artifact or generated files.",

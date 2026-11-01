@@ -93,6 +93,7 @@ function operationMetadata(operations) {
     method: operation.method,
     path: operation.path,
     requestSchema: operation.requestSchema,
+    parameters: operation.parameters,
     responses: operation.responses,
   }]));
 }
@@ -150,6 +151,7 @@ function clientTypescript(operations) {
     "  constructor(private readonly options: GeneratedV2ClientOptions) { this.baseUrl = (options.baseUrl ?? '/api/v2').replace(/\\/$/, ''); this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis); }",
     "  async call<Id extends OperationId>(operationId: Id, input: OperationInputMap[Id]): Promise<OperationResponseMap[Id]> {",
     "    const operation = operations[operationId];",
+    "    validateOperationInput(operation, input as Record<string, unknown>, this.options.validator);",
     "    const pathParams = ('pathParams' in input ? input.pathParams : {}) as Record<string, string>;",
     "    const path = operation.path.replace(/\\{([^}]+)\\}/g, (_match, name: string) => encodeURIComponent(pathParams[name] ?? (() => { throw new Error('Missing path parameter: ' + name); })()));",
     "    const absolute = /^https?:\\/\\//i.test(this.baseUrl);",
@@ -168,6 +170,14 @@ function clientTypescript(operations) {
     "    return { status: response.status, data: payload as OperationResponseMap[Id], headers: responseHeaders } as unknown as OperationResponseMap[Id];",
     "  }",
     "}",
+    "function findHeader(headers: Record<string, unknown> | undefined, name: string): unknown { const key = Object.keys(headers ?? {}).find((candidate) => candidate.toLowerCase() === name.toLowerCase()); return key === undefined ? undefined : headers?.[key]; }",
+    "function validateOperationInput(operation: { readonly parameters?: readonly { readonly name: string; readonly in: string; readonly required?: boolean; readonly schema?: object }[]; readonly requestSchema?: string }, input: Record<string, unknown>, validator: RuntimeValidator): void {",
+    "  const containers: Record<string, Record<string, unknown> | undefined> = { path: (input.pathParams as Record<string, unknown> | undefined), query: (input.query as Record<string, unknown> | undefined), header: (input.headers as Record<string, unknown> | undefined) };",
+    "  const declaredHeaders = new Set((operation.parameters ?? []).filter((parameter) => parameter.in === 'header').map((parameter) => parameter.name.toLowerCase()));",
+    "  for (const parameter of operation.parameters ?? []) { const value = parameter.in === 'header' ? findHeader(containers.header, parameter.name) : containers[parameter.in]?.[parameter.name]; if (value === undefined) { if (parameter.required) throw new Error('Missing required ' + parameter.in + ' parameter: ' + parameter.name); continue; } if (parameter.in === 'header' && typeof value !== 'string') throw new Error('Invalid header: ' + parameter.name); if (parameter.schema !== undefined && !validator.validateSchema(parameter.schema, value)) throw new Error('Invalid ' + parameter.in + ' parameter: ' + parameter.name); }",
+    "  for (const name of Object.keys(containers.header ?? {})) if (!declaredHeaders.has(name.toLowerCase())) throw new Error('Unknown header: ' + name);",
+    "  if (operation.requestSchema !== undefined) { if (!Object.hasOwn(input, 'body') || !validator.validate(operation.requestSchema, input.body)) throw new Error('Invalid ' + operation.requestSchema + ' request body.'); } else if (Object.hasOwn(input, 'body')) throw new Error('Operation does not accept a request body.');",
+    "}",
   ];
   return lines.join('\n') + '\n';
 }
@@ -180,6 +190,7 @@ function clientJavascript(operations) {
     "  async call(operationId, input = {}) {",
     "    const operation = operations[operationId];",
     "    if (operation === undefined) throw new Error('Unknown operation ' + operationId);",
+    "    validateOperationInput(operation, input, this.validator);",
     "    const path = operation.path.replace(/\\{([^}]+)\\}/g, (_match, name) => encodeURIComponent(input.pathParams?.[name] ?? (() => { throw new Error('Missing path parameter: ' + name); })()));",
     "    const absolute = /^https?:\\/\\//i.test(this.baseUrl);",
     "    const url = absolute ? new URL(this.baseUrl + path) : new URL(this.baseUrl + path, 'http://v2-contract.invalid');",
@@ -195,6 +206,15 @@ function clientJavascript(operations) {
     "    if (!response.ok) { const error = new Error('API request failed.'); error.status = response.status; error.problem = payload; error.headers = responseHeaders; throw error; }",
     "    return { status: response.status, data: payload, headers: responseHeaders };",
     "  }",
+    "}",
+    "function findHeader(headers, name) { const key = Object.keys(headers ?? {}).find((candidate) => candidate.toLowerCase() === name.toLowerCase()); return key === undefined ? undefined : headers?.[key]; }",
+    "function validateOperationInput(operation, input, validator) {",
+    "  if (validator === undefined) throw new Error('A runtime validator is required before sending a request.');",
+    "  const containers = { path: input.pathParams, query: input.query, header: input.headers };",
+    "  const declaredHeaders = new Set((operation.parameters ?? []).filter((parameter) => parameter.in === 'header').map((parameter) => parameter.name.toLowerCase()));",
+    "  for (const parameter of operation.parameters ?? []) { const value = parameter.in === 'header' ? findHeader(containers.header, parameter.name) : containers[parameter.in]?.[parameter.name]; if (value === undefined) { if (parameter.required) throw new Error('Missing required ' + parameter.in + ' parameter: ' + parameter.name); continue; } if (parameter.in === 'header' && typeof value !== 'string') throw new Error('Invalid header: ' + parameter.name); if (parameter.schema !== undefined && !validator.validateSchema(parameter.schema, value)) throw new Error('Invalid ' + parameter.in + ' parameter: ' + parameter.name); }",
+    "  for (const name of Object.keys(containers.header ?? {})) if (!declaredHeaders.has(name.toLowerCase())) throw new Error('Unknown header: ' + name);",
+    "  if (operation.requestSchema !== undefined) { if (!Object.hasOwn(input, 'body') || !validator.validate(operation.requestSchema, input.body)) throw new Error('Invalid ' + operation.requestSchema + ' request body.'); } else if (Object.hasOwn(input, 'body')) throw new Error('Operation does not accept a request body.');",
     "}",
   ].join('\n') + '\n';
 }
