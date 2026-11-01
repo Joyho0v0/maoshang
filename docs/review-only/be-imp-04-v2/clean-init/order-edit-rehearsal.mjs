@@ -119,8 +119,9 @@ function priceForLine(line, entry, state) {
     };
   }
   if (line.itemKind !== 'STANDARD' || typeof line.skuId !== 'string') reject('INVALID_STANDARD_LINE');
-  const sourceCurrency = entry.policyCurrency ?? orderCurrency;
-  const sourceUnitPrice = formatScaled(scaled(entry.policyUnitPrice ?? entry.expectedPrice ?? '19.9900', 4), 4);
+  if (typeof entry.policyCurrency !== 'string' || typeof entry.policyUnitPrice !== 'string') reject('POLICY_FACT_MISSING');
+  const sourceCurrency = entry.policyCurrency;
+  const sourceUnitPrice = formatScaled(scaled(entry.policyUnitPrice, 4), 4);
   let effectiveUnitPrice = sourceUnitPrice;
   let fxSnapshot = null;
   if (sourceCurrency === orderCurrency) {
@@ -158,6 +159,9 @@ function apply(state, entry, key) {
     if (entry.ifMatch !== undefined && entry.ifMatch !== `"v${state.version}"`) reject('STALE_ETAG');
     if (entry.policyVersion !== undefined && entry.policyVersion !== state.policyVersion) reject('POLICY_RECHECK');
     const locked = stateAtLock(state, entry);
+    if (locked.status !== 'DRAFT' || !['INITIAL_CONTACT', 'QUOTING', 'QUOTE_FOLLOW_UP'].includes(locked.stage)) {
+      reject(locked.status === 'CANCELLED' || locked.status === 'FULFILLED' || locked.status === 'CLOSED' ? 'TERMINAL' : 'LATE_STAGE');
+    }
     const preLockById = new Map(state.lines.map((line) => [String(line.lineId), line]));
     const lockedById = new Map(locked.lines.map((line) => [String(line.lineId), line]));
     const stableIds = entry.body.lines.filter((line) => line.lineId !== null).map((line) => String(line.lineId));
@@ -221,7 +225,7 @@ for (const entry of rehearsal.cases) {
   const state = stateForEntry(entry);
   const key = `edit-${entry.name}`;
   const result = apply(state, entry, key);
-  assert(result.outcome === entry.expectedOutcome, `${entry.name} expected ${entry.expectedOutcome} but execution returned ${result.outcome}`);
+  assert(result.outcome === entry.expectedOutcome, `${entry.name} expected ${entry.expectedOutcome} but execution returned ${result.outcome}; actualFailure=${result.failure ?? 'none'}`);
   if (entry.expectedOutcome === 'ROLLBACK') {
     assert(result.failure === entry.expectedFailure, `${entry.name} returned ${result.failure}, expected ${entry.expectedFailure}`);
     if (entry.expectedRecovery !== undefined) assert(result.recovery === entry.expectedRecovery, `${entry.name} recovery classification mismatch`);
