@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import pg from 'pg';
+import { vi } from 'vitest';
 import { createApp } from '../../apps/api/src/main.js';
 import { ControlledAuthenticationProvider, hashControlledPassword } from '../../apps/api/src/modules/identity/application/controlled-authentication.provider.js';
 import { IdempotencyOwnershipLostError, IDEMPOTENCY_REPOSITORY, type PostgresIdempotencyRepository } from '../../apps/api/src/modules/integration/idempotency/postgres-idempotency-repository.js';
@@ -7,6 +8,7 @@ import { IdempotencyOwnershipLostError, IDEMPOTENCY_REPOSITORY, type PostgresIde
 describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
   const organizationId = '00000000-0000-4000-8000-000000000701';
   const actorId = '00000000-0000-4000-8000-000000000702';
+  const actorBId = '00000000-0000-4000-8000-000000000714';
   const groupId = '00000000-0000-4000-8000-000000000703';
   const customerId = '00000000-0000-4000-8000-000000000704';
   const imageFileId = '00000000-0000-4000-8000-000000000711';
@@ -16,6 +18,8 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
   let app: Awaited<ReturnType<typeof createApp>> | undefined;
   let cookie = '';
   let csrfToken = '';
+  let actorBCookie = '';
+  let actorBCsrfToken = '';
 
   beforeAll(async () => {
     const databaseUrl = process.env.DATABASE_URL;
@@ -24,7 +28,10 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
     await seed(pool);
     app = await createApp({
       config: { nodeEnv: 'test', databaseUrl, sessionSecret: 's'.repeat(32) },
-      authenticationProvider: new ControlledAuthenticationProvider([{ username: 'v2@example.test', subject: 'v2-subject', passwordHash: hashControlledPassword('pw') }]),
+      authenticationProvider: new ControlledAuthenticationProvider([
+        { username: 'v2@example.test', subject: 'v2-subject', passwordHash: hashControlledPassword('pw') },
+        { username: 'v2-actor-b@example.test', subject: 'v2-actor-b-subject', passwordHash: hashControlledPassword('pw-b') },
+      ]),
     });
     await app.init();
     const http = app.getHttpAdapter().getInstance();
@@ -39,6 +46,17 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
     expect(login.statusCode).toBe(201);
     cookie = cookieFrom(login.headers['set-cookie']);
     csrfToken = login.json().csrfToken as string;
+    const actorBCsrf = await http.inject({ method: 'GET', url: '/api/v1/auth/csrf' });
+    const actorBBootstrapCookie = cookieFrom(actorBCsrf.headers['set-cookie']);
+    const actorBLogin = await http.inject({
+      method: 'POST',
+      url: '/api/v1/auth/sessions',
+      headers: { cookie: actorBBootstrapCookie, 'x-csrf-token': actorBCsrf.json().csrfToken },
+      payload: { provider: 'LOCAL_PASSWORD', username: 'v2-actor-b@example.test', password: 'pw-b' },
+    });
+    expect(actorBLogin.statusCode).toBe(201);
+    actorBCookie = cookieFrom(actorBLogin.headers['set-cookie']);
+    actorBCsrfToken = actorBLogin.json().csrfToken as string;
   });
 
   afterAll(async () => {
@@ -177,6 +195,49 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
     expect(crossSnapshotRows).toHaveLength(2);
     expect(new Set(crossSnapshotRows.map((row) => row.price_snapshot_v2_id)).size).toBe(2);
     expect(new Set(crossSnapshotRows.map((row) => row.fx_snapshot_v2_id)).size).toBe(2);
+    const actorScopedLineId = crossCurrencyOrder.json().lines[0].lineId as string;
+    const actorScopedOrderId = crossCurrencyOrder.json().id as string;
+    const actorScopedPayload = { lines: [{ itemKind: 'STANDARD', lineId: actorScopedLineId, skuId: sku.json().id, quantity: '2', imageFileId: null }] };
+    const frozenApplicationNow = new Date('2026-01-01T00:00:00.123Z').valueOf();
+    const actorScopedBefore = (await pool.query<{ price: number; fx: number; audits: number; outbox: number }>('SELECT (SELECT count(*)::int FROM catalog.price_snapshot_v2 WHERE organization_id=$1) AS price,(SELECT count(*)::int FROM orders.fx_snapshot_v2 WHERE organization_id=$1) AS fx,(SELECT count(*)::int FROM audit.audit_event WHERE organization_id=$1 AND resource_type=\'ORDER\' AND resource_id=$2 AND action=\'order.updated\') AS audits,(SELECT count(*)::int FROM integration.outbox_event WHERE organization_id=$1 AND aggregate_type=\'ORDER\' AND aggregate_id=$2 AND event_type=\'order.updated\') AS outbox', [organizationId, actorScopedOrderId])).rows[0]!;
+    const actorScopedPriceIdsBefore = new Set((await pool.query<{ id: string }>('SELECT id FROM catalog.price_snapshot_v2 WHERE organization_id=$1', [organizationId])).rows.map((row) => row.id));
+    const actorScopedFxIdsBefore = new Set((await pool.query<{ id: string }>('SELECT id FROM orders.fx_snapshot_v2 WHERE organization_id=$1', [organizationId])).rows.map((row) => row.id));
+    vi.spyOn(Date, 'now').mockReturnValue(frozenApplicationNow);
+    try {
+      const actorAEdit = await http.inject({ method: 'PATCH', url: `/api/v2/orders/${actorScopedOrderId}`, headers: { ...mutationHeaders, 'idempotency-key': 'v2-actor-shared-key', 'if-match': '"v1"' }, payload: actorScopedPayload });
+      expect(actorAEdit.statusCode).toBe(200);
+      const actorBEdit = await http.inject({ method: 'PATCH', url: `/api/v2/orders/${actorScopedOrderId}`, headers: { cookie: actorBCookie, 'x-csrf-token': actorBCsrfToken, 'idempotency-key': 'v2-actor-shared-key', 'if-match': '"v2"' }, payload: actorScopedPayload });
+      expect(actorBEdit.statusCode).toBe(200);
+    } finally {
+      vi.restoreAllMocks();
+    }
+    const actorScopedRows = (await pool.query<{ actor_user_id: string; command_id: string; state: string }>('SELECT r.actor_user_id,r.id AS command_id,r.state FROM integration.idempotency_record r WHERE r.organization_id=$1 AND r.operation_id=\'updateOrderV2\' AND r.key_hash=digest($2,\'sha256\') ORDER BY r.actor_user_id', [organizationId, 'v2-actor-shared-key'])).rows;
+    expect(actorScopedRows).toHaveLength(2);
+    expect(actorScopedRows.map((row) => row.actor_user_id).sort()).toEqual([actorBId, actorId].sort());
+    expect(new Set(actorScopedRows.map((row) => row.command_id)).size).toBe(2);
+    expect(new Set(actorScopedRows.map((row) => row.state))).toEqual(new Set(['SUCCEEDED']));
+    const actorScopedPriceIdsAfter = new Set((await pool.query<{ id: string }>('SELECT id FROM catalog.price_snapshot_v2 WHERE organization_id=$1', [organizationId])).rows.map((row) => row.id));
+    const actorScopedFxIdsAfter = new Set((await pool.query<{ id: string }>('SELECT id FROM orders.fx_snapshot_v2 WHERE organization_id=$1', [organizationId])).rows.map((row) => row.id));
+    const newPriceSnapshotIds = [...actorScopedPriceIdsAfter].filter((id) => !actorScopedPriceIdsBefore.has(id));
+    const newFxSnapshotIds = [...actorScopedFxIdsAfter].filter((id) => !actorScopedFxIdsBefore.has(id));
+    expect(newPriceSnapshotIds).toHaveLength(2);
+    expect(newFxSnapshotIds).toHaveLength(2);
+    console.info(`P1_05_01_ACTOR_COMMANDS ${JSON.stringify({ actorScopedRows, newPriceSnapshotIds, newFxSnapshotIds })}`);
+    const actorScopedEffects = (await pool.query<{ version: number; audits: number; outbox: number; snapshots: number; fx: number }>('SELECT (SELECT version FROM orders.order_header WHERE organization_id=$1 AND id=$2)::int AS version,(SELECT count(*)::int FROM audit.audit_event WHERE organization_id=$1 AND resource_type=\'ORDER\' AND resource_id=$2 AND action=\'order.updated\') AS audits,(SELECT count(*)::int FROM integration.outbox_event WHERE organization_id=$1 AND aggregate_type=\'ORDER\' AND aggregate_id=$2 AND event_type=\'order.updated\') AS outbox,(SELECT count(*)::int FROM catalog.price_snapshot_v2 WHERE organization_id=$1) AS snapshots,(SELECT count(*)::int FROM orders.fx_snapshot_v2 WHERE organization_id=$1) AS fx', [organizationId, actorScopedOrderId])).rows[0]!;
+    expect(actorScopedEffects.version).toBe(3);
+    expect(actorScopedEffects.audits).toBe(actorScopedBefore.audits + 2);
+    expect(actorScopedEffects.outbox).toBe(actorScopedBefore.outbox + 2);
+    expect(actorScopedEffects.snapshots).toBe(actorScopedBefore.price + 2);
+    expect(actorScopedEffects.fx).toBe(actorScopedBefore.fx + 2);
+    const actorAReplay = await http.inject({ method: 'PATCH', url: `/api/v2/orders/${actorScopedOrderId}`, headers: { ...mutationHeaders, 'idempotency-key': 'v2-actor-shared-key', 'if-match': '"v1"' }, payload: actorScopedPayload });
+    const actorBReplay = await http.inject({ method: 'PATCH', url: `/api/v2/orders/${actorScopedOrderId}`, headers: { cookie: actorBCookie, 'x-csrf-token': actorBCsrfToken, 'idempotency-key': 'v2-actor-shared-key', 'if-match': '"v2"' }, payload: actorScopedPayload });
+    expect(actorAReplay.statusCode).toBe(200);
+    expect(actorBReplay.statusCode).toBe(200);
+    expect(actorAReplay.headers['idempotent-replay']).toBe('true');
+    expect(actorBReplay.headers['idempotent-replay']).toBe('true');
+    const actorScopedReplayEffects = (await pool.query<{ version: number; audits: number; outbox: number; snapshots: number; fx: number }>('SELECT (SELECT version FROM orders.order_header WHERE organization_id=$1 AND id=$2)::int AS version,(SELECT count(*)::int FROM audit.audit_event WHERE organization_id=$1 AND resource_type=\'ORDER\' AND resource_id=$2 AND action=\'order.updated\') AS audits,(SELECT count(*)::int FROM integration.outbox_event WHERE organization_id=$1 AND aggregate_type=\'ORDER\' AND aggregate_id=$2 AND event_type=\'order.updated\') AS outbox,(SELECT count(*)::int FROM catalog.price_snapshot_v2 WHERE organization_id=$1) AS snapshots,(SELECT count(*)::int FROM orders.fx_snapshot_v2 WHERE organization_id=$1) AS fx', [organizationId, actorScopedOrderId])).rows[0]!;
+    expect(actorScopedReplayEffects).toEqual(actorScopedEffects);
+    console.info(`P1_05_01_REPLAY_EFFECTS ${JSON.stringify({ actorAStatus: actorAReplay.statusCode, actorBStatus: actorBReplay.statusCode, actorAReplay: actorAReplay.headers['idempotent-replay'], actorBReplay: actorBReplay.headers['idempotent-replay'], effects: actorScopedReplayEffects })}`);
     const policyReplacement = await http.inject({
       method: 'PATCH',
       url: `/api/v2/skus/${sku.json().id}`,
@@ -384,11 +445,17 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
   async function seed(database: pg.Pool): Promise<void> {
     await database.query('INSERT INTO org.organization (id, code, name) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [organizationId, 'v2-formal', 'V2 Formal']);
     await database.query(`INSERT INTO iam.user_account (id, organization_id, provider, provider_subject, username_normalized, display_name) VALUES ($1,$2,'LOCAL_PASSWORD','v2-subject','v2@example.test','V2 User') ON CONFLICT DO NOTHING`, [actorId, organizationId]);
+    await database.query(`INSERT INTO iam.user_account (id, organization_id, provider, provider_subject, username_normalized, display_name) VALUES ($1,$2,'LOCAL_PASSWORD','v2-actor-b-subject','v2-actor-b@example.test','V2 Actor B') ON CONFLICT DO NOTHING`, [actorBId, organizationId]);
     await database.query('INSERT INTO org.business_group (id, organization_id, code, name) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING', [groupId, organizationId, 'V2-GROUP', 'V2 Group']);
     await database.query('INSERT INTO org.membership (id, organization_id, user_id, business_group_id, is_primary) VALUES ($1,$2,$3,$4,true) ON CONFLICT DO NOTHING', ['00000000-0000-4000-8000-000000000705', organizationId, actorId, groupId]);
+    await database.query('INSERT INTO org.membership (id, organization_id, user_id, business_group_id, is_primary) VALUES ($1,$2,$3,$4,true) ON CONFLICT DO NOTHING', ['00000000-0000-4000-8000-000000000715', organizationId, actorBId, groupId]);
     await database.query('INSERT INTO iam.user_role_binding (id, organization_id, user_id, role_id) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING', ['00000000-0000-4000-8000-000000000706', organizationId, actorId, '00000000-0000-4000-8000-000000001001']);
+    await database.query('INSERT INTO iam.user_role_binding (id, organization_id, user_id, role_id) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING', ['00000000-0000-4000-8000-000000000716', organizationId, actorBId, '00000000-0000-4000-8000-000000001001']);
     for (const [id, resourceType] of [['00000000-0000-4000-8000-000000000707', 'ORGANIZATION'], ['00000000-0000-4000-8000-000000000708', 'ORDER'], ['00000000-0000-4000-8000-000000000709', 'FILE']] as const) {
       await database.query('INSERT INTO iam.user_data_scope (id, organization_id, user_id, resource_type, scope_type) VALUES ($1,$2,$3,$4,\'ALL_ORG\') ON CONFLICT DO NOTHING', [id, organizationId, actorId, resourceType]);
+    }
+    for (const [id, resourceType] of [['00000000-0000-4000-8000-000000000717', 'ORGANIZATION'], ['00000000-0000-4000-8000-000000000718', 'ORDER'], ['00000000-0000-4000-8000-000000000719', 'FILE']] as const) {
+      await database.query('INSERT INTO iam.user_data_scope (id, organization_id, user_id, resource_type, scope_type) VALUES ($1,$2,$3,$4,\'ALL_ORG\') ON CONFLICT DO NOTHING', [id, organizationId, actorBId, resourceType]);
     }
     await database.query('INSERT INTO crm.customer (id, organization_id, name, owner_user_id, business_group_id) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING', [customerId, organizationId, 'V2 Customer', actorId, groupId]);
     await database.query(`INSERT INTO files.file_object (id, organization_id, created_by, business_group_id, object_key, original_name, declared_content_type, declared_size_bytes, status, metadata) VALUES ($1,$2,$3,$4,$5,'v2-image.png','image/png',12,'AVAILABLE','{}'::jsonb) ON CONFLICT DO NOTHING`, [imageFileId, organizationId, actorId, groupId, `v2-formal-image-object-key-${imageFileId}`]);
