@@ -1,0 +1,72 @@
+{
+  "name": "autoflow-crm-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Non-production backend foundation for the Autoflow CRM rebuild.",
+  "type": "module",
+  "packageManager": "npm@11.6.2",
+  "engines": {
+    "node": ">=22.22.3"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "22.22.3",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": "11.6.2",
+      "onFail": "error"
+    }
+  },
+  "scripts": {
+    "build:node": "tsc -p tsconfig.build.json",
+    "build:web": "npm --prefix apps/web run build",
+    "build": "npm run build:node && npm run build:web",
+    "start:api": "tsx apps/api/src/main.ts",
+    "start:worker": "tsx apps/worker/src/main.ts",
+    "typecheck:node": "tsc -p tsconfig.json --noEmit",
+    "typecheck:web": "npm --prefix apps/web run typecheck",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:contract": "vitest run tests/contract",
+    "test:integration": "vitest run tests/integration",
+    "test:migration": "vitest run tests/migration",
+    "lint:openapi": "tsx packages/contracts/openapi/lint.ts",
+    "generate:client": "tsx packages/contracts/openapi/generate-client.ts",
+    "contract:breaking": "tsx packages/contracts/openapi/breaking-gate.ts packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml",
+    "contract:breaking:inventory": "tsx packages/contracts/openapi/breaking-inventory.ts packages/contracts/openapi/openapi.baseline.yaml packages/contracts/openapi/openapi.yaml",
+    "contract:digest": "sha256sum packages/contracts/openapi/openapi.yaml",
+    "migration:validate": "tsx packages/database/migrations/validate.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "10.0.1",
+    "@nestjs/common": "12.3.2",
+    "@nestjs/core": "12.3.2",
+    "@nestjs/platform-fastify": "12.3.2",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "fastify": "5.12.7",
+    "pg": "^8.13.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "^10.1.0",
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "eslint": "^9.17.0",
+    "openapi-typescript": "^7.6.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vitest": "4.1.12"
+  }
+}

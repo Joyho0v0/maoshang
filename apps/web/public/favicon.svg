@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-labelledby="title">
+  <title id="title">Autoflow</title>
+  <rect width="32" height="32" rx="4" fill="#5ad0ac" />
+  <path d="M16 5 27 26h-5l-2.1-4.3h-7.8L10 26H5L16 5Zm0 8.3-2.9 5.9h5.8L16 13.3Z" fill="#10233f" />
+</svg>
