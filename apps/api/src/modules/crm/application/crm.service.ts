@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { DomainProblemError } from '../../../common/http/domain-error.js';
-import type { AuthorizationPrincipal, DataScopeGrant } from '../../identity/domain/authz.js';
-import { assertApprovalTransition, canSeeCustomer, customerCapabilities, type ApprovalAction, type CustomerStatus } from '../domain/crm.js';
+import { AuthorizationDeniedError, type AuthorizationPrincipal, type DataScopeGrant } from '../../identity/domain/authz.js';
+import { ApprovalTransitionError, assertApprovalTransition, canSeeCustomer, customerCapabilities, type ApprovalAction, type CustomerStatus } from '../domain/crm.js';
 
 export interface CustomerRecord {
   id: string;
@@ -78,9 +78,8 @@ export class CrmService {
       try {
         assertApprovalTransition({ status: customer.status, action: input.action, ...(typeof customer.approvalSummary?.submitterUserId === 'string' ? { submitterUserId: customer.approvalSummary.submitterUserId } : {}), actorUserId: principal.userId, ...(input.reason === undefined ? {} : { reason: input.reason }), contacts: customer.contacts });
       } catch (error) {
-        const message = error instanceof Error ? error.message : '';
-        if (message === 'submitter-approver-separation') { await this.recordDenied(principal, `customer.${input.action.toLowerCase()}`, customerId, requestId, 'submitter-approver-separation'); throw new DomainProblemError('PERMISSION_DENIED', 403); }
-        if (message === 'REJECTION_REASON_REQUIRED' || message === 'CUSTOMER_APPROVAL_CONTACTS_INCOMPLETE') throw new DomainProblemError('VALIDATION_FAILED', 400);
+        if (error instanceof AuthorizationDeniedError && error.reason === 'submitter-approver-separation') { await this.recordDenied(principal, `customer.${input.action.toLowerCase()}`, customerId, requestId, error.reason); throw new DomainProblemError('PERMISSION_DENIED', 403); }
+        if (error instanceof ApprovalTransitionError && (error.code === 'REJECTION_REASON_REQUIRED' || error.code === 'CUSTOMER_APPROVAL_CONTACTS_INCOMPLETE')) throw new DomainProblemError('VALIDATION_FAILED', 400);
         throw new DomainProblemError('CUSTOMER_APPROVAL_STATE_CONFLICT', 409, { customerId, currentCustomerStatus: customer.status, currentVersion: customer.version });
       }
     }

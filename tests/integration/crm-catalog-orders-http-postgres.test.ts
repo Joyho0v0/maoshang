@@ -92,6 +92,41 @@ describe('CRM/Catalog/Orders HTTP PostgreSQL vertical slice', () => {
     expect(submitted.statusCode).toBe(200);
     expect(submitted.json()).toMatchObject({ status: 'PENDING_APPROVAL', version: 2, approvalSummary: { latestOutcome: 'PENDING' } });
 
+    const customerId = customer.json().id as string;
+    const selfApprovalRequest = {
+      method: 'POST' as const,
+      url: `/api/v1/customers/${customerId}/approve`,
+      headers: { ...headers, 'idempotency-key': 'be-imp-04-customer-self-approve-1', 'if-match': '"v2"', 'x-request-id': '00000000-0000-4000-8000-000000000633' },
+      payload: { action: 'APPROVE' },
+    };
+    const selfApprovalBefore = await pool.query<{ status: string; version: number; denial_count: number; outbox_count: number }>(`SELECT c.status, c.version,
+      (SELECT count(*)::int FROM audit.audit_event WHERE organization_id = $1 AND resource_type = 'CUSTOMER' AND resource_id = $2 AND action = 'customer.approve' AND outcome = 'DENIED' AND reason = 'submitter-approver-separation') AS denial_count,
+      (SELECT count(*)::int FROM integration.outbox_event WHERE organization_id = $1 AND aggregate_type = 'CUSTOMER' AND aggregate_id = $2) AS outbox_count
+      FROM crm.customer c WHERE c.id = $2`, [organizationId, customerId]);
+    const selfApproval = await http.inject(selfApprovalRequest);
+    expect(selfApproval.statusCode).toBe(403);
+    expect(selfApproval.json()).toMatchObject({ status: 403, code: 'PERMISSION_DENIED', retryable: false });
+    expect(selfApproval.headers['x-request-id']).toBe('00000000-0000-4000-8000-000000000633');
+    expect(selfApproval.headers['cache-control']).toBe('no-store');
+    const selfApprovalAfter = await pool.query<{ status: string; version: number; denial_count: number; outbox_count: number }>(`SELECT c.status, c.version,
+      (SELECT count(*)::int FROM audit.audit_event WHERE organization_id = $1 AND resource_type = 'CUSTOMER' AND resource_id = $2 AND action = 'customer.approve' AND outcome = 'DENIED' AND reason = 'submitter-approver-separation') AS denial_count,
+      (SELECT count(*)::int FROM integration.outbox_event WHERE organization_id = $1 AND aggregate_type = 'CUSTOMER' AND aggregate_id = $2) AS outbox_count
+      FROM crm.customer c WHERE c.id = $2`, [organizationId, customerId]);
+    expect(selfApprovalAfter.rows[0]).toEqual({ status: 'PENDING_APPROVAL', version: 2, denial_count: (selfApprovalBefore.rows[0]?.denial_count ?? 0) + 1, outbox_count: selfApprovalBefore.rows[0]?.outbox_count ?? 0 });
+
+    const selfApprovalReplay = await http.inject(selfApprovalRequest);
+    expect(selfApprovalReplay.statusCode).toBe(403);
+    expect(selfApprovalReplay.headers['idempotent-replay']).toBeUndefined();
+    expect(selfApprovalReplay.json()).toMatchObject({ status: 403, code: 'PERMISSION_DENIED', retryable: false });
+    const selfApprovalAfterReplay = await pool.query<{ denial_count: number; outbox_count: number }>(`SELECT
+      (SELECT count(*)::int FROM audit.audit_event WHERE organization_id = $1 AND resource_type = 'CUSTOMER' AND resource_id = $2 AND action = 'customer.approve' AND outcome = 'DENIED' AND reason = 'submitter-approver-separation') AS denial_count,
+      (SELECT count(*)::int FROM integration.outbox_event WHERE organization_id = $1 AND aggregate_type = 'CUSTOMER' AND aggregate_id = $2) AS outbox_count`, [organizationId, customerId]);
+    expect(selfApprovalAfterReplay.rows[0]).toEqual({ denial_count: selfApprovalAfter.rows[0]?.denial_count, outbox_count: selfApprovalAfter.rows[0]?.outbox_count });
+
+    const selfApprovalConflict = await http.inject({ ...selfApprovalRequest, payload: { action: 'APPROVE', reason: 'different canonical body' } });
+    expect(selfApprovalConflict.statusCode).toBe(409);
+    expect(selfApprovalConflict.json()).toMatchObject({ status: 409, code: 'IDEMPOTENCY_KEY_REUSED' });
+
     const order = await http.inject({
       method: 'POST',
       url: '/api/v1/orders',

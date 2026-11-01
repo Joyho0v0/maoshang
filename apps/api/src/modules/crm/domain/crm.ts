@@ -12,16 +12,25 @@ export interface ApprovalTransitionInput {
   contacts?: readonly Record<string, unknown>[];
 }
 
+export type ApprovalTransitionErrorCode = 'CUSTOMER_APPROVAL_STATE_CONFLICT' | 'CUSTOMER_APPROVAL_CONTACTS_INCOMPLETE' | 'REJECTION_REASON_REQUIRED';
+
+export class ApprovalTransitionError extends Error {
+  constructor(readonly code: ApprovalTransitionErrorCode) {
+    super(code);
+    this.name = 'ApprovalTransitionError';
+  }
+}
+
 export function assertApprovalTransition(input: ApprovalTransitionInput): { nextStatus: CustomerStatus; outcome?: 'SUBMITTED' | 'APPROVED' | 'REJECTED' } {
   if (input.action === 'SUBMIT_APPROVAL') {
-    if (input.status !== 'DRAFT') throw new Error('CUSTOMER_APPROVAL_STATE_CONFLICT');
-    if (!hasApprovalReadyContact(input.contacts)) throw new Error('CUSTOMER_APPROVAL_CONTACTS_INCOMPLETE');
+    if (input.status !== 'DRAFT') throw new ApprovalTransitionError('CUSTOMER_APPROVAL_STATE_CONFLICT');
+    if (!hasApprovalReadyContact(input.contacts)) throw new ApprovalTransitionError('CUSTOMER_APPROVAL_CONTACTS_INCOMPLETE');
     return { nextStatus: 'PENDING_APPROVAL', outcome: 'SUBMITTED' };
   }
-  if (input.status !== 'PENDING_APPROVAL') throw new Error('CUSTOMER_APPROVAL_STATE_CONFLICT');
+  if (input.status !== 'PENDING_APPROVAL') throw new ApprovalTransitionError('CUSTOMER_APPROVAL_STATE_CONFLICT');
   if (input.submitterUserId !== undefined) assertDutiesSeparated(input.submitterUserId, input.actorUserId);
   if (input.action === 'REJECT') {
-    if (input.reason === undefined || input.reason.trim().length === 0) throw new Error('REJECTION_REASON_REQUIRED');
+    if (input.reason === undefined || input.reason.trim().length === 0) throw new ApprovalTransitionError('REJECTION_REASON_REQUIRED');
     return { nextStatus: 'DRAFT', outcome: 'REJECTED' };
   }
   return { nextStatus: 'APPROVED', outcome: 'APPROVED' };
