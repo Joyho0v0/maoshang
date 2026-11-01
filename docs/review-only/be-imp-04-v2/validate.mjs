@@ -316,6 +316,7 @@ function orderStateFixture(base, name) {
   const writable = [{ action: 'ADVANCE', toStage: 'QUOTING' }, { action: 'CANCEL' }];
   const baseWritable = { ...base, status: 'DRAFT', stage: 'INITIAL_CONTACT', capabilities: ['order.update', 'order.transition'], allowedTransitions: writable };
   if (name === 'full') return baseWritable;
+  if (name === 'fullReversed') return { ...baseWritable, capabilities: ['order.transition', 'order.update'] };
   if (name === 'updateOnly') return { ...baseWritable, capabilities: ['order.update'], allowedTransitions: [] };
   if (name === 'transitionOnly') return { ...baseWritable, capabilities: ['order.transition'] };
   if (name === 'readOnlyEmpty') return { ...baseWritable, stage: 'QUOTING', capabilities: [], allowedTransitions: [] };
@@ -433,7 +434,20 @@ async function runGeneratedGate() {
     const badNonStandardClient = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(badNonStandard), { status: 200, headers: stateHeaders }) });
     try { await badNonStandardClient.call('getOrderV2', { pathParams: { id: badNonStandard.id }, headers: { 'X-Request-ID': '77777777-7777-7777-8777-777777777777' } }); } catch { badNonStandardRejected = true; }
     assert(badNonStandardRejected, 'NON_STANDARD catalog-policy response was accepted');
-    console.log(`ORDER_STATE_RUNTIME_GATE exit=0 valid=${fixtures.orderStateRehearsal.valid.length} invalid=${fixtures.orderStateRehearsal.invalid.length} lineResponses=${lineResponseCases} lineInvalid=1`);
+    const invalidLineResponseCases = [
+      ['sameCurrencyNonNullFx', { ...fixtures.valid.orderResponse, lines: [{ ...fixtures.valid.orderResponse.lines[0], fxSnapshot: { baseCurrency: 'USD', quoteCurrency: 'USD', rawMarketRate: '1.000000000000', riskBufferBps: 0, effectiveRate: '1.000000000000', source: 'synthetic', capturedAt: '2026-10-31T00:00:00Z' } }] }],
+      ['crossCurrencyNullFx', { ...fixtures.valid.orderResponseCrossCurrency, lines: [{ ...fixtures.valid.orderResponseCrossCurrency.lines[0], fxSnapshot: null }] }],
+      ['crossCurrencyBaseMismatch', { ...fixtures.valid.orderResponseCrossCurrency, lines: [{ ...fixtures.valid.orderResponseCrossCurrency.lines[0], fxSnapshot: { ...fixtures.valid.orderResponseCrossCurrency.lines[0].fxSnapshot, baseCurrency: 'USD' } }] }],
+      ['crossCurrencyQuoteMismatch', { ...fixtures.valid.orderResponseCrossCurrency, lines: [{ ...fixtures.valid.orderResponseCrossCurrency.lines[0], fxSnapshot: { ...fixtures.valid.orderResponseCrossCurrency.lines[0].fxSnapshot, quoteCurrency: 'EUR' } }] }],
+    ];
+    let invalidLineResponseCount = 0;
+    for (const [label, responseValue] of invalidLineResponseCases) {
+      const invalidLineClient = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(responseValue), { status: 200, headers: stateHeaders }) });
+      try { await invalidLineClient.call('getOrderV2', { pathParams: { id: responseValue.id }, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch { invalidLineResponseCount += 1; }
+      assert(invalidLineResponseCount <= invalidLineResponseCases.length, `invalid line response gate overflowed at ${label}`);
+    }
+    assert(invalidLineResponseCount === invalidLineResponseCases.length, `STANDARD FX semantic gate rejected only ${invalidLineResponseCount}/${invalidLineResponseCases.length} invalid cases`);
+    console.log(`ORDER_STATE_RUNTIME_GATE exit=0 valid=${fixtures.orderStateRehearsal.valid.length} invalid=${fixtures.orderStateRehearsal.invalid.length} lineResponses=${lineResponseCases} lineInvalid=${invalidLineResponseCount + 1}`);
     const identityHeaders = { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', etag: '"v1"', 'cache-control': 'no-store', location: '/api/v2/orders/' + fixtures.valid.orderResponse.id };
     const identityClient = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(fixtures.valid.orderResponse), { status: 201, headers: identityHeaders }) });
     await identityClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'identity-ok' }, body: fixtures.valid.standardSameCurrency });

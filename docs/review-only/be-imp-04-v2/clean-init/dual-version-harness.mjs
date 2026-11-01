@@ -27,6 +27,7 @@ const sameKey = 'dual-version-same-original-key';
 const v1OrderBody = { customerId: fixtures.valid.standardSameCurrency.customerId, orderNo: 'V1-DUAL', currency: 'USD', lines: [{ skuId: '11111111-1111-4111-8111-111111111111', quantity: '1.0000', unitPrice: '19.9900' }] };
 const v2OrderBody = fixtures.valid.standardSameCurrency;
 const events = [];
+const stats = { mutations: 0, polls: 0, inProgress: 0, recoveryRequired: 0, terminalProblems: 0, recoverable502: 0, recoverable503: 0, replayRejected: 0 };
 
 function responseHeaders(version, status, extra = {}) {
   if (status >= 400) return version === 'v1'
@@ -37,8 +38,8 @@ function responseHeaders(version, status, extra = {}) {
     : { 'content-type': 'application/json', 'x-request-id': requestId, 'cache-control': 'no-store', 'content-location': '/api/v2/commands/status', 'retry-after': '1', ...extra };
 }
 
-function command(operationId) {
-  return { commandId, operationId, state: 'IN_PROGRESS', startedAt: '2026-10-31T00:00:00Z', expiresAt: '2026-10-31T00:01:00Z', retryAfterMs: 1000, completedAt: null, httpStatus: null, resource: null, resultHref: null, problem: null };
+function command(operationId, state = 'IN_PROGRESS') {
+  return { commandId, operationId, state, startedAt: '2026-10-31T00:00:00Z', expiresAt: '2026-10-31T00:01:00Z', retryAfterMs: state === 'RECOVERY_REQUIRED' ? 0 : 1000, completedAt: null, httpStatus: null, resource: null, resultHref: null, problem: null };
 }
 
 function transport(version, mode = 'success') {
@@ -52,13 +53,19 @@ function transport(version, mode = 'success') {
         : fixtures.valid.problemFileNotReady;
       return new Response(JSON.stringify(problem), { status: 409, headers: responseHeaders(version, 409) });
     }
-    if (mode === 'recoverable' && init.method === 'POST' && rawUrl.endsWith('/orders')) {
+    if (mode.startsWith('recoverable') && init.method === 'POST' && rawUrl.endsWith('/orders')) {
+      const status = mode.includes('502') ? 502 : 503;
+      const code = status === 502 ? 'DEPENDENCY_FAILURE' : 'DEPENDENCY_UNAVAILABLE';
       const problem = version === 'v1'
-        ? { type: 'urn:autoflow:problem:dependency-unavailable', title: 'Dependency unavailable', status: 503, code: 'DEPENDENCY_UNAVAILABLE', requestId, retryable: true }
-        : fixtures.valid.problemDependencyUnavailable;
-      return new Response(JSON.stringify(problem), { status: 503, headers: responseHeaders(version, 503) });
+        ? { type: `urn:autoflow:problem:${code.toLowerCase().replaceAll('_', '-')}`, title: code, status, code, requestId, retryable: true }
+        : fixtures.valid[status === 502 ? 'problemDependencyFailure' : 'problemDependencyUnavailable'];
+      const replay = mode.endsWith('Replay') ? { 'idempotent-replay': 'true' } : {};
+      return new Response(JSON.stringify(problem), { status, headers: responseHeaders(version, status, replay) });
     }
-    if (rawUrl.endsWith('/commands/status')) return new Response(JSON.stringify(command(request.operation)), { status: 200, headers: responseHeaders(version, 200) });
+    if (rawUrl.endsWith('/commands/status')) {
+      const state = mode === 'recovery' ? 'RECOVERY_REQUIRED' : 'IN_PROGRESS';
+      return new Response(JSON.stringify(command(request.operation, state)), { status: 200, headers: responseHeaders(version, 200) });
+    }
     if (init.method === 'POST' && rawUrl.endsWith('/orders')) return new Response(JSON.stringify(command(version === 'v1' ? 'createOrder' : 'createOrderV2')), { status: 202, headers: responseHeaders(version, 202) });
     throw new Error(`unexpected ${version} fake transport request: ${init.method} ${rawUrl}`);
   };
@@ -72,6 +79,8 @@ const cacheKeys = new Set();
 const v1Create = await v1Client.call('createOrder', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': sameKey }, body: v1OrderBody });
 const v2Create = await v2Client.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': sameKey }, body: v2OrderBody });
 assert(v1Create.status === 202 && v2Create.status === 202, 'both versioned mutation clients did not produce command status');
+stats.mutations += 2;
+stats.inProgress += 2;
 pendingCommands.set(`v1:createOrder:${sameKey}`, v1Create.data.commandId);
 pendingCommands.set(`v2:createOrderV2:${sameKey}`, v2Create.data.commandId);
 cacheKeys.add(`v1:ORDER:${fixtures.valid.orderResponse.id}:orders`);
@@ -81,6 +90,7 @@ assert(pendingCommands.size === 2 && cacheKeys.size === 2, 'versioned pending/ca
 const v1Status = await v1Client.call('getCommandStatus', { headers: { 'Idempotency-Key': sameKey, 'X-Command-Operation': 'createOrder' } });
 const v2Status = await v2Client.call('getCommandStatusV2', { headers: { 'Idempotency-Key': sameKey, 'X-Command-Operation': 'createOrderV2', 'X-Request-ID': requestId } });
 assert(v1Status.data.operationId === 'createOrder' && v2Status.data.operationId === 'createOrderV2', 'versioned command polling crossed operation identity');
+stats.polls += 2;
 assert(events.filter((event) => event.key === sameKey).every((event) => event.url.startsWith(`/api/${event.version}/`)), 'same-key requests crossed version base paths');
 assert(events.some((event) => event.version === 'v1' && event.url === '/api/v1/orders') && events.some((event) => event.version === 'v2' && event.url === '/api/v2/orders'), 'fake transport did not observe both versioned mutations');
 
@@ -91,15 +101,48 @@ for (const [version, client, operation, input] of [
   let observed = false;
   try { await client.call(operation, input); } catch (error) { observed = error?.status === 409 && error?.problem?.code === 'FILE_NOT_READY'; }
   assert(observed, `${version} terminal Problem did not stay in its versioned error branch`);
+  const terminalEvent = events.at(-1);
+  assert(terminalEvent?.version === version && terminalEvent.key === input.headers['Idempotency-Key'] && terminalEvent.operation === operation && terminalEvent.url === `/api/${version}/orders`, `${version} terminal Problem request crossed version or operation identity`);
+  stats.terminalProblems += 1;
 }
 
 for (const [version, client, operation, input] of [
-  ['v1', new GeneratedV1Client({ validator: v1Validator, fetch: transport('v1', 'recoverable') }), 'createOrder', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'recoverable-v1' }, body: v1OrderBody }],
-  ['v2', new clientModule.GeneratedV2Client({ validator: v2Validator, fetch: transport('v2', 'recoverable') }), 'createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'recoverable-v2' }, body: v2OrderBody }],
+  ['v1', new GeneratedV1Client({ validator: v1Validator, fetch: transport('v1', 'recovery') }), 'createOrder', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'recovery-v1' }, body: v1OrderBody }],
+  ['v2', new clientModule.GeneratedV2Client({ validator: v2Validator, fetch: transport('v2', 'recovery') }), 'createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'recovery-v2' }, body: v2OrderBody }],
 ]) {
-  let observed = false;
-  try { await client.call(operation, input); } catch (error) { observed = error?.status === 503 && error?.problem?.retryable === true; }
-  assert(observed, `${version} 503 did not stay recoverable in its versioned error branch`);
+  const accepted = await client.call(operation, input);
+  const status = version === 'v1'
+    ? await client.call('getCommandStatus', { headers: { 'Idempotency-Key': input.headers['Idempotency-Key'], 'X-Command-Operation': 'createOrder' } })
+    : await client.call('getCommandStatusV2', { headers: { 'Idempotency-Key': input.headers['Idempotency-Key'], 'X-Command-Operation': 'createOrderV2', 'X-Request-ID': requestId } });
+  assert(accepted.status === 202 && status.data.state === 'RECOVERY_REQUIRED' && status.data.operationId === (version === 'v1' ? 'createOrder' : 'createOrderV2'), `${version} RECOVERY_REQUIRED branch crossed version or state identity`);
+  const recoveryEvents = events.filter((event) => event.key === input.headers['Idempotency-Key']);
+  assert(recoveryEvents.length === 2 && recoveryEvents[0].version === version && recoveryEvents[0].url === `/api/${version}/orders` && recoveryEvents[0].operation === operation && recoveryEvents[1].version === version && recoveryEvents[1].url === `/api/${version}/commands/status` && recoveryEvents[1].operation === (version === 'v1' ? 'createOrder' : 'createOrderV2'), `${version} RECOVERY_REQUIRED requests crossed version or operation identity`);
+  stats.mutations += 1;
+  stats.polls += 1;
+  stats.recoveryRequired += 1;
+}
+
+for (const status of [502, 503]) {
+  for (const [version, client, operation, input] of [
+    ['v1', new GeneratedV1Client({ validator: v1Validator, fetch: transport('v1', `recoverable${status}`) }), 'createOrder', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': `recoverable-${status}-v1` }, body: v1OrderBody }],
+    ['v2', new clientModule.GeneratedV2Client({ validator: v2Validator, fetch: transport('v2', `recoverable${status}`) }), 'createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': `recoverable-${status}-v2` }, body: v2OrderBody }],
+  ]) {
+    let observed = false;
+    try { await client.call(operation, input); } catch (error) { observed = error?.status === status && error?.problem?.retryable === true && error?.headers?.['Idempotent-Replay'] === undefined; }
+    assert(observed, `${version} ${status} normal recovery did not preserve retryable/no-replay semantics`);
+    const recoveryEvent = events.at(-1);
+    assert(recoveryEvent?.version === version && recoveryEvent.key === input.headers['Idempotency-Key'] && recoveryEvent.operation === operation && recoveryEvent.url === `/api/${version}/orders`, `${version} ${status} request crossed version or operation identity`);
+    stats[status === 502 ? 'recoverable502' : 'recoverable503'] += 1;
+  }
+}
+
+for (const status of [502, 503]) {
+  const client = new clientModule.GeneratedV2Client({ validator: v2Validator, fetch: transport('v2', `recoverable${status}Replay`) });
+  let rejected = false;
+  try { await client.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': `replay-${status}-v2` }, body: v2OrderBody }); } catch (error) { rejected = /Forbidden response header|recoverable problem cannot be replayed/i.test(error?.message ?? ''); }
+  assert(rejected, `v2 recoverable ${status} incorrectly accepted Idempotent-Replay`);
+  assert(events.at(-1)?.version === 'v2' && events.at(-1).key === `replay-${status}-v2` && events.at(-1).operation === 'createOrderV2' && events.at(-1).url === '/api/v2/orders', `v2 replay rejection ${status} crossed version or operation identity`);
+  stats.replayRejected += 1;
 }
 
 assert(fixtures.valid.problemDependencyFailure.code === 'DEPENDENCY_FAILURE' && fixtures.valid.problemDependencyUnavailable.code === 'DEPENDENCY_UNAVAILABLE', 'dependency recovery fixtures are missing');
@@ -109,4 +152,4 @@ assert(fixtures.valid.problemCsrfFailed.meta.refreshHref === '/api/v2/auth/csrf'
 const canonicalCapability = 'customer.submit-approval';
 assert(/^[a-z][a-z0-9.:-]{1,127}$/.test(canonicalCapability), 'canonical capability is invalid');
 assert(!/customer\.submitApproval/.test(JSON.stringify(fixtures)), 'camelCase capability alias is present in v2 fixtures');
-console.log(`DUAL_VERSION_HARNESS exit=0 requests=${events.length} mutations=2 polls=2 terminalProblems=2 recoverable503=2 cacheKeys=2 pendingKeys=2 v1=/api/v1 v2=/api/v2`);
+console.log(`DUAL_VERSION_HARNESS exit=0 requests=${events.length} mutations=${stats.mutations} polls=${stats.polls} inProgress=${stats.inProgress} recoveryRequired=${stats.recoveryRequired} terminalProblems=${stats.terminalProblems} recoverable502=${stats.recoverable502} recoverable503=${stats.recoverable503} replayRejected=${stats.replayRejected} cacheKeys=${cacheKeys.size} pendingKeys=${pendingCommands.size} v1=/api/v1 v2=/api/v2`);
