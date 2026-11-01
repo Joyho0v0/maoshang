@@ -21,23 +21,32 @@ export function validateV2Request(request: FastifyRequest, operation: V2Operatio
   const params = request.params as Record<string, unknown> | undefined;
   const query = request.query as Record<string, unknown> | undefined;
   const headers = request.headers as Record<string, unknown>;
-  const errors: string[] = [];
+  const violations: Array<{ field: string; code: string; message: string }> = [];
+  const queryParameters = (operation.parameters ?? []).filter((parameter) => parameter.in === 'query') as readonly V2Parameter[];
+  const declaredQueries = new Set(queryParameters.map((parameter) => parameter.name));
+  for (const name of Object.keys(query ?? {})) {
+    if (!declaredQueries.has(name)) violations.push({ field: name, code: 'UNKNOWN_QUERY_PARAMETER', message: `Unknown query parameter: ${name}` });
+  }
   for (const parameter of (operation.parameters ?? []) as readonly V2Parameter[]) {
     const container = parameter.in === 'path' ? params : parameter.in === 'query' ? query : headers;
     const raw = parameter.in === 'header' ? findHeader(headers, parameter.name) : container?.[parameter.name];
     if (raw === undefined) {
-      if (parameter.required) errors.push(`Missing ${parameter.in} parameter: ${parameter.name}`);
+      if (parameter.required) violations.push({ field: parameter.name, code: 'MISSING_PARAMETER', message: `Missing ${parameter.in} parameter: ${parameter.name}` });
       continue;
     }
-    if (parameter.in === 'query' && Array.isArray(raw)) errors.push(`Duplicate query parameter: ${parameter.name}`);
-    if (parameter.in === 'header' && typeof raw !== 'string') errors.push(`Invalid header: ${parameter.name}`);
-    if (parameter.schema !== undefined && !validator.validateSchema(parameter.schema, raw)) errors.push(`Invalid ${parameter.in} parameter: ${parameter.name}`);
+    if (parameter.in === 'query' && Array.isArray(raw)) {
+      violations.push({ field: parameter.name, code: 'DUPLICATE_QUERY_PARAMETER', message: `Duplicate query parameter: ${parameter.name}` });
+      continue;
+    }
+    if (parameter.in === 'header' && typeof raw !== 'string') violations.push({ field: parameter.name, code: 'INVALID_HEADER', message: `Invalid header: ${parameter.name}` });
+    const schemaValue = parameter.in === 'query' && parameter.name === 'page[size]' && typeof raw === 'string' && /^[0-9]+$/.test(raw) ? Number(raw) : raw;
+    if (parameter.schema !== undefined && !validator.validateSchema(parameter.schema, schemaValue)) violations.push({ field: parameter.name, code: 'INVALID_PARAMETER', message: `Invalid ${parameter.in} parameter: ${parameter.name}` });
   }
   const declaredHeaders = new Set((operation.parameters ?? [] as readonly V2Parameter[]).filter((parameter) => parameter.in === 'header').map((parameter) => parameter.name.toLowerCase()));
-  for (const name of Object.keys(headers)) if (name !== 'host' && name !== 'content-type' && name !== 'content-length' && !declaredHeaders.has(name.toLowerCase()) && name.startsWith('x-')) errors.push(`Unknown header: ${name}`);
-  if (operation.requestSchema !== undefined && !validator.validate(operation.requestSchema, request.body)) errors.push(`Invalid ${operation.requestSchema} request body`);
-  if (operation.requestSchema === undefined && request.body !== undefined && request.body !== null) errors.push('Operation does not accept a request body');
-  if (errors.length > 0) throw new ProblemError(buildProblem({ status: 400, code: 'VALIDATION_FAILED', title: 'Validation failed', requestId: normalizeRequestId(request.headers['x-request-id']), retryable: false, violations: errors.map((message) => ({ field: 'request', code: 'INVALID', message })) }));
+  for (const name of Object.keys(headers)) if (name !== 'host' && name !== 'content-type' && name !== 'content-length' && !declaredHeaders.has(name.toLowerCase()) && name.startsWith('x-')) violations.push({ field: name, code: 'UNKNOWN_HEADER', message: `Unknown header: ${name}` });
+  if (operation.requestSchema !== undefined && !validator.validate(operation.requestSchema, request.body)) violations.push({ field: 'body', code: 'INVALID_BODY', message: `Invalid ${operation.requestSchema} request body` });
+  if (operation.requestSchema === undefined && request.body !== undefined && request.body !== null) violations.push({ field: 'body', code: 'BODY_NOT_ALLOWED', message: 'Operation does not accept a request body' });
+  if (violations.length > 0) throw new ProblemError(buildProblem({ status: 400, code: 'VALIDATION_FAILED', title: 'Validation failed', requestId: normalizeRequestId(request.headers['x-request-id']), retryable: false, violations }));
 }
 
 export function requiredSafetyHeader(operation: V2Operation, name: string): boolean {

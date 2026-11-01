@@ -10,6 +10,8 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
   const groupId = '00000000-0000-4000-8000-000000000703';
   const customerId = '00000000-0000-4000-8000-000000000704';
   const imageFileId = '00000000-0000-4000-8000-000000000711';
+  const replacementImageFileId = '00000000-0000-4000-8000-000000000712';
+  const notReadyFileId = '00000000-0000-4000-8000-000000000713';
   let pool: pg.Pool | undefined;
   let app: Awaited<ReturnType<typeof createApp>> | undefined;
   let cookie = '';
@@ -48,6 +50,18 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
     if (app === undefined || pool === undefined) return;
     const http = app.getHttpAdapter().getInstance();
     const mutationHeaders = { cookie, 'x-csrf-token': csrfToken };
+
+    const csrfFailure = await http.inject({
+      method: 'POST',
+      url: '/api/v2/products',
+      headers: { cookie, 'idempotency-key': 'v2-csrf-rejection-1' },
+      payload: { productCode: 'V2-CSRF-REJECTED', name: 'CSRF rejected', unit: 'PCS' },
+    });
+    expect(csrfFailure.statusCode).toBe(403);
+    expect(csrfFailure.json()).toMatchObject({ status: 403, code: 'CSRF_FAILED', retryable: true, meta: { kind: 'CSRF', refreshHref: '/api/v2/auth/csrf' } });
+    expect(csrfFailure.headers['cache-control']).toBe('no-store');
+    expect(csrfFailure.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/i);
+
     const productRequest = {
       method: 'POST' as const,
       url: '/api/v2/products',
@@ -63,6 +77,37 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
     expect(productReplay.statusCode).toBe(201);
     expect(productReplay.headers['idempotent-replay']).toBe('true');
 
+    for (const [productCode, name, key] of [['V2-P-ALPHA', 'Alpha', 'v2-product-alpha-1'], ['V2-P-ZULU', 'Zulu', 'v2-product-zulu-1'] as const]) {
+      const created = await http.inject({ method: 'POST', url: '/api/v2/products', headers: { ...mutationHeaders, 'idempotency-key': key }, payload: { productCode, name, unit: 'PCS' } });
+      expect(created.statusCode).toBe(201);
+    }
+    const productsByName = await http.inject({ method: 'GET', url: '/api/v2/products?sort=name&page%5Bsize%5D=100', headers: { cookie } });
+    expect(productsByName.statusCode).toBe(200);
+    expect(productsByName.json().data.map((product: { name: string }) => product.name)).toEqual(['Alpha', 'V2 Product', 'Zulu']);
+    for (const sort of ['name', '-name', 'status', '-status', 'id', '-id', 'createdAt', '-createdAt', 'updatedAt', '-updatedAt', '-updatedAt,-id']) {
+      const response = await http.inject({ method: 'GET', url: `/api/v2/products?sort=${sort}&page%5Bsize%5D=100`, headers: { cookie } });
+      expect(response.statusCode, `Product sort ${sort}`).toBe(200);
+    }
+    const unknownQuery = await http.inject({ method: 'GET', url: '/api/v2/products?unknown=1', headers: { cookie } });
+    expect(unknownQuery.statusCode).toBe(400);
+    expect(unknownQuery.json()).toMatchObject({ code: 'VALIDATION_FAILED', meta: { violations: [{ field: 'unknown' }] } });
+    const duplicateSort = await http.inject({ method: 'GET', url: '/api/v2/products?sort=name&sort=-name', headers: { cookie } });
+    expect(duplicateSort.statusCode).toBe(400);
+    expect(duplicateSort.json()).toMatchObject({ code: 'VALIDATION_FAILED', meta: { violations: [{ field: 'sort' }] } });
+    const firstProductPage = await http.inject({ method: 'GET', url: '/api/v2/products?sort=name&page%5Bsize%5D=1', headers: { cookie } });
+    const nameCursor = firstProductPage.json().page.nextCursor as string;
+    const cursorSortReuse = await http.inject({ method: 'GET', url: `/api/v2/products?sort=-name&page%5Bafter%5D=${encodeURIComponent(nameCursor)}`, headers: { cookie } });
+    expect(cursorSortReuse.statusCode).toBe(400);
+    expect(cursorSortReuse.json()).toMatchObject({ code: 'VALIDATION_FAILED', meta: { kind: 'VALIDATION', violations: [{ field: 'page[after]', code: 'INVALID_CURSOR' }] } });
+
+    const notReadyStatus = await http.inject({ method: 'GET', url: `/api/v2/files/${notReadyFileId}`, headers: { cookie } });
+    expect(notReadyStatus.statusCode).toBe(200);
+    expect(notReadyStatus.json()).toMatchObject({ id: notReadyFileId, status: 'SCANNING', href: `/api/v2/files/${notReadyFileId}` });
+    const notReadyDownload = await http.inject({ method: 'POST', url: `/api/v2/files/${notReadyFileId}/download-intents`, headers: mutationHeaders });
+    expect(notReadyDownload.statusCode).toBe(409);
+    expect(notReadyDownload.json()).toMatchObject({ status: 409, code: 'FILE_NOT_READY', retryable: true, meta: { kind: 'FILE_NOT_READY', fileId: notReadyFileId, state: 'SCANNING', statusHref: `/api/v2/files/${notReadyFileId}` } });
+    expect(notReadyDownload.headers['cache-control']).toBe('no-store');
+
     const sku = await http.inject({
       method: 'POST',
       url: '/api/v2/skus',
@@ -71,6 +116,16 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
     });
     expect(sku.statusCode).toBe(201);
     expect(sku.json()).toMatchObject({ trackingMode: 'NONE', baseUnit: 'PCS', standardizationMode: 'STRICT', lowStockThreshold: '0.000000' });
+    const skusByCode = await http.inject({ method: 'GET', url: '/api/v2/skus?sort=skuCode&page%5Bsize%5D=100', headers: { cookie } });
+    expect(skusByCode.statusCode).toBe(200);
+    expect(skusByCode.json().data.map((value: { skuCode: string }) => value.skuCode)).toEqual(['V2-SKU-1']);
+    for (const sort of ['skuCode', '-skuCode', 'name', '-name', 'status', '-status', 'id', '-id', 'createdAt', '-createdAt', 'updatedAt', '-updatedAt', '-updatedAt,-id']) {
+      const response = await http.inject({ method: 'GET', url: `/api/v2/skus?sort=${sort}&page%5Bsize%5D=100`, headers: { cookie } });
+      expect(response.statusCode, `SKU sort ${sort}`).toBe(200);
+    }
+    const duplicateSkuFilter = await http.inject({ method: 'GET', url: '/api/v2/skus?filter%5Bstatus%5D=ACTIVE&filter%5Bstatus%5D=INACTIVE', headers: { cookie } });
+    expect(duplicateSkuFilter.statusCode).toBe(400);
+    expect(duplicateSkuFilter.json()).toMatchObject({ code: 'VALIDATION_FAILED', meta: { violations: [{ field: 'filter[status]', code: 'DUPLICATE_QUERY_PARAMETER' }] } });
     const policyValidFrom = new Date(Date.now() - 1000).toISOString();
     const policy = await http.inject({
       method: 'PATCH',
@@ -133,6 +188,16 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
     expect(order.statusCode).toBe(201);
     expect(order.json()).toMatchObject({ status: 'DRAFT', stage: 'INITIAL_CONTACT', capabilities: expect.arrayContaining(['order.update', 'order.transition']), allowedTransitions: [{ action: 'ADVANCE', toStage: 'QUOTING' }, { action: 'CANCEL' }] });
     expect(order.json().lines[0]).toMatchObject({ itemKind: 'NON_STANDARD', currency: 'USD', fxSnapshot: null, priceSnapshot: { sourceKind: 'MANUAL_QUOTE', sourceCurrency: 'USD' } });
+    const ordersByNumber = await http.inject({ method: 'GET', url: '/api/v2/orders?sort=orderNo&page%5Bsize%5D=100', headers: { cookie } });
+    expect(ordersByNumber.statusCode).toBe(200);
+    expect(ordersByNumber.json().data.map((value: { orderNo: string }) => value.orderNo)).toEqual(['V2-SO-1', 'V2-SO-EUR-1', 'V2-SO-USD-1']);
+    for (const sort of ['orderNo', '-orderNo', 'status', '-status', 'id', '-id', 'createdAt', '-createdAt', 'updatedAt', '-updatedAt', '-updatedAt,-id']) {
+      const response = await http.inject({ method: 'GET', url: `/api/v2/orders?sort=${sort}&page%5Bsize%5D=100`, headers: { cookie } });
+      expect(response.statusCode, `Order sort ${sort}`).toBe(200);
+    }
+    const duplicateOrderPageSize = await http.inject({ method: 'GET', url: '/api/v2/orders?page%5Bsize%5D=1&page%5Bsize%5D=2', headers: { cookie } });
+    expect(duplicateOrderPageSize.statusCode).toBe(400);
+    expect(duplicateOrderPageSize.json()).toMatchObject({ code: 'VALIDATION_FAILED', meta: { violations: [{ field: 'page[size]', code: 'DUPLICATE_QUERY_PARAMETER' }] } });
 
     const orderId = order.json().id as string;
     const read = await http.inject({ method: 'GET', url: `/api/v2/orders/${orderId}`, headers: { cookie } });
@@ -149,10 +214,43 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
     expect(patch.json().totalAmount).toBe('4.0000');
     await expect(pool.query('SELECT resource_type,resource_id,purpose,resource_owner_id FROM files.file_link WHERE organization_id=$1 AND file_id=$2', [organizationId, imageFileId])).resolves.toMatchObject({ rows: [{ resource_type: 'ORDER', resource_id: orderId, purpose: 'IMAGE', resource_owner_id: actorId }] });
 
+    const replaceImage = await http.inject({
+      method: 'PATCH',
+      url: `/api/v2/orders/${orderId}`,
+      headers: { ...mutationHeaders, 'idempotency-key': 'v2-order-image-replace-1', 'if-match': '"v2"' },
+      payload: { lines: [{ itemKind: 'NON_STANDARD', lineId: order.json().lines[0].lineId, name: 'Custom item replaced', unit: 'PCS', quantity: '1', quotedUnitPrice: '5.00', standardizationMode: 'SIMPLE', imageFileId: replacementImageFileId }] },
+    });
+    expect(replaceImage.statusCode).toBe(200);
+    await expect(pool.query('SELECT file_id FROM files.file_link WHERE organization_id=$1 AND resource_type=\'ORDER\' AND resource_id=$2 AND purpose=\'IMAGE\' ORDER BY file_id', [organizationId, orderId])).resolves.toMatchObject({ rows: [{ file_id: replacementImageFileId }] });
+    const replaceReplay = await http.inject({
+      method: 'PATCH',
+      url: `/api/v2/orders/${orderId}`,
+      headers: { ...mutationHeaders, 'idempotency-key': 'v2-order-image-replace-1', 'if-match': '"v2"' },
+      payload: { lines: [{ itemKind: 'NON_STANDARD', lineId: order.json().lines[0].lineId, name: 'Custom item replaced', unit: 'PCS', quantity: '1', quotedUnitPrice: '5.00', standardizationMode: 'SIMPLE', imageFileId: replacementImageFileId }] },
+    });
+    expect(replaceReplay.statusCode).toBe(200);
+    await expect(pool.query('SELECT count(*)::int AS count FROM files.file_link WHERE organization_id=$1 AND resource_type=\'ORDER\' AND resource_id=$2 AND purpose=\'IMAGE\'', [organizationId, orderId])).resolves.toMatchObject({ rows: [{ count: 1 }] });
+    const removeImage = await http.inject({
+      method: 'PATCH',
+      url: `/api/v2/orders/${orderId}`,
+      headers: { ...mutationHeaders, 'idempotency-key': 'v2-order-image-remove-1', 'if-match': '"v3"' },
+      payload: { lines: [{ itemKind: 'NON_STANDARD', lineId: order.json().lines[0].lineId, name: 'Custom item without image', unit: 'PCS', quantity: '1', quotedUnitPrice: '5.00', standardizationMode: 'SIMPLE', imageFileId: null }] },
+    });
+    expect(removeImage.statusCode).toBe(200);
+    await expect(pool.query('SELECT count(*)::int AS count FROM files.file_link WHERE organization_id=$1 AND resource_type=\'ORDER\' AND resource_id=$2 AND purpose=\'IMAGE\'', [organizationId, orderId])).resolves.toMatchObject({ rows: [{ count: 0 }] });
+    const rollbackImage = await http.inject({
+      method: 'PATCH',
+      url: `/api/v2/orders/${orderId}`,
+      headers: { ...mutationHeaders, 'idempotency-key': 'v2-order-image-rollback-1', 'if-match': '"v4"' },
+      payload: { lines: [{ itemKind: 'NON_STANDARD', lineId: order.json().lines[0].lineId, name: 'Should rollback', unit: 'PCS', quantity: '1', quotedUnitPrice: '6.00', standardizationMode: 'SIMPLE', imageFileId: notReadyFileId }] },
+    });
+    expect(rollbackImage.statusCode).toBe(409);
+    await expect(pool.query('SELECT count(*)::int AS count FROM files.file_link WHERE organization_id=$1 AND resource_type=\'ORDER\' AND resource_id=$2 AND purpose=\'IMAGE\'', [organizationId, orderId])).resolves.toMatchObject({ rows: [{ count: 0 }] });
+
     const cancelled = await http.inject({
       method: 'POST',
       url: `/api/v2/orders/${orderId}/transitions`,
-      headers: { ...mutationHeaders, 'idempotency-key': 'v2-order-cancel-1', 'if-match': '"v2"' },
+      headers: { ...mutationHeaders, 'idempotency-key': 'v2-order-cancel-1', 'if-match': '"v4"' },
       payload: { action: 'CANCEL' },
     });
     expect(cancelled.statusCode).toBe(200);
@@ -194,6 +292,8 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
     }
     await database.query('INSERT INTO crm.customer (id, organization_id, name, owner_user_id, business_group_id) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING', [customerId, organizationId, 'V2 Customer', actorId, groupId]);
     await database.query(`INSERT INTO files.file_object (id, organization_id, created_by, business_group_id, object_key, original_name, declared_content_type, declared_size_bytes, status, metadata) VALUES ($1,$2,$3,$4,$5,'v2-image.png','image/png',12,'AVAILABLE','{}'::jsonb) ON CONFLICT DO NOTHING`, [imageFileId, organizationId, actorId, groupId, `v2-formal-image-object-key-${imageFileId}`]);
+    await database.query(`INSERT INTO files.file_object (id, organization_id, created_by, business_group_id, object_key, original_name, declared_content_type, declared_size_bytes, status, metadata) VALUES ($1,$2,$3,$4,$5,'v2-replacement-image.png','image/png',12,'AVAILABLE','{}'::jsonb) ON CONFLICT DO NOTHING`, [replacementImageFileId, organizationId, actorId, groupId, `v2-formal-replacement-image-object-key-${replacementImageFileId}`]);
+    await database.query(`INSERT INTO files.file_object (id, organization_id, created_by, business_group_id, object_key, original_name, declared_content_type, declared_size_bytes, status, metadata) VALUES ($1,$2,$3,$4,$5,'v2-not-ready-image.png','image/png',12,'SCANNING','{}'::jsonb) ON CONFLICT DO NOTHING`, [notReadyFileId, organizationId, actorId, groupId, `v2-formal-not-ready-image-object-key-${notReadyFileId}`]);
   }
 });
 

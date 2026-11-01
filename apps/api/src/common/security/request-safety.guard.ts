@@ -132,6 +132,7 @@ export class RequestSafetyGuard implements CanActivate {
         method: request.method.toUpperCase() as 'POST' | 'PUT' | 'PATCH' | 'DELETE',
         operationId: operation.operationId,
         authenticated: principal !== undefined,
+        requestId: normalizeRequestId(request.headers['x-request-id']),
         csrfRefreshHref: '/api/v2/auth/csrf',
         ...(csrfToken === undefined ? {} : { csrfToken }),
         ...(expectedCsrfToken === undefined ? {} : { expectedCsrfToken }),
