@@ -126,6 +126,10 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
     const duplicateSkuFilter = await http.inject({ method: 'GET', url: '/api/v2/skus?filter%5Bstatus%5D=ACTIVE&filter%5Bstatus%5D=INACTIVE', headers: { cookie } });
     expect(duplicateSkuFilter.statusCode).toBe(400);
     expect(duplicateSkuFilter.json()).toMatchObject({ code: 'VALIDATION_FAILED', meta: { violations: [{ field: 'filter[status]', code: 'DUPLICATE_QUERY_PARAMETER' }] } });
+    for (const [skuCode, name, key] of [['V2-SKU-2', 'V2 SKU 2', 'v2-sku-command-2'], ['V2-SKU-3', 'V2 SKU 3', 'v2-sku-command-3'] as const]) {
+      const extraSku = await http.inject({ method: 'POST', url: '/api/v2/skus', headers: { ...mutationHeaders, 'idempotency-key': key }, payload: { productId: product.json().id, skuCode, name, unit: 'PCS', standardizationMode: 'STRICT' } });
+      expect(extraSku.statusCode).toBe(201);
+    }
     const policyValidFrom = new Date(Date.now() - 1000).toISOString();
     const policy = await http.inject({
       method: 'PATCH',
@@ -162,6 +166,17 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
     });
     expect(crossCurrencyOrder.statusCode).toBe(201);
     expect(crossCurrencyOrder.json().lines[0]).toMatchObject({ itemKind: 'STANDARD', currency: 'EUR', priceSnapshot: { sourceCurrency: 'USD' }, fxSnapshot: { baseCurrency: 'USD', quoteCurrency: 'EUR', riskBufferBps: 25 } });
+    const crossCurrencyOrderClone = await http.inject({
+      method: 'POST',
+      url: '/api/v2/orders',
+      headers: { ...mutationHeaders, 'idempotency-key': 'v2-standard-order-eur-2' },
+      payload: { customerId, orderNo: 'V2-SO-EUR-2', currency: 'EUR', lines: [{ itemKind: 'STANDARD', skuId: sku.json().id, quantity: '2' }] },
+    });
+    expect(crossCurrencyOrderClone.statusCode).toBe(201);
+    const crossSnapshotRows = (await pool.query<{ order_id: string; price_snapshot_v2_id: string; fx_snapshot_v2_id: string }>('SELECT order_id,price_snapshot_v2_id,fx_snapshot_v2_id FROM orders.order_item WHERE organization_id=$1 AND order_id=ANY($2::uuid[]) ORDER BY order_id', [organizationId, [crossCurrencyOrder.json().id, crossCurrencyOrderClone.json().id]])).rows;
+    expect(crossSnapshotRows).toHaveLength(2);
+    expect(new Set(crossSnapshotRows.map((row) => row.price_snapshot_v2_id)).size).toBe(2);
+    expect(new Set(crossSnapshotRows.map((row) => row.fx_snapshot_v2_id)).size).toBe(2);
     const policyReplacement = await http.inject({
       method: 'PATCH',
       url: `/api/v2/skus/${sku.json().id}`,
@@ -190,7 +205,7 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
     expect(order.json().lines[0]).toMatchObject({ itemKind: 'NON_STANDARD', currency: 'USD', fxSnapshot: null, priceSnapshot: { sourceKind: 'MANUAL_QUOTE', sourceCurrency: 'USD' } });
     const ordersByNumber = await http.inject({ method: 'GET', url: '/api/v2/orders?sort=orderNo&page%5Bsize%5D=100', headers: { cookie } });
     expect(ordersByNumber.statusCode).toBe(200);
-    expect(ordersByNumber.json().data.map((value: { orderNo: string }) => value.orderNo)).toEqual(['V2-SO-1', 'V2-SO-EUR-1', 'V2-SO-USD-1']);
+    expect(ordersByNumber.json().data.map((value: { orderNo: string }) => value.orderNo)).toEqual(['V2-SO-1', 'V2-SO-EUR-1', 'V2-SO-EUR-2', 'V2-SO-USD-1']);
     for (const sort of ['orderNo', '-orderNo', 'status', '-status', 'id', '-id', 'createdAt', '-createdAt', 'updatedAt', '-updatedAt', '-updatedAt,-id']) {
       const response = await http.inject({ method: 'GET', url: `/api/v2/orders?sort=${sort}&page%5Bsize%5D=100`, headers: { cookie } });
       expect(response.statusCode, `Order sort ${sort}`).toBe(200);
@@ -198,6 +213,91 @@ describe('Catalog + Orders v2 HTTP PostgreSQL runtime', () => {
     const duplicateOrderPageSize = await http.inject({ method: 'GET', url: '/api/v2/orders?page%5Bsize%5D=1&page%5Bsize%5D=2', headers: { cookie } });
     expect(duplicateOrderPageSize.statusCode).toBe(400);
     expect(duplicateOrderPageSize.json()).toMatchObject({ code: 'VALIDATION_FAILED', meta: { violations: [{ field: 'page[size]', code: 'DUPLICATE_QUERY_PARAMETER' }] } });
+
+    // Exercise the actual PostgreSQL precision boundary. pg's default Date parser rounds
+    // timestamptz to milliseconds, while the keyset predicate must retain all six digits.
+    await pool.query(`WITH ranked AS (SELECT id, row_number() OVER (ORDER BY id) AS rn FROM catalog.product WHERE organization_id=$1)
+      UPDATE catalog.product p SET created_at=timestamp with time zone '2026-01-01 00:00:00+00' + GREATEST(ranked.rn - 2, 0) * interval '1 microsecond', updated_at=timestamp with time zone '2026-01-01 00:00:00+00' + GREATEST(ranked.rn - 2, 0) * interval '1 microsecond'
+      FROM ranked WHERE p.id=ranked.id`, [organizationId]);
+    await pool.query(`WITH ranked AS (SELECT id, row_number() OVER (ORDER BY id) AS rn FROM catalog.sku WHERE organization_id=$1)
+      UPDATE catalog.sku s SET created_at=timestamp with time zone '2026-01-01 00:00:00+00' + GREATEST(ranked.rn - 2, 0) * interval '1 microsecond', updated_at=timestamp with time zone '2026-01-01 00:00:00+00' + GREATEST(ranked.rn - 2, 0) * interval '1 microsecond'
+      FROM ranked WHERE s.id=ranked.id`, [organizationId]);
+    await pool.query(`WITH ranked AS (SELECT id, row_number() OVER (ORDER BY id) AS rn FROM orders.order_header WHERE organization_id=$1)
+      UPDATE orders.order_header o SET created_at=timestamp with time zone '2026-01-01 00:00:00+00' + GREATEST(ranked.rn - 2, 0) * interval '1 microsecond', updated_at=timestamp with time zone '2026-01-01 00:00:00+00' + GREATEST(ranked.rn - 2, 0) * interval '1 microsecond'
+      FROM ranked WHERE o.id=ranked.id`, [organizationId]);
+    const collectPageIds = async (path: string, sort: string, expectedCount: number): Promise<string[]> => {
+      const ids: string[] = [];
+      let after: string | undefined;
+      for (let page = 0; page < expectedCount + 2; page += 1) {
+        const query = new URLSearchParams({ sort, 'page[size]': '1' });
+        if (after !== undefined) query.set('page[after]', after);
+        const response = await http.inject({ method: 'GET', url: `${path}?${query.toString()}`, headers: { cookie } });
+        expect(response.statusCode, `${path} sort=${sort} page=${page}`).toBe(200);
+        const body = response.json() as { data: Array<{ id: string }>; page: { hasNext: boolean; nextCursor: string | null } };
+        ids.push(...body.data.map((item) => item.id));
+        if (!body.page.hasNext) {
+          expect(body.page.nextCursor).toBeNull();
+          expect(ids).toHaveLength(expectedCount);
+          expect(new Set(ids).size).toBe(expectedCount);
+          return ids;
+        }
+        expect(body.page.nextCursor).toEqual(expect.any(String));
+        expect(body.page.nextCursor).not.toBe(after);
+        after = body.page.nextCursor!;
+      }
+      throw new Error(`keyset pagination did not terminate for ${path} sort=${sort}`);
+    };
+    for (const sort of ['createdAt', '-createdAt', 'updatedAt', '-updatedAt', '-updatedAt,-id']) await collectPageIds('/api/v2/products', sort, 3);
+    for (const sort of ['createdAt', '-createdAt', 'updatedAt', '-updatedAt', '-updatedAt,-id']) await collectPageIds('/api/v2/skus', sort, 3);
+    for (const sort of ['createdAt', '-createdAt', 'updatedAt', '-updatedAt', '-updatedAt,-id']) await collectPageIds('/api/v2/orders', sort, 4);
+
+    const snapshotOrder = await http.inject({
+      method: 'POST',
+      url: '/api/v2/orders',
+      headers: { ...mutationHeaders, 'idempotency-key': 'v2-snapshot-order-1' },
+      payload: { customerId, orderNo: 'V2-SO-SNAPSHOT-1', currency: 'USD', lines: [{ itemKind: 'NON_STANDARD', name: 'Custom item', unit: 'PCS', quantity: '2', quotedUnitPrice: '3.50', standardizationMode: 'SIMPLE' }] },
+    });
+    expect(snapshotOrder.statusCode).toBe(201);
+    const snapshotOrderId = snapshotOrder.json().id as string;
+    const snapshotLineId = snapshotOrder.json().lines[0].lineId as string;
+    const initialOrderId = order.json().id as string;
+    const sameFactOrderSnapshots = (await pool.query<{ order_id: string; snapshot_id: string }>('SELECT order_id,price_snapshot_v2_id AS snapshot_id FROM orders.order_item WHERE organization_id=$1 AND order_id=ANY($2::uuid[]) ORDER BY order_id', [organizationId, [initialOrderId, snapshotOrderId]])).rows;
+    expect(sameFactOrderSnapshots).toHaveLength(2);
+    expect(new Set(sameFactOrderSnapshots.map((row) => row.snapshot_id)).size).toBe(2);
+    const beforeSnapshotEdit = (await pool.query<{ id: string; fingerprint: string }>('SELECT ps.id,ps.fingerprint FROM orders.order_item oi JOIN catalog.price_snapshot_v2 ps ON ps.organization_id=oi.organization_id AND ps.id=oi.price_snapshot_v2_id WHERE oi.organization_id=$1 AND oi.order_id=$2', [organizationId, snapshotOrderId])).rows[0]!;
+    const beforeSnapshotEffects = {
+      snapshots: (await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM catalog.price_snapshot_v2 WHERE organization_id=$1', [organizationId])).rows[0]!.count,
+      audits: (await pool.query<{ count: number }>(`SELECT count(*)::int AS count FROM audit.audit_event WHERE organization_id=$1 AND resource_type='ORDER' AND resource_id=$2 AND action='order.updated'`, [organizationId, snapshotOrderId])).rows[0]!.count,
+      outbox: (await pool.query<{ count: number }>(`SELECT count(*)::int AS count FROM integration.outbox_event WHERE organization_id=$1 AND aggregate_type='ORDER' AND aggregate_id=$2 AND event_type='order.updated'`, [organizationId, snapshotOrderId])).rows[0]!.count,
+    };
+    const snapshotEdit = await http.inject({
+      method: 'PATCH',
+      url: `/api/v2/orders/${snapshotOrderId}`,
+      headers: { ...mutationHeaders, 'idempotency-key': 'v2-snapshot-order-edit-1', 'if-match': '"v1"' },
+      payload: { lines: [{ itemKind: 'NON_STANDARD', lineId: snapshotLineId, name: 'Custom item', unit: 'PCS', quantity: '2', quotedUnitPrice: '3.50', standardizationMode: 'SIMPLE', imageFileId: null }] },
+    });
+    expect(snapshotEdit.statusCode).toBe(200);
+    const afterSnapshotEdit = (await pool.query<{ id: string; fingerprint: string; count: string }>('SELECT oi.price_snapshot_v2_id AS id,ps.fingerprint,(SELECT count(*)::text FROM catalog.price_snapshot_v2 WHERE organization_id=$1 AND fingerprint=$2) FROM orders.order_item oi JOIN catalog.price_snapshot_v2 ps ON ps.organization_id=oi.organization_id AND ps.id=oi.price_snapshot_v2_id WHERE oi.organization_id=$1 AND oi.order_id=$3', [organizationId, beforeSnapshotEdit.fingerprint, snapshotOrderId])).rows[0]!;
+    expect(afterSnapshotEdit.id).not.toBe(beforeSnapshotEdit.id);
+    await expect(pool.query('SELECT id FROM catalog.price_snapshot_v2 WHERE organization_id=$1 AND id=$2', [organizationId, beforeSnapshotEdit.id])).resolves.toMatchObject({ rows: [{ id: beforeSnapshotEdit.id }] });
+    expect(afterSnapshotEdit.count).toBe('1');
+    const afterSnapshotEffects = {
+      snapshots: (await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM catalog.price_snapshot_v2 WHERE organization_id=$1', [organizationId])).rows[0]!.count,
+      audits: (await pool.query<{ count: number }>(`SELECT count(*)::int AS count FROM audit.audit_event WHERE organization_id=$1 AND resource_type='ORDER' AND resource_id=$2 AND action='order.updated'`, [organizationId, snapshotOrderId])).rows[0]!.count,
+      outbox: (await pool.query<{ count: number }>(`SELECT count(*)::int AS count FROM integration.outbox_event WHERE organization_id=$1 AND aggregate_type='ORDER' AND aggregate_id=$2 AND event_type='order.updated'`, [organizationId, snapshotOrderId])).rows[0]!.count,
+    };
+    expect(afterSnapshotEffects).toEqual({ snapshots: beforeSnapshotEffects.snapshots + 1, audits: beforeSnapshotEffects.audits + 1, outbox: beforeSnapshotEffects.outbox + 1 });
+    const snapshotEditReplay = await http.inject({
+      method: 'PATCH',
+      url: `/api/v2/orders/${snapshotOrderId}`,
+      headers: { ...mutationHeaders, 'idempotency-key': 'v2-snapshot-order-edit-1', 'if-match': '"v1"' },
+      payload: { lines: [{ itemKind: 'NON_STANDARD', lineId: snapshotLineId, name: 'Custom item', unit: 'PCS', quantity: '2', quotedUnitPrice: '3.50', standardizationMode: 'SIMPLE', imageFileId: null }] },
+    });
+    expect(snapshotEditReplay.statusCode).toBe(200);
+    expect(snapshotEditReplay.headers['idempotent-replay']).toBe('true');
+    await expect(pool.query<{ count: number }>('SELECT count(*)::int AS count FROM catalog.price_snapshot_v2 WHERE organization_id=$1', [organizationId])).resolves.toMatchObject({ rows: [{ count: afterSnapshotEffects.snapshots }] });
+    await expect(pool.query<{ count: number }>(`SELECT count(*)::int AS count FROM audit.audit_event WHERE organization_id=$1 AND resource_type='ORDER' AND resource_id=$2 AND action='order.updated'`, [organizationId, snapshotOrderId])).resolves.toMatchObject({ rows: [{ count: afterSnapshotEffects.audits }] });
+    await expect(pool.query<{ count: number }>(`SELECT count(*)::int AS count FROM integration.outbox_event WHERE organization_id=$1 AND aggregate_type='ORDER' AND aggregate_id=$2 AND event_type='order.updated'`, [organizationId, snapshotOrderId])).resolves.toMatchObject({ rows: [{ count: afterSnapshotEffects.outbox }] });
 
     const orderId = order.json().id as string;
     const read = await http.inject({ method: 'GET', url: `/api/v2/orders/${orderId}`, headers: { cookie } });
