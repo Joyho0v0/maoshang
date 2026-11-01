@@ -178,12 +178,20 @@ invalid facts. No reset is hidden in migration, application startup, or test
 bootstrap.
 
 The order-edit rehearsal is fixture-driven rather than scenario-name-driven:
-it reads 21 concrete replacement/failure requests, models ordered line
-replacement, immutable append-and-repoint snapshots, same/cross-currency FX,
-NON_STANDARD pricing, image add/replace/remove, and independently counts audit,
-outbox, ledger, rollback, recovery and replay effects. Failed and unknown-result
+it reads 21 concrete replacement/failure requests, derives commit/rollback from
+the execution state, lock-time authoritative reread, If-Match, policy/Files/FX
+context and dependency result, and uses `expectedOutcome` only for assertions.
+It models ordered line replacement, immutable append-and-repoint snapshots,
+same/cross-currency FX with fixed-point rounding, NON_STANDARD pricing, image
+add/replace/remove, and independently counts audit, outbox, ledger, rollback,
+recovery and replay effects. Failed and unknown-result
 cases leave all durable model state unchanged; replay does not duplicate side
 effects.
+
+`clean-init/order-edit-regression.mjs` mutates the expected outcome, injects a
+client FX/snapshot mismatch, and simulates a line-ID allocator collision. The
+gate requires all mutations to be rejected, while the positive replacement
+fixture creates multiple `lineId: null` rows with distinct deterministic UUIDs.
 
 ## Frozen compatibility facts
 

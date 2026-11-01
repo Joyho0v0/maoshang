@@ -610,6 +610,10 @@ async function runGeneratedGate() {
     const orderEditRun = spawnSync(process.execPath, [orderEditHarness, fixturesPath], { encoding: 'utf8' });
     assert(orderEditRun.status === 0, `order edit transaction rehearsal failed: ${orderEditRun.stdout}${orderEditRun.stderr}`);
     process.stdout.write(orderEditRun.stdout);
+    const orderEditRegression = fileURLToPath(new URL('./clean-init/order-edit-regression.mjs', import.meta.url));
+    const orderEditRegressionRun = spawnSync(process.execPath, [orderEditRegression], { encoding: 'utf8' });
+    assert(orderEditRegressionRun.status === 0, `order edit mutation gate failed: ${orderEditRegressionRun.stdout}${orderEditRegressionRun.stderr}`);
+    process.stdout.write(orderEditRegressionRun.stdout);
     const harness = fileURLToPath(new URL('./clean-init/dual-version-harness.mjs', import.meta.url));
     const v1OpenApi = fileURLToPath(new URL('../../../packages/contracts/openapi/openapi.yaml', import.meta.url));
     const tsx = join(process.cwd(), 'node_modules/.bin/tsx');
