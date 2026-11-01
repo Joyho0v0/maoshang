@@ -37,22 +37,25 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.22.3
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            apps/web/package-lock.json
-
-      - name: Pin npm 11.6.2
-        run: npm install --global npm@11.6.2 --ignore-scripts --no-audit --no-fund
 
       - name: Prepare evidence directory
         run: mkdir -p ci-evidence
+
+      - name: Bootstrap and verify npm 11.6.2
+        working-directory: ${{ runner.temp }}
+        run: |
+          set -o pipefail
+          npm install --global npm@11.6.2 --ignore-scripts --no-audit --no-fund \
+            2>&1 | tee "${{ github.workspace }}/ci-evidence/npm-bootstrap.log"
+          actual_npm="$(npm --version)"
+          printf '%s\n' "$actual_npm" \
+            | tee "${{ github.workspace }}/ci-evidence/npm-version.txt"
+          test "$actual_npm" = "11.6.2"
 
       - name: Verify locked toolchain
         run: |
           set -o pipefail
           node --version | tee ci-evidence/node-version.txt
-          npm --version | tee ci-evidence/npm-version.txt
           node tools/install-locked.mjs --check 2>&1 | tee ci-evidence/toolchain-check.log
           node tools/install-locked.mjs --self-test 2>&1 | tee ci-evidence/toolchain-self-test.log
 
