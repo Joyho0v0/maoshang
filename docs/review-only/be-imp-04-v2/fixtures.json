@@ -201,6 +201,21 @@
       "allowedTransitions": [{ "action": "ADVANCE", "toStage": "QUOTING" }, { "action": "CANCEL" }],
       "capabilities": ["order.update", "order.transition"]
     },
+    "orderResponseCrossCurrency": {
+      "id": "55555555-5555-4555-8555-555555555556", "organizationId": "66666666-6666-4666-8666-666666666666", "version": 2, "createdAt": "2026-10-31T00:00:00Z", "updatedAt": "2026-10-31T00:01:00Z", "customerId": "66666666-6666-4666-8666-666666666666", "orderNo": "V2-ORDER-FX", "currency": "USD", "status": "DRAFT", "stage": "INITIAL_CONTACT",
+      "lines": [{ "lineId": "33333333-3333-4333-8333-333333333334", "itemKind": "STANDARD", "skuId": "22222222-2222-4222-8222-222222222222", "standardizationMode": "SIMPLE", "name": "FX SKU", "unit": "piece", "quantity": "1.250000", "effectiveUnitPrice": "21.6000", "lineAmount": "27.0000", "currency": "USD", "priceSnapshot": { "sourceKind": "CATALOG_POLICY", "sourceCurrency": "EUR", "sourceUnitPrice": "20.0000", "capturedAt": "2026-10-31T00:00:00Z" }, "fxSnapshot": { "baseCurrency": "EUR", "quoteCurrency": "USD", "rawMarketRate": "1.080000000000", "riskBufferBps": 0, "effectiveRate": "1.080000000000", "source": "synthetic", "capturedAt": "2026-10-31T00:00:00Z" }, "imageFileId": null }],
+      "totalAmount": "27.0000", "allowedTransitions": [{ "action": "ADVANCE", "toStage": "QUOTING" }, { "action": "CANCEL" }], "capabilities": ["order.update", "order.transition"]
+    },
+    "orderResponseNonStandard": {
+      "id": "55555555-5555-4555-8555-555555555557", "organizationId": "66666666-6666-4666-8666-666666666666", "version": 3, "createdAt": "2026-10-31T00:00:00Z", "updatedAt": "2026-10-31T00:02:00Z", "customerId": "66666666-6666-4666-8666-666666666666", "orderNo": "V2-ORDER-MANUAL", "currency": "EUR", "status": "DRAFT", "stage": "INITIAL_CONTACT",
+      "lines": [{ "lineId": "33333333-3333-4333-8333-333333333335", "itemKind": "NON_STANDARD", "standardizationMode": "SIMPLE", "name": "Manual label", "unit": "piece", "quantity": "2.000000", "effectiveUnitPrice": "19.9900", "lineAmount": "39.9800", "currency": "EUR", "priceSnapshot": { "sourceKind": "MANUAL_QUOTE", "sourceCurrency": "EUR", "sourceUnitPrice": "19.9900", "capturedAt": "2026-10-31T00:00:00Z" }, "fxSnapshot": null, "imageFileId": null }],
+      "totalAmount": "39.9800", "allowedTransitions": [{ "action": "ADVANCE", "toStage": "QUOTING" }, { "action": "CANCEL" }], "capabilities": ["order.update", "order.transition"]
+    },
+    "orderResponseMixedImage": {
+      "id": "55555555-5555-4555-8555-555555555558", "organizationId": "66666666-6666-4666-8666-666666666666", "version": 4, "createdAt": "2026-10-31T00:00:00Z", "updatedAt": "2026-10-31T00:03:00Z", "customerId": "66666666-6666-4666-8666-666666666666", "orderNo": "V2-ORDER-MIXED", "currency": "USD", "status": "DRAFT", "stage": "INITIAL_CONTACT",
+      "lines": [{ "lineId": "33333333-3333-4333-8333-333333333336", "itemKind": "STANDARD", "skuId": "11111111-1111-4111-8111-111111111111", "standardizationMode": "STRICT", "name": "Synthetic SKU", "unit": "piece", "quantity": "2.000000", "effectiveUnitPrice": "19.9900", "lineAmount": "39.9800", "currency": "USD", "priceSnapshot": { "sourceKind": "CATALOG_POLICY", "sourceCurrency": "USD", "sourceUnitPrice": "19.9900", "capturedAt": "2026-10-31T00:00:00Z" }, "fxSnapshot": null, "imageFileId": "33333333-3333-4333-8333-333333333333" }, { "lineId": "33333333-3333-4333-8333-333333333337", "itemKind": "NON_STANDARD", "standardizationMode": "NONE", "name": "Packing", "unit": "set", "quantity": "1.000000", "effectiveUnitPrice": "4.2500", "lineAmount": "4.2500", "currency": "USD", "priceSnapshot": { "sourceKind": "MANUAL_QUOTE", "sourceCurrency": "USD", "sourceUnitPrice": "4.2500", "capturedAt": "2026-10-31T00:00:00Z" }, "fxSnapshot": null, "imageFileId": null }],
+      "totalAmount": "44.2300", "allowedTransitions": [{ "action": "ADVANCE", "toStage": "QUOTING" }, { "action": "CANCEL" }], "capabilities": ["order.update", "order.transition"]
+    },
     "orderUpdateReplacement": {
       "lines": [
         { "itemKind": "STANDARD", "lineId": "33333333-3333-4333-8333-333333333333", "skuId": "11111111-1111-4111-8111-111111111111", "quantity": "2.000000", "imageFileId": null },
@@ -395,14 +410,51 @@
     ]
   },
   "orderStateRehearsal": {
-    "valid": ["writableAdjacent", "readOnlyEmpty", "cancelledEmpty", "fulfilledEmpty"],
-    "invalid": ["fulfilledWithCapabilities", "cancelledWithTransitions", "reversedTransitions", "nonAdjacentTransition", "partialCapabilityState"]
+    "valid": ["updateOnly", "transitionOnly", "full", "readOnlyEmpty", "lateTransitionOnly", "cancelledEmpty", "fulfilledEmpty"],
+    "invalid": ["fulfilledWithCapabilities", "cancelledWithTransitions", "reversedTransitions", "nonAdjacentTransition", "partialCapabilityState", "lateStageWithUpdate"]
   },
   "query": {
     "valid": {
       "productDefaultComposite": { "sort": "-updatedAt,-id", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "productInactiveStatus": { "sort": "-updatedAt,-id", "page[size]": 20, "filter[status]": "INACTIVE" },
+      "productSortName": { "sort": "name", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "productSortNameDesc": { "sort": "-name", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "productSortStatus": { "sort": "status", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "productSortStatusDesc": { "sort": "-status", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "productSortId": { "sort": "id", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "productSortIdDesc": { "sort": "-id", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "productSortCreatedAt": { "sort": "createdAt", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "productSortCreatedAtDesc": { "sort": "-createdAt", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "productSortUpdatedAt": { "sort": "updatedAt", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "productSortUpdatedAtDesc": { "sort": "-updatedAt", "page[size]": 20, "filter[status]": "ACTIVE" },
       "skuDefaultComposite": { "sort": "-updatedAt,-id", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "skuInactiveStatus": { "sort": "-updatedAt,-id", "page[size]": 20, "filter[status]": "INACTIVE" },
+      "skuSortSkuCode": { "sort": "skuCode", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "skuSortSkuCodeDesc": { "sort": "-skuCode", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "skuSortName": { "sort": "name", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "skuSortNameDesc": { "sort": "-name", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "skuSortStatus": { "sort": "status", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "skuSortStatusDesc": { "sort": "-status", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "skuSortId": { "sort": "id", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "skuSortIdDesc": { "sort": "-id", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "skuSortCreatedAt": { "sort": "createdAt", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "skuSortCreatedAtDesc": { "sort": "-createdAt", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "skuSortUpdatedAt": { "sort": "updatedAt", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "skuSortUpdatedAtDesc": { "sort": "-updatedAt", "page[size]": 20, "filter[status]": "ACTIVE" },
       "orderDefaultComposite": { "sort": "-updatedAt,-id", "page[size]": 20, "filter[status]": "DRAFT" },
+      "orderConfirmedStatus": { "sort": "-updatedAt,-id", "page[size]": 20, "filter[status]": "CONFIRMED" },
+      "orderFulfilledStatus": { "sort": "-updatedAt,-id", "page[size]": 20, "filter[status]": "FULFILLED" },
+      "orderCancelledStatus": { "sort": "-updatedAt,-id", "page[size]": 20, "filter[status]": "CANCELLED" },
+      "orderSortOrderNo": { "sort": "orderNo", "page[size]": 20, "filter[status]": "DRAFT" },
+      "orderSortOrderNoDesc": { "sort": "-orderNo", "page[size]": 20, "filter[status]": "DRAFT" },
+      "orderSortStatus": { "sort": "status", "page[size]": 20, "filter[status]": "DRAFT" },
+      "orderSortStatusDesc": { "sort": "-status", "page[size]": 20, "filter[status]": "DRAFT" },
+      "orderSortId": { "sort": "id", "page[size]": 20, "filter[status]": "DRAFT" },
+      "orderSortIdDesc": { "sort": "-id", "page[size]": 20, "filter[status]": "DRAFT" },
+      "orderSortCreatedAt": { "sort": "createdAt", "page[size]": 20, "filter[status]": "DRAFT" },
+      "orderSortCreatedAtDesc": { "sort": "-createdAt", "page[size]": 20, "filter[status]": "DRAFT" },
+      "orderSortUpdatedAt": { "sort": "updatedAt", "page[size]": 20, "filter[status]": "DRAFT" },
+      "orderSortUpdatedAtDesc": { "sort": "-updatedAt", "page[size]": 20, "filter[status]": "DRAFT" },
       "orderCursor": { "sort": "-updatedAt,-id", "page[size]": 20, "filter[status]": "DRAFT", "page[after]": "v2.eyJ2ZXJzaW9uIjoyLCJvcGVyYXRpb24iOiJsaXN0T3JkZXJzVjIiLCJyZXNvdXJjZSI6Ik9SREVSIiwib3JnYW5pemF0aW9uIjoiNjY2NjY2NjYtNjY2Ni00NjY2LTg2NjYtNjY2NjY2NjY2NjY2Iiwic2NvcGVGaW5nZXJwcmludCI6InN5bnRoZXRpYyIsImF1dGh6VmVyc2lvbiI6IjEiLCJzb3J0IjoiLXVwZGF0ZWRBdCwtaWQiLCJmaWx0ZXJzIjoie1wiZmlsdGVyW3N0YXR1c11cIjpcIkRSQUZUXCJ9IiwicGFnZVNpemUiOjIwLCJsYXN0VHVwbGUiOlsiMjAyNi0xMS0wMVQwMDowMDowMC4wMDBaIiwiNTU1NTU1NTUtNTU1NS00NTU1LTg1NTUtNTU1NTU1NTU1NTU1Il19.CSjClYaW8GnzbgsE6QQpJ3UGZTqo1fDt-00lLMulg1Q" }
     },
     "invalid": {
@@ -410,6 +462,7 @@
       "skuUnknownSort": { "sort": "priority" },
       "unknownSort": { "sort": "priority" },
       "duplicateStatus": { "filter[status]": "DRAFT,DRAFT" },
+      "malformedCursor": { "sort": "-updatedAt,-id", "page[size]": 20, "filter[status]": "DRAFT", "page[after]": "not-an-opaque-cursor" },
       "crossResourceCursor": { "sort": "-updatedAt,-id", "page[after]": "v2.eyJ2ZXJzaW9uIjoyLCJvcGVyYXRpb24iOiJsaXN0U2t1c1YyIiwicmVzb3VyY2UiOiJTS1UiLCJvcmdhbml6YXRpb24iOiI2NjY2NjY2Ni02NjY2LTQ2NjYtODY2Ni02NjY2NjY2NjY2NjY2Iiwic2NvcGVGaW5nZXJwcmludCI6InN5bnRoZXRpYyIsImF1dGh6VmVyc2lvbiI6IjEiLCJzb3J0IjoiLXVwZGF0ZWRBdCwtaWQiLCJmaWx0ZXJzIjoie30iLCJwYWdlU2l6ZSI6MjAsImxhc3RUdXBsZSI6WyIyMDI2LTExLTAxVDAwOjAwOjAwLjAwMFoiLCIxNjE2MTYxNi0xNjE2LTQxNjEtODE2MS0xNjE2MTYxNjE2MTYxNiJdfQ.c2lnbmF0dXJl" }
     }
   }

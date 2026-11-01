@@ -228,7 +228,7 @@ function compileFixtures(dereferenced) {
           : name.startsWith('file') ? validators.get('FileStatusV2')
             : name === 'problemDependencyFailure' ? validators.get('Problem502')
               : name === 'problemDependencyUnavailable' ? validators.get('Problem503')
-                : name === 'orderResponse' ? validators.get('OrderV2')
+                : name.startsWith('orderResponse') ? validators.get('OrderV2')
                     : name === 'orderUpdateReplacement' || name === 'orderUpdateMetadataOnly' ? validators.get('OrderUpdateRequestV2')
                     : name === 'orderAdvanceAction' || name === 'orderCancelAction' ? validators.get('OrderTransitionRequestV2')
           : name === 'csrfToken' ? validators.get('CsrfToken')
@@ -315,8 +315,11 @@ function hasDuplicateActivePrimaryPolicy(value) {
 function orderStateFixture(base, name) {
   const writable = [{ action: 'ADVANCE', toStage: 'QUOTING' }, { action: 'CANCEL' }];
   const baseWritable = { ...base, status: 'DRAFT', stage: 'INITIAL_CONTACT', capabilities: ['order.update', 'order.transition'], allowedTransitions: writable };
-  if (name === 'writableAdjacent') return baseWritable;
+  if (name === 'full') return baseWritable;
+  if (name === 'updateOnly') return { ...baseWritable, capabilities: ['order.update'], allowedTransitions: [] };
+  if (name === 'transitionOnly') return { ...baseWritable, capabilities: ['order.transition'] };
   if (name === 'readOnlyEmpty') return { ...baseWritable, stage: 'QUOTING', capabilities: [], allowedTransitions: [] };
+  if (name === 'lateTransitionOnly') return { ...baseWritable, status: 'CONFIRMED', stage: 'DEPOSIT_PENDING', capabilities: ['order.transition'], allowedTransitions: [{ action: 'ADVANCE', toStage: 'DEPOSIT_CONFIRMED' }, { action: 'CANCEL' }] };
   if (name === 'cancelledEmpty') return { ...baseWritable, status: 'CANCELLED', capabilities: [], allowedTransitions: [] };
   if (name === 'fulfilledEmpty') return { ...baseWritable, status: 'FULFILLED', stage: 'CLOSED', capabilities: [], allowedTransitions: [] };
   if (name === 'fulfilledWithCapabilities') return { ...baseWritable, status: 'FULFILLED', stage: 'CLOSED' };
@@ -324,6 +327,7 @@ function orderStateFixture(base, name) {
   if (name === 'reversedTransitions') return { ...baseWritable, allowedTransitions: [{ action: 'CANCEL' }, { action: 'ADVANCE', toStage: 'QUOTING' }] };
   if (name === 'nonAdjacentTransition') return { ...baseWritable, allowedTransitions: [{ action: 'ADVANCE', toStage: 'CLOSED' }, { action: 'CANCEL' }] };
   if (name === 'partialCapabilityState') return { ...baseWritable, capabilities: [] };
+  if (name === 'lateStageWithUpdate') return { ...baseWritable, status: 'CONFIRMED', stage: 'DEPOSIT_PENDING', capabilities: ['order.update'], allowedTransitions: [] };
   throw new Error(`unknown order state fixture ${name}`);
 }
 
@@ -397,8 +401,8 @@ async function runGeneratedGate() {
     const clientModule = await import(pathToFileURL(join(output, 'client.mjs')).href);
     const validator = validatorModule.createV2RuntimeValidator(documentValue);
     const fixtures = JSON.parse(awaitReadFixtures);
-    const runtimeFixtures = ['fileStatus', 'fileDownloadIntent', 'commandInProgress', 'commandRecovery', 'commandSucceeded', 'commandFailed', 'problemCsrfFailed', 'problemDependencyFailure', 'problemDependencyUnavailable', 'skuUnclassifiedStateConflict', 'orderResponse']
-      .map((name) => [name, validator.validate(name === 'fileStatus' ? 'FileStatusV2' : name === 'fileDownloadIntent' ? 'FileDownloadIntentV2' : name.startsWith('command') ? 'CommandStatus' : name === 'problemDependencyFailure' ? 'Problem502' : name === 'problemDependencyUnavailable' ? 'Problem503' : name === 'skuUnclassifiedStateConflict' ? 'Problem409' : name === 'orderResponse' ? 'OrderV2' : 'Problem403', fixtures.valid[name])]);
+    const runtimeFixtures = ['fileStatus', 'fileDownloadIntent', 'commandInProgress', 'commandRecovery', 'commandSucceeded', 'commandFailed', 'problemCsrfFailed', 'problemDependencyFailure', 'problemDependencyUnavailable', 'skuUnclassifiedStateConflict', 'orderResponse', 'orderResponseCrossCurrency', 'orderResponseNonStandard', 'orderResponseMixedImage']
+      .map((name) => [name, validator.validate(name === 'fileStatus' ? 'FileStatusV2' : name === 'fileDownloadIntent' ? 'FileDownloadIntentV2' : name.startsWith('command') ? 'CommandStatus' : name === 'problemDependencyFailure' ? 'Problem502' : name === 'problemDependencyUnavailable' ? 'Problem503' : name === 'skuUnclassifiedStateConflict' ? 'Problem409' : name.startsWith('orderResponse') ? 'OrderV2' : 'Problem403', fixtures.valid[name])]);
     assert(runtimeFixtures.every(([, valid]) => valid), 'generated runtime validator rejected valid fixtures: ' + JSON.stringify(validator.errors));
     const stateHeaders = { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', etag: '"v1"', 'cache-control': 'no-store' };
     for (const name of fixtures.orderStateRehearsal.valid) {
@@ -415,7 +419,37 @@ async function runGeneratedGate() {
       try { await stateClient.call('getOrderV2', { pathParams: { id: fixtures.valid.orderResponse.id }, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch (error) { rejected = /order (capabilities|state)|Invalid response schema OrderV2/i.test(error?.message ?? ''); }
       assert(rejected, `generated response state gate accepted ${name}`);
     }
-    console.log(`ORDER_STATE_RUNTIME_GATE exit=0 valid=${fixtures.orderStateRehearsal.valid.length} invalid=${fixtures.orderStateRehearsal.invalid.length}`);
+    const responseVariants = ['orderResponse', 'orderResponseCrossCurrency', 'orderResponseNonStandard', 'orderResponseMixedImage'];
+    let lineResponseCases = 0;
+    for (const name of responseVariants) {
+      const responseValue = fixtures.valid[name];
+      const lineClient = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(responseValue), { status: 200, headers: stateHeaders }) });
+      await lineClient.call('getOrderV2', { pathParams: { id: responseValue.id }, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
+      lineResponseCases += 1;
+    }
+    const badNonStandard = JSON.parse(JSON.stringify(fixtures.valid.orderResponseNonStandard));
+    badNonStandard.lines[0].priceSnapshot.sourceKind = 'CATALOG_POLICY';
+    let badNonStandardRejected = false;
+    const badNonStandardClient = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(badNonStandard), { status: 200, headers: stateHeaders }) });
+    try { await badNonStandardClient.call('getOrderV2', { pathParams: { id: badNonStandard.id }, headers: { 'X-Request-ID': '77777777-7777-7777-8777-777777777777' } }); } catch { badNonStandardRejected = true; }
+    assert(badNonStandardRejected, 'NON_STANDARD catalog-policy response was accepted');
+    console.log(`ORDER_STATE_RUNTIME_GATE exit=0 valid=${fixtures.orderStateRehearsal.valid.length} invalid=${fixtures.orderStateRehearsal.invalid.length} lineResponses=${lineResponseCases} lineInvalid=1`);
+    const identityHeaders = { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', etag: '"v1"', 'cache-control': 'no-store', location: '/api/v2/orders/' + fixtures.valid.orderResponse.id };
+    const identityClient = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(fixtures.valid.orderResponse), { status: 201, headers: identityHeaders }) });
+    await identityClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'identity-ok' }, body: fixtures.valid.standardSameCurrency });
+    let wrongLocationRejected = false;
+    const wrongLocationClient = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(fixtures.valid.orderResponse), { status: 201, headers: { ...identityHeaders, location: '/api/v2/products/11111111-1111-4111-8111-111111111111' } }) });
+    try { await wrongLocationClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'identity-location' }, body: fixtures.valid.standardSameCurrency }); } catch (error) { wrongLocationRejected = /Location must identify this operation collection and body id/i.test(error?.message ?? ''); }
+    assert(wrongLocationRejected, '201 Location was not bound to operation collection and body id');
+    let wrongProblemRequestIdRejected = false;
+    const wrongProblemRequestIdClient = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(fixtures.valid.problemFileNotReady), { status: 409, headers: { 'content-type': 'application/problem+json', 'x-request-id': '88888888-8888-4888-8888-888888888888', 'cache-control': 'no-store' } }) });
+    try { await wrongProblemRequestIdClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'identity-problem' }, body: fixtures.valid.standardSameCurrency }); } catch (error) { wrongProblemRequestIdRejected = /requestId must match X-Request-ID/i.test(error?.message ?? ''); }
+    assert(wrongProblemRequestIdRejected, 'Problem requestId was not bound to X-Request-ID');
+    let wrongCommandOperationRejected = false;
+    const wrongCommandOperationClient = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify({ ...fixtures.valid.commandInProgress, operationId: 'createSkuV2' }), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store', 'content-location': '/api/v2/commands/status', 'retry-after': '1' } }) });
+    try { await wrongCommandOperationClient.call('getCommandStatusV2', { headers: { 'Idempotency-Key': 'identity-command', 'X-Command-Operation': 'createOrderV2', 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch (error) { wrongCommandOperationRejected = /operationId must match X-Command-Operation/i.test(error?.message ?? ''); }
+    assert(wrongCommandOperationRejected, 'CommandStatus operationId was not bound to X-Command-Operation');
+    console.log('RESPONSE_IDENTITY_RUNTIME_GATE exit=0 location=1 problemRequestId=1 commandOperation=1');
     const fileId = fixtures.valid.fileStatus.id;
     let observed;
     const client = new clientModule.GeneratedV2Client({
@@ -484,6 +518,25 @@ async function runGeneratedGate() {
     let missingRecoveryRetryRejected = false;
     try { await recoveryStatusClient.call('getCommandStatusV2', { headers: { 'Idempotency-Key': 'recovery-key', 'X-Command-Operation': 'createOrderV2', 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch (error) { missingRecoveryRetryRejected = /requires Retry-After/i.test(error?.message ?? ''); }
     assert(missingRecoveryRetryRejected, 'command status accepted RECOVERY_REQUIRED without Retry-After');
+    let commandStatesObserved = 0;
+    for (const stateName of ['commandInProgress', 'commandRecovery', 'commandSucceeded', 'commandFailed']) {
+      const stateFixture = fixtures.valid[stateName];
+      const commandHeaders = {
+        'content-type': 'application/json',
+        'x-request-id': '77777777-7777-4777-8777-777777777777',
+        'cache-control': 'no-store',
+        'content-location': '/api/v2/commands/status',
+        ...(stateFixture.state === 'IN_PROGRESS' || stateFixture.state === 'RECOVERY_REQUIRED' ? { 'retry-after': '1' } : {}),
+      };
+      const stateClient = new clientModule.GeneratedV2Client({
+        validator,
+        fetch: async () => new Response(JSON.stringify(stateFixture), { status: 200, headers: commandHeaders }),
+      });
+      const stateResponse = await stateClient.call('getCommandStatusV2', { headers: { 'Idempotency-Key': `state-${stateName}`, 'X-Command-Operation': 'createOrderV2', 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
+      assert(stateResponse.data.state === stateFixture.state && stateResponse.data.operationId === 'createOrderV2', `generated command client did not observe ${stateName}`);
+      commandStatesObserved += 1;
+    }
+    assert(commandStatesObserved === 4, `only ${commandStatesObserved}/4 CommandStatus states traversed through generated client`);
     const validOrderClient = new clientModule.GeneratedV2Client({
       validator,
       fetch: async (url, init) => {
@@ -536,6 +589,27 @@ async function runGeneratedGate() {
       errorObserved = error?.status === 409 && error?.problem?.code === 'FILE_NOT_READY';
     }
     assert(errorObserved, 'generated client did not validate/type the declared Problem response');
+    let fileReplayAttempts = 0;
+    const fileReplayClient = new clientModule.GeneratedV2Client({
+      validator,
+      fetch: async (_url, init) => {
+        const key = init.headers.get('idempotency-key');
+        if (key === 'file-not-ready-key') {
+          fileReplayAttempts += 1;
+          return new Response(JSON.stringify(fixtures.valid.problemFileNotReady), {
+            status: 409,
+            headers: { 'content-type': 'application/problem+json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store', ...(fileReplayAttempts > 1 ? { 'idempotent-replay': 'true' } : {}) },
+          });
+        }
+        return new Response(JSON.stringify(fixtures.valid.orderResponse), { status: 201, headers: identityHeaders });
+      },
+    });
+    let firstFileNotReady = false;
+    let replayedFileNotReady = false;
+    try { await fileReplayClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'file-not-ready-key' }, body: fixtures.valid.standardCrossCurrency }); } catch (error) { firstFileNotReady = error?.status === 409 && error?.problem?.code === 'FILE_NOT_READY' && error?.headers?.['Idempotent-Replay'] === undefined; }
+    try { await fileReplayClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'file-not-ready-key' }, body: fixtures.valid.standardCrossCurrency }); } catch (error) { replayedFileNotReady = error?.status === 409 && error?.problem?.code === 'FILE_NOT_READY' && error?.headers?.['Idempotent-Replay'] === 'true'; }
+    const newFileKeyResponse = await fileReplayClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'file-available-new-key' }, body: fixtures.valid.standardCrossCurrency });
+    assert(firstFileNotReady && replayedFileNotReady && newFileKeyResponse.data.id === fixtures.valid.orderResponse.id && fileReplayAttempts === 2, 'FILE_NOT_READY replay/new-key semantics did not traverse the generated client');
     let requestFetchCount = 0;
     const requestGateClient = new clientModule.GeneratedV2Client({
       validator,
@@ -570,9 +644,9 @@ async function runGeneratedGate() {
         return new Response(JSON.stringify({ data: [], page: { nextCursor: null, hasNext: false } }), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store' } });
       },
     });
-    await queryClient.call('listProductsV2', { query: fixtures.query.valid.productDefaultComposite, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
-    await queryClient.call('listSkusV2', { query: fixtures.query.valid.skuDefaultComposite, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
-    await queryClient.call('listOrdersV2', { query: fixtures.query.valid.orderDefaultComposite, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
+    const queryOperationForFixture = (name) => name.startsWith('product') ? 'listProductsV2' : name.startsWith('sku') ? 'listSkusV2' : 'listOrdersV2';
+    const queryFixtureEntries = Object.entries(fixtures.query.valid).filter(([name]) => name !== 'orderCursor');
+    for (const [name, query] of queryFixtureEntries) await queryClient.call(queryOperationForFixture(name), { query, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
     await queryClient.call('listOrdersV2', { query: fixtures.query.valid.orderCursor, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
     let invalidQueryRejected = false;
     try { await queryClient.call('listOrdersV2', { query: fixtures.query.invalid.unknownSort, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch { invalidQueryRejected = true; }
@@ -582,9 +656,11 @@ async function runGeneratedGate() {
     try { await queryClient.call('listSkusV2', { query: fixtures.query.invalid.skuUnknownSort, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch { invalidSkuRejected = true; }
     let duplicateStatusRejected = false;
     try { await queryClient.call('listOrdersV2', { query: fixtures.query.invalid.duplicateStatus, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch { duplicateStatusRejected = true; }
+    let malformedCursorRejected = false;
+    try { await queryClient.call('listOrdersV2', { query: fixtures.query.invalid.malformedCursor, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch { malformedCursorRejected = true; }
     let invalidCursorRejected = false;
     try { await queryClient.call('listOrdersV2', { query: fixtures.query.invalid.crossResourceCursor, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch (error) { invalidCursorRejected = /INVALID_CURSOR/.test(error?.message ?? ''); }
-    assert(invalidQueryRejected && invalidStatusRejected && invalidSkuRejected && duplicateStatusRejected && invalidCursorRejected && queryFetchCount === 4, `query gate did not fail before fetch (${queryFetchCount} calls)`);
+    assert(invalidQueryRejected && invalidStatusRejected && invalidSkuRejected && duplicateStatusRejected && malformedCursorRejected && invalidCursorRejected && queryFetchCount === queryFixtureEntries.length + 1, `query gate did not fail before fetch (${queryFetchCount} calls, expected ${queryFixtureEntries.length + 1})`);
     const cursorChecks = [
       ['valid', fixtures.query.valid.orderCursor['page[after]'], true],
       ['cross-resource', fixtures.query.invalid.crossResourceCursor['page[after]'], false],
@@ -619,12 +695,13 @@ async function runGeneratedGate() {
     const tsx = join(process.cwd(), 'node_modules/.bin/tsx');
     const harnessRun = spawnSync(tsx, [harness, output, v1OpenApi, fixturesPath], { encoding: 'utf8' });
     assert(harnessRun.status === 0, `dual-version consumer harness failed: ${harnessRun.stdout}${harnessRun.stderr}`);
+    process.stdout.write(harnessRun.stdout);
     const clientSource = await readFile(join(output, 'client.ts'), 'utf8');
     const typesSource = await readFile(join(output, 'types.ts'), 'utf8');
     const validatorSource = await readFile(join(output, 'runtime-validator.ts'), 'utf8');
     assert(clientSource.includes('OperationResponseMap') && clientSource.includes('OperationErrorMap'), 'generated client lacks response/error typing');
     assert(!/packages\/contracts\/openapi\/|\/api\/v1/.test(clientSource + validatorSource), 'generated v2 runtime imports or URLs leaked v1');
-    return { operations: summary.operationCount, baseUrl: summary.baseUrl, schemas: Object.keys(documentValue.components?.schemas ?? {}).length, typesBytes: Buffer.byteLength(typesSource), typesSha256: createHash('sha256').update(typesSource).digest('hex'), clientBytes: Buffer.byteLength(clientSource), clientSha256: createHash('sha256').update(clientSource).digest('hex'), runtimeSmoke: 'GET+POST /api/v2; typed request headers; request body/path/header gate; response header gate; dual-version harness; success+Problem response validators', runtimeFixtures: runtimeFixtures.length, requestGate: 'invalid=6/fetch=0; standard+nonstandard=2', dualVersion: 'v1=/api/v1;v2=/api/v2' };
+    return { operations: summary.operationCount, baseUrl: summary.baseUrl, schemas: Object.keys(documentValue.components?.schemas ?? {}).length, typesBytes: Buffer.byteLength(typesSource), typesSha256: createHash('sha256').update(typesSource).digest('hex'), clientBytes: Buffer.byteLength(clientSource), clientSha256: createHash('sha256').update(clientSource).digest('hex'), runtimeSmoke: 'GET+POST /api/v2; typed request headers; request body/path/header gate; response header gate; dual-version harness; success+Problem response validators', runtimeFixtures: runtimeFixtures.length, requestGate: `invalid=6/fetch=0; standard+nonstandard=2; commandStates=${commandStatesObserved}; fileNotReadyReplay=2+newKey=1; querySorts=${queryFixtureEntries.length + 1}`, dualVersion: 'v1=/api/v1;v2=/api/v2' };
   } finally {
     await rm(output, { recursive: true, force: true });
   }

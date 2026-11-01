@@ -573,9 +573,19 @@ components:
         - { $ref: '#/components/schemas/OrderNonStandardLineReplacementV2' }
       discriminator: { propertyName: itemKind, mapping: { STANDARD: '#/components/schemas/OrderStandardLineReplacementV2', NON_STANDARD: '#/components/schemas/OrderNonStandardLineReplacementV2' } }
     PriceSnapshotV2:
+      oneOf:
+        - { $ref: '#/components/schemas/PriceSnapshotCatalogPolicyV2' }
+        - { $ref: '#/components/schemas/PriceSnapshotManualQuoteV2' }
+      discriminator: { propertyName: sourceKind, mapping: { CATALOG_POLICY: '#/components/schemas/PriceSnapshotCatalogPolicyV2', MANUAL_QUOTE: '#/components/schemas/PriceSnapshotManualQuoteV2' } }
+    PriceSnapshotCatalogPolicyV2:
       type: object
       required: [sourceKind, sourceCurrency, sourceUnitPrice, capturedAt]
-      properties: { sourceKind: { type: string, enum: [CATALOG_POLICY, MANUAL_QUOTE] }, sourceCurrency: { $ref: '#/components/schemas/Currency' }, sourceUnitPrice: { $ref: '#/components/schemas/DecimalAmount' }, capturedAt: { $ref: '#/components/schemas/DateTime' } }
+      properties: { sourceKind: { const: CATALOG_POLICY }, sourceCurrency: { $ref: '#/components/schemas/Currency' }, sourceUnitPrice: { $ref: '#/components/schemas/DecimalAmount' }, capturedAt: { $ref: '#/components/schemas/DateTime' } }
+      additionalProperties: false
+    PriceSnapshotManualQuoteV2:
+      type: object
+      required: [sourceKind, sourceCurrency, sourceUnitPrice, capturedAt]
+      properties: { sourceKind: { const: MANUAL_QUOTE }, sourceCurrency: { $ref: '#/components/schemas/Currency' }, sourceUnitPrice: { $ref: '#/components/schemas/DecimalAmount' }, capturedAt: { $ref: '#/components/schemas/DateTime' } }
       additionalProperties: false
     FxSnapshotV2:
       anyOf:
@@ -587,12 +597,12 @@ components:
     OrderStandardLineV2:
       type: object
       required: [lineId, itemKind, skuId, standardizationMode, name, unit, quantity, effectiveUnitPrice, lineAmount, currency, priceSnapshot, fxSnapshot, imageFileId]
-      properties: { lineId: { $ref: '#/components/schemas/Uuid' }, itemKind: { const: STANDARD }, skuId: { $ref: '#/components/schemas/Uuid' }, standardizationMode: { $ref: '#/components/schemas/StandardizationMode' }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, quantity: { $ref: '#/components/schemas/DecimalQuantity' }, effectiveUnitPrice: { $ref: '#/components/schemas/DecimalAmount' }, lineAmount: { $ref: '#/components/schemas/DecimalAmount' }, currency: { $ref: '#/components/schemas/Currency' }, priceSnapshot: { $ref: '#/components/schemas/PriceSnapshotV2' }, fxSnapshot: { $ref: '#/components/schemas/FxSnapshotV2' }, imageFileId: { anyOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] } }
+      properties: { lineId: { $ref: '#/components/schemas/Uuid' }, itemKind: { const: STANDARD }, skuId: { $ref: '#/components/schemas/Uuid' }, standardizationMode: { $ref: '#/components/schemas/StandardizationMode' }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, quantity: { $ref: '#/components/schemas/DecimalQuantity' }, effectiveUnitPrice: { $ref: '#/components/schemas/DecimalAmount' }, lineAmount: { $ref: '#/components/schemas/DecimalAmount' }, currency: { $ref: '#/components/schemas/Currency' }, priceSnapshot: { $ref: '#/components/schemas/PriceSnapshotCatalogPolicyV2' }, fxSnapshot: { $ref: '#/components/schemas/FxSnapshotV2' }, imageFileId: { anyOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] } }
       additionalProperties: false
     OrderNonStandardLineV2:
       type: object
       required: [lineId, itemKind, standardizationMode, name, unit, quantity, effectiveUnitPrice, lineAmount, currency, priceSnapshot, fxSnapshot, imageFileId]
-      properties: { lineId: { $ref: '#/components/schemas/Uuid' }, itemKind: { const: NON_STANDARD }, standardizationMode: { type: string, enum: [SIMPLE, NONE] }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, quantity: { $ref: '#/components/schemas/DecimalQuantity' }, effectiveUnitPrice: { $ref: '#/components/schemas/DecimalAmount' }, lineAmount: { $ref: '#/components/schemas/DecimalAmount' }, currency: { $ref: '#/components/schemas/Currency' }, priceSnapshot: { $ref: '#/components/schemas/PriceSnapshotV2' }, fxSnapshot: { $ref: '#/components/schemas/FxSnapshotV2' }, imageFileId: { anyOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] } }
+      properties: { lineId: { $ref: '#/components/schemas/Uuid' }, itemKind: { const: NON_STANDARD }, standardizationMode: { type: string, enum: [SIMPLE, NONE] }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, quantity: { $ref: '#/components/schemas/DecimalQuantity' }, effectiveUnitPrice: { $ref: '#/components/schemas/DecimalAmount' }, lineAmount: { $ref: '#/components/schemas/DecimalAmount' }, currency: { $ref: '#/components/schemas/Currency' }, priceSnapshot: { $ref: '#/components/schemas/PriceSnapshotManualQuoteV2' }, fxSnapshot: { type: 'null' }, imageFileId: { anyOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] } }
       additionalProperties: false
     OrderLineV2:
       oneOf:
