@@ -1,0 +1,396 @@
+/* global process, URL, console */
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { parse } from 'yaml';
+import SwaggerParser from '@apidevtools/swagger-parser';
+import openapiTS, { astToString } from 'openapi-typescript';
+
+const args = new Map();
+for (let index = 2; index < process.argv.length; index += 1) {
+  if (process.argv[index].startsWith('--')) args.set(process.argv[index].slice(2), process.argv[index + 1]);
+}
+const output = resolve(args.get('out') ?? '');
+if (!output || output === resolve('.')) throw new Error('Usage: node generate.mjs --out <temporary-directory>');
+await mkdir(output, { recursive: true });
+
+const source = parse(await readFile(new URL('./openapi.yaml', import.meta.url), 'utf8'));
+const operations = operationDefinitions(source);
+const document = await SwaggerParser.dereference(source);
+await writeFile(resolve(output, 'document.json'), JSON.stringify(document, null, 2));
+await writeFile(resolve(output, 'types.ts'), astToString(await openapiTS(source)));
+await writeFile(resolve(output, 'runtime-validator.ts'), runtimeValidatorTypescript());
+await writeFile(resolve(output, 'runtime-validator.mjs'), runtimeValidatorJavascript());
+await writeFile(resolve(output, 'client.ts'), clientTypescript(operations));
+await writeFile(resolve(output, 'client.mjs'), clientJavascript(operations));
+await writeFile(resolve(output, 'tsconfig.json'), JSON.stringify({
+  compilerOptions: { module: 'NodeNext', moduleResolution: 'NodeNext', target: 'ES2022', lib: ['ES2022', 'DOM', 'DOM.Iterable'], strict: true, esModuleInterop: true, skipLibCheck: true, types: ['node'] },
+  include: ['types.ts', 'client.ts', 'runtime-validator.ts'],
+}, null, 2));
+console.log(JSON.stringify({
+  output,
+  baseUrl: document.servers?.[0]?.url ?? null,
+  operationCount: operations.length,
+  operationIds: operations.map((operation) => operation.operationId),
+  generatedFiles: ['types.ts', 'client.ts', 'runtime-validator.ts', 'client.mjs', 'runtime-validator.mjs', 'document.json'],
+}, null, 2));
+
+function operationDefinitions(document) {
+  const methods = new Set(['get', 'put', 'post', 'delete', 'patch', 'options', 'head', 'trace']);
+  return Object.entries(document.paths ?? {}).flatMap(([path, item]) =>
+    Object.entries(item).filter(([method]) => methods.has(method)).map(([method, operation]) => {
+      const parameters = [...(item.parameters ?? []), ...(operation.parameters ?? [])].map((parameter) => resolveRef(source, parameter));
+      const requestBody = resolveRef(source, operation.requestBody)?.content?.['application/json']?.schema;
+      const responses = Object.fromEntries(Object.entries(operation.responses ?? {}).map(([status, response]) => {
+        const resolved = resolveRef(source, response);
+        const content = resolved.content?.['application/json'] ?? resolved.content?.['application/problem+json'];
+        return [status, {
+          schema: schemaName(content?.schema),
+          contentType: resolved.content?.['application/problem+json'] ? 'application/problem+json' : content === undefined ? undefined : 'application/json',
+          headers: Object.fromEntries(Object.entries(resolved.headers ?? {}).map(([name, header]) => {
+            const resolvedHeader = resolveRef(source, header);
+            return [name, { required: resolvedHeader.required === true, schema: resolvedHeader.schema }];
+          })),
+        }];
+      }));
+      return { operationId: operation.operationId, method: method.toUpperCase(), path, requestSchema: schemaName(requestBody), parameters, responses, cursorBinding: operation['x-cursor-binding'] };
+    }),
+  );
+}
+
+function resolveRef(root, value) {
+  if (value === undefined || typeof value !== 'object' || value === null || typeof value.$ref !== 'string') return value ?? {};
+  const resolved = value.$ref.slice(2).split('/').reduce((current, part) => current?.[part], root);
+  return { ...(resolved ?? {}), ...value };
+}
+
+function schemaName(value) {
+  return typeof value?.$ref === 'string' && value.$ref.startsWith('#/components/schemas/') ? value.$ref.split('/').pop() : undefined;
+}
+
+function schemaType(value) {
+  const name = schemaName(value);
+  if (name !== undefined) return `components['schemas'][${JSON.stringify(name)}]`;
+  if (value?.const !== undefined) return JSON.stringify(value.const);
+  if (Array.isArray(value?.enum)) return value.enum.map((item) => JSON.stringify(item)).join(' | ');
+  if (value?.type === 'integer' || value?.type === 'number') return 'number';
+  if (value?.type === 'boolean') return 'boolean';
+  if (value?.type === 'array') return `ReadonlyArray<${schemaType(value.items ?? {})}>`;
+  if (Array.isArray(value?.anyOf)) return value.anyOf.map((item) => schemaType(item)).join(' | ');
+  return 'string';
+}
+
+function headerTypeName(operationId) {
+  return `${operationId[0].toUpperCase()}${operationId.slice(1)}Headers`;
+}
+
+function headerType(headers) {
+  const entries = Object.entries(headers ?? {});
+  if (entries.length === 0) return 'Record<never, never>';
+  return `{ ${entries.map(([name, header]) => `${JSON.stringify(name)}${header.required ? '' : '?'}: ${schemaType(header.schema)}`).join('; ')} }`;
+}
+
+function operationMetadata(operations) {
+  return Object.fromEntries(operations.map((operation) => [operation.operationId, {
+    operationId: operation.operationId,
+    method: operation.method,
+    path: operation.path,
+    requestSchema: operation.requestSchema,
+    parameters: operation.parameters,
+    responses: operation.responses,
+    cursorBinding: operation.cursorBinding,
+  }]));
+}
+
+function inputType(operation) {
+  const path = operation.parameters.filter((parameter) => parameter.in === 'path');
+  const query = operation.parameters.filter((parameter) => parameter.in === 'query');
+  const headers = operation.parameters.filter((parameter) => parameter.in === 'header');
+  const fields = [];
+  if (path.length > 0) fields.push('pathParams: { ' + path.map((parameter) => JSON.stringify(parameter.name) + ': ' + schemaType(parameter.schema)).join('; ') + ' }');
+  if (query.length > 0) fields.push('query?: { ' + query.map((parameter) => JSON.stringify(parameter.name) + (parameter.required ? '' : '?') + ': ' + schemaType(parameter.schema)).join('; ') + ' }');
+  if (headers.length > 0) fields.push('headers: ' + headerTypeName(operation.operationId));
+  if (operation.requestSchema !== undefined) fields.push('body: components[\'schemas\'][' + JSON.stringify(operation.requestSchema) + ']');
+  return fields.length === 0 ? 'Record<never, never>' : '{ ' + fields.join('; ') + ' }';
+}
+
+function responseType(operation) {
+  const responses = Object.entries(operation.responses).filter(([status]) => /^2\d\d$/.test(status)).map(([status, response]) =>
+    'ContractResponse<' + (response.schema === undefined ? 'void' : 'components[\'schemas\'][' + JSON.stringify(response.schema) + ']') + ', ' + status + ', ' + headerType(response.headers) + '>',
+  );
+  return responses.length === 0 ? 'never' : responses.join(' | ');
+}
+
+function errorType(operation) {
+  const responses = Object.entries(operation.responses).filter(([status]) => /^[45]\d\d$/.test(status)).map(([, response]) =>
+    response.schema === undefined ? 'unknown' : 'components[\'schemas\'][' + JSON.stringify(response.schema) + ']',
+  );
+  return responses.length === 0 ? 'never' : [...new Set(responses)].join(' | ');
+}
+
+function clientTypescript(operations) {
+  const lines = [
+    "import type { components } from './types.js';",
+    "import type { RuntimeValidator } from './runtime-validator.js';",
+    "export type ContractResponse<T, S extends number, H extends Record<string, unknown> = Record<string, string>> = { readonly status: S; readonly data: T; readonly headers: Readonly<H> };",
+    "export interface GeneratedV2ClientOptions { readonly baseUrl?: string; readonly fetch?: typeof globalThis.fetch; readonly validator: RuntimeValidator; }",
+    "export const operations = " + JSON.stringify(operationMetadata(operations), null, 2) + " as const;",
+    "export type OperationId = keyof typeof operations;",
+    ...operations.filter((operation) => operation.parameters.some((parameter) => parameter.in === 'header')).map((operation) => 'export type ' + headerTypeName(operation.operationId) + ' = ' + headerType(Object.fromEntries(operation.parameters.filter((parameter) => parameter.in === 'header').map((parameter) => [parameter.name, { required: parameter.required === true, schema: parameter.schema }]))) + ';'),
+    "export type OperationInputMap = {",
+    ...operations.map((operation) => '  ' + JSON.stringify(operation.operationId) + ': ' + inputType(operation) + ';'),
+    "};",
+    "export type OperationResponseMap = {",
+    ...operations.map((operation) => '  ' + JSON.stringify(operation.operationId) + ': ' + responseType(operation) + ';'),
+    "};",
+    "export type OperationErrorMap = {",
+    ...operations.map((operation) => '  ' + JSON.stringify(operation.operationId) + ': ' + errorType(operation) + ';'),
+    "};",
+    "export class ApiProblemError<Id extends OperationId = OperationId> extends Error {",
+    "  constructor(readonly status: number, readonly problem: OperationErrorMap[Id], readonly headers: Readonly<Record<string, string>>) { super('API request failed.'); this.name = 'ApiProblemError'; }",
+    "}",
+    "export class GeneratedV2Client {",
+    "  private readonly baseUrl: string;",
+    "  private readonly fetchImpl: typeof globalThis.fetch;",
+    "  constructor(private readonly options: GeneratedV2ClientOptions) { this.baseUrl = (options.baseUrl ?? '/api/v2').replace(/\\/$/, ''); this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis); }",
+    "  async call<Id extends OperationId>(operationId: Id, input: OperationInputMap[Id]): Promise<OperationResponseMap[Id]> {",
+    "    const operation = operations[operationId];",
+    "    validateOperationInput(operation, input as Record<string, unknown>, this.options.validator);",
+    "    const pathParams = ('pathParams' in input ? input.pathParams : {}) as Record<string, string>;",
+    "    const path = operation.path.replace(/\\{([^}]+)\\}/g, (_match, name: string) => encodeURIComponent(pathParams[name] ?? (() => { throw new Error('Missing path parameter: ' + name); })()));",
+    "    const absolute = /^https?:\\/\\//i.test(this.baseUrl);",
+    "    const url = absolute ? new URL(this.baseUrl + path) : new URL(this.baseUrl + path, 'http://v2-contract.invalid');",
+    "    for (const [key, value] of Object.entries(('query' in input ? input.query : {}) ?? {})) if (value !== undefined) url.searchParams.set(key, String(value));",
+    "    const headers = new Headers({ Accept: 'application/json', ...(('headers' in input ? input.headers : undefined) as Record<string, string> | undefined) });",
+    "    const body = 'body' in input ? input.body : undefined;",
+    "    if (body !== undefined && !headers.has('content-type')) headers.set('content-type', 'application/json');",
+    "    const response = await this.fetchImpl(absolute ? url.toString() : url.pathname + url.search, { method: operation.method, credentials: 'include', headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });",
+    "    const contract = (operation.responses as Record<string, { schema?: string; headers?: Record<string, { required: boolean; schema?: object }> }>)[String(response.status)];",
+    "    if (contract === undefined) throw new Error('Undeclared HTTP status ' + response.status);",
+    "    const payload = await response.text().then((text) => text.length === 0 ? undefined : JSON.parse(text) as unknown);",
+    "    const responseHeaders: Record<string, string> = {}; for (const [name, header] of Object.entries(contract.headers ?? {})) { const value = response.headers.get(name); if (value === null && header.required) throw new Error('Missing required response header ' + name); if (value !== null && header.schema !== undefined && !this.options.validator.validateSchema(header.schema, value)) throw new Error('Invalid response header ' + name); if (value !== null) responseHeaders[name] = value; }",
+    "    for (const name of ['X-Request-ID', 'ETag', 'Location', 'Content-Location', 'Cache-Control', 'Retry-After', 'Idempotent-Replay']) if (!(name in (contract.headers ?? {})) && response.headers.get(name) !== null) throw new Error('Forbidden response header ' + name);",
+    "    validateResponseSemantics(operation, response.status, payload, responseHeaders, input);",
+    "    if (contract.schema !== undefined && !this.options.validator.validate(contract.schema, payload)) throw new Error('Invalid response schema ' + contract.schema); if (contract.schema === 'OrderV2') validateOrderState(payload); if (contract.schema === 'OrderPage') for (const item of (payload as { readonly data?: readonly unknown[] }).data ?? []) validateOrderState(item);",
+    "    if (!response.ok) throw new ApiProblemError(response.status, payload as OperationErrorMap[Id], responseHeaders);",
+    "    return { status: response.status, data: payload as OperationResponseMap[Id], headers: responseHeaders } as unknown as OperationResponseMap[Id];",
+    "  }",
+    "}",
+    "function findHeader(headers: Record<string, unknown> | undefined, name: string): unknown { const key = Object.keys(headers ?? {}).find((candidate) => candidate.toLowerCase() === name.toLowerCase()); return key === undefined ? undefined : headers?.[key]; }",
+    "function validateOperationInput(operation: { readonly operationId: string; readonly parameters?: readonly { readonly name: string; readonly in: string; readonly required?: boolean; readonly schema?: object }[]; readonly requestSchema?: string; readonly cursorBinding?: { readonly resource?: string; readonly defaultSort?: string } }, input: Record<string, unknown>, validator: RuntimeValidator): void {",
+    "  const containers: Record<string, Record<string, unknown> | undefined> = { path: (input.pathParams as Record<string, unknown> | undefined), query: (input.query as Record<string, unknown> | undefined), header: (input.headers as Record<string, unknown> | undefined) };",
+    "  const declaredHeaders = new Set((operation.parameters ?? []).filter((parameter) => parameter.in === 'header').map((parameter) => parameter.name.toLowerCase()));",
+    "  for (const parameter of operation.parameters ?? []) { const value = parameter.in === 'header' ? findHeader(containers.header, parameter.name) : containers[parameter.in]?.[parameter.name]; if (value === undefined) { if (parameter.required) throw new Error('Missing required ' + parameter.in + ' parameter: ' + parameter.name); continue; } if (parameter.in === 'header' && typeof value !== 'string') throw new Error('Invalid header: ' + parameter.name); if (parameter.schema !== undefined && !validator.validateSchema(parameter.schema, value)) throw new Error('Invalid ' + parameter.in + ' parameter: ' + parameter.name); }",
+    "  for (const name of Object.keys(containers.header ?? {})) if (!declaredHeaders.has(name.toLowerCase())) throw new Error('Unknown header: ' + name);",
+    "  if (operation.requestSchema !== undefined) { if (!Object.hasOwn(input, 'body') || !validator.validate(operation.requestSchema, input.body)) throw new Error('Invalid ' + operation.requestSchema + ' request body.'); } else if (Object.hasOwn(input, 'body')) throw new Error('Operation does not accept a request body.');",
+    "  validateSemanticInput(operation, input, validator);",
+    "}",
+    "function validateSemanticInput(operation: { readonly operationId: string; readonly parameters?: readonly { readonly name: string; readonly in: string }[]; readonly cursorBinding?: { readonly resource?: string; readonly defaultSort?: string } }, input: Record<string, unknown>, validator: RuntimeValidator): void {",
+    "  const query = input.query as Record<string, unknown> | undefined; if (query !== undefined) { const declared = new Set((operation.parameters ?? []).filter((parameter) => parameter.in === 'query').map((parameter) => parameter.name)); for (const [key, value] of Object.entries(query)) { if (!declared.has(key) || Array.isArray(value)) throw new Error('Invalid or duplicate query parameter: ' + key); } } if (operation.cursorBinding && query?.['page[after]'] !== undefined) validateCursorBinding(operation, query);",
+    "  const body = input.body as Record<string, unknown> | undefined; if (operation.operationId === 'updateOrderV2' && body?.lines !== undefined) { const ids = new Set<string>(); const images = new Set<string>(); for (const line of body.lines as Array<Record<string, unknown>>) { if (line.lineId !== null && ids.has(String(line.lineId))) throw new Error('Duplicate replacement lineId'); if (line.lineId !== null) ids.add(String(line.lineId)); if (line.imageFileId !== null && images.has(String(line.imageFileId))) throw new Error('An image file cannot be reused by multiple lines'); if (line.imageFileId !== null) images.add(String(line.imageFileId)); } }",
+    "}",
+    "function validateCursorBinding(operation: { readonly operationId: string; readonly cursorBinding?: { readonly resource?: string; readonly defaultSort?: string } }, query: Record<string, unknown>): void {",
+    "  const raw = String(query['page[after]']); if (!/^v2\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(raw)) throw new Error('Invalid opaque cursor');",
+    "}",
+    "function canonicalFilters(query: Record<string, unknown>): string { return JSON.stringify(Object.fromEntries(Object.entries(query).filter(([key]) => key.startsWith('filter[')).sort(([a], [b]) => a.localeCompare(b)))); }",
+    `function nextOrderStage(stage: string | undefined): string | undefined {
+  return ({ INITIAL_CONTACT: 'QUOTING', QUOTING: 'QUOTE_FOLLOW_UP', QUOTE_FOLLOW_UP: 'DEPOSIT_PENDING', DEPOSIT_PENDING: 'DEPOSIT_CONFIRMED', DEPOSIT_CONFIRMED: 'FULFILLMENT', FULFILLMENT: 'FOB_COMPLETED', FOB_COMPLETED: 'CLOSED' } as Record<string, string>)[stage ?? ''];
+}
+function validateOrderState(payload: unknown): void {
+  const order = payload as { status?: string; stage?: string; currency?: string; capabilities?: string[]; allowedTransitions?: Array<{ action?: string; toStage?: string }> };
+  const caps = order.capabilities ?? [];
+  const transitions = order.allowedTransitions ?? [];
+  const terminal = order.status === 'FULFILLED' || order.status === 'CANCELLED' || order.stage === 'CLOSED';
+  if (terminal) {
+    if (caps.length !== 0 || transitions.length !== 0) throw new Error('terminal order state must expose empty capabilities and allowedTransitions');
+  } else {
+    const canUpdate = order.status === 'DRAFT' && ['INITIAL_CONTACT', 'QUOTING', 'QUOTE_FOLLOW_UP'].includes(order.stage ?? '');
+    const canTransition = nextOrderStage(order.stage) !== undefined;
+    const allowedCaps = new Set([...(canUpdate ? ['order.update'] : []), ...(canTransition ? ['order.transition'] : [])]);
+    if (caps.length !== new Set(caps).size || caps.some((cap) => !allowedCaps.has(cap))) throw new Error('order capabilities do not match independent permission projection');
+    if (caps.includes('order.update') && !canUpdate) throw new Error('order.update is not allowed for this status/stage');
+    if (caps.includes('order.transition') && !canTransition) throw new Error('order.transition is not allowed for this stage');
+    const expectedTransitions = caps.includes('order.transition') ? [{ action: 'ADVANCE', toStage: nextOrderStage(order.stage) }, { action: 'CANCEL' }] : [];
+    if (JSON.stringify(transitions) !== JSON.stringify(expectedTransitions)) throw new Error('allowedTransitions do not match independent transition capability');
+  }
+  validateOrderLines(order);
+}
+function validateOrderLines(order: { currency?: string; lines?: unknown[] }): void {
+  for (const line of order.lines ?? []) {
+    const value = line as { itemKind?: string; currency?: string; priceSnapshot?: { sourceKind?: string; sourceCurrency?: string }; fxSnapshot?: { baseCurrency?: string; quoteCurrency?: string } | null };
+    if (value.itemKind === 'STANDARD') {
+      if (value.priceSnapshot?.sourceKind !== 'CATALOG_POLICY') throw new Error('STANDARD line must use CATALOG_POLICY price snapshot');
+      const sameCurrency = value.priceSnapshot?.sourceCurrency === order.currency;
+      if (sameCurrency) { if (value.fxSnapshot !== null) throw new Error('STANDARD same-currency snapshot must not carry FX'); }
+      else if (value.fxSnapshot === null || value.fxSnapshot === undefined || value.fxSnapshot.baseCurrency !== value.priceSnapshot?.sourceCurrency || value.fxSnapshot.quoteCurrency !== order.currency) throw new Error('STANDARD FX currency mismatch');
+    } else if (value.itemKind === 'NON_STANDARD') {
+      if (value.priceSnapshot?.sourceKind !== 'MANUAL_QUOTE' || value.priceSnapshot.sourceCurrency !== order.currency || value.fxSnapshot !== null) throw new Error('NON_STANDARD snapshot semantics are invalid');
+    }
+  }
+}
+function validateResponseSemantics(operation: { readonly operationId: string; readonly responses?: Record<string, { readonly headers?: Record<string, unknown> }> }, status: number, payload: unknown, headers: Record<string, string>, input: Record<string, unknown>): void {
+  const state = (payload as { state?: string } | undefined)?.state;
+  const retry = headers['Retry-After'];
+  const replay = headers['Idempotent-Replay'];
+  const declaredReplay = operation.responses?.[String(status)]?.headers?.['Idempotent-Replay'] !== undefined;
+  if (status >= 400 && (payload as { status?: unknown } | undefined)?.status !== status) throw new Error('Problem status must match HTTP status');
+  if (status >= 400 && (payload as { requestId?: unknown } | undefined)?.requestId !== headers['X-Request-ID']) throw new Error('Problem requestId must match X-Request-ID');
+  if (replay !== undefined && replay !== 'true') throw new Error('Idempotent-Replay must be true');
+  if (replay !== undefined && !declaredReplay) throw new Error('Idempotent-Replay is forbidden for this response');
+  if (replay !== undefined && (status === 502 || status === 503 || (status === 500 && (payload as { retryable?: boolean } | undefined)?.retryable === true))) throw new Error('recoverable problem cannot be replayed');
+  if ((status === 429 || status === 500 || status === 502 || status === 503) && headers['Cache-Control'] !== 'no-store') throw new Error('Problem response requires Cache-Control no-store');
+  if (operation.operationId === 'getCommandStatusV2') {
+    const commandOperation = findHeader(input.headers as Record<string, unknown> | undefined, 'X-Command-Operation');
+    if (commandOperation !== undefined && (payload as { operationId?: unknown } | undefined)?.operationId !== commandOperation) throw new Error('CommandStatus operationId must match X-Command-Operation');
+    if ((state === 'IN_PROGRESS' || state === 'RECOVERY_REQUIRED') && retry === undefined) throw new Error(state + ' command status requires Retry-After');
+    if (state !== 'IN_PROGRESS' && state !== 'RECOVERY_REQUIRED' && retry !== undefined) throw new Error('terminal command status forbids Retry-After');
+    if (headers['Content-Location'] !== '/api/v2/commands/status') throw new Error('command status Content-Location must be canonical');
+  }
+  if (status === 202 && operation.operationId !== 'getCommandStatusV2' && retry === undefined) throw new Error('202 command response requires Retry-After');
+  for (const name of ['Location', 'Content-Location']) { const value = headers[name]; if (value !== undefined && (!/^\\/api\\/v2\\//.test(value) || /[?#]/.test(value))) throw new Error('Invalid canonical href header ' + name); }
+  if (status === 202 && headers['Content-Location'] !== '/api/v2/commands/status') throw new Error('202 Content-Location must be the command status resource');
+  if (status === 201 && operation.operationId.startsWith('create')) {
+    const collection = ({ createProductV2: 'products', createSkuV2: 'skus', createOrderV2: 'orders' } as Record<string, string>)[operation.operationId];
+    const id = (payload as { id?: unknown } | undefined)?.id;
+    if (collection === undefined || typeof id !== 'string' || headers.Location !== '/api/v2/' + collection + '/' + id) throw new Error('201 Location must identify this operation collection and body id');
+  }
+}`,
+  ];
+  return lines.join('\n') + '\n';
+}
+
+function clientJavascript(operations) {
+  return [
+    'export const operations = ' + JSON.stringify(operationMetadata(operations), null, 2) + ';',
+    "export class GeneratedV2Client {",
+    "  constructor(options = {}) { this.baseUrl = (options.baseUrl ?? '/api/v2').replace(/\\/$/, ''); this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis); this.validator = options.validator; }",
+    "  async call(operationId, input = {}) {",
+    "    const operation = operations[operationId];",
+    "    if (operation === undefined) throw new Error('Unknown operation ' + operationId);",
+    "    validateOperationInput(operation, input, this.validator);",
+    "    const path = operation.path.replace(/\\{([^}]+)\\}/g, (_match, name) => encodeURIComponent(input.pathParams?.[name] ?? (() => { throw new Error('Missing path parameter: ' + name); })()));",
+    "    const absolute = /^https?:\\/\\//i.test(this.baseUrl);",
+    "    const url = absolute ? new URL(this.baseUrl + path) : new URL(this.baseUrl + path, 'http://v2-contract.invalid');",
+    "    for (const [key, value] of Object.entries(input.query ?? {})) if (value !== undefined) url.searchParams.set(key, String(value));",
+    "    const headers = new Headers({ Accept: 'application/json', ...(input.headers ?? {}) });",
+    "    if (input.body !== undefined && !headers.has('content-type')) headers.set('content-type', 'application/json');",
+    "    const response = await this.fetchImpl(absolute ? url.toString() : url.pathname + url.search, { method: operation.method, credentials: 'include', headers, ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }) });",
+    "    const contract = operation.responses[String(response.status)];",
+    "    if (contract === undefined) throw new Error('Undeclared HTTP status ' + response.status);",
+    "    const payload = await response.text().then((text) => text.length === 0 ? undefined : JSON.parse(text));",
+    "    const responseHeaders = {}; for (const [name, header] of Object.entries(contract.headers ?? {})) { const value = response.headers.get(name); if (value === null && header.required) throw new Error('Missing required response header ' + name); if (value !== null && header.schema !== undefined && !this.validator.validateSchema(header.schema, value)) throw new Error('Invalid response header ' + name); if (value !== null) responseHeaders[name] = value; }",
+    "    for (const name of ['X-Request-ID', 'ETag', 'Location', 'Content-Location', 'Cache-Control', 'Retry-After', 'Idempotent-Replay']) if (!(name in (contract.headers ?? {})) && response.headers.get(name) !== null) throw new Error('Forbidden response header ' + name);",
+    "    validateResponseSemantics(operation, response.status, payload, responseHeaders, input);",
+    "    if (contract.schema !== undefined && !this.validator.validate(contract.schema, payload)) throw new Error('Invalid response schema ' + contract.schema); if (contract.schema === 'OrderV2') validateOrderState(payload); if (contract.schema === 'OrderPage') for (const item of payload.data ?? []) validateOrderState(item);",
+    "    if (!response.ok) { const error = new Error('API request failed.'); error.status = response.status; error.problem = payload; error.headers = responseHeaders; throw error; }",
+    "    return { status: response.status, data: payload, headers: responseHeaders };",
+    "  }",
+    "}",
+    "function findHeader(headers, name) { const key = Object.keys(headers ?? {}).find((candidate) => candidate.toLowerCase() === name.toLowerCase()); return key === undefined ? undefined : headers?.[key]; }",
+    "function validateOperationInput(operation, input, validator) {",
+    "  if (validator === undefined) throw new Error('A runtime validator is required before sending a request.');",
+    "  const containers = { path: input.pathParams, query: input.query, header: input.headers };",
+    "  const declaredHeaders = new Set((operation.parameters ?? []).filter((parameter) => parameter.in === 'header').map((parameter) => parameter.name.toLowerCase()));",
+    "  for (const parameter of operation.parameters ?? []) { const value = parameter.in === 'header' ? findHeader(containers.header, parameter.name) : containers[parameter.in]?.[parameter.name]; if (value === undefined) { if (parameter.required) throw new Error('Missing required ' + parameter.in + ' parameter: ' + parameter.name); continue; } if (parameter.in === 'header' && typeof value !== 'string') throw new Error('Invalid header: ' + parameter.name); if (parameter.schema !== undefined && !validator.validateSchema(parameter.schema, value)) throw new Error('Invalid ' + parameter.in + ' parameter: ' + parameter.name); }",
+    "  for (const name of Object.keys(containers.header ?? {})) if (!declaredHeaders.has(name.toLowerCase())) throw new Error('Unknown header: ' + name);",
+    "  if (operation.requestSchema !== undefined) { if (!Object.hasOwn(input, 'body') || !validator.validate(operation.requestSchema, input.body)) throw new Error('Invalid ' + operation.requestSchema + ' request body.'); } else if (Object.hasOwn(input, 'body')) throw new Error('Operation does not accept a request body.');",
+    "  validateSemanticInput(operation, input);",
+    "}",
+    "function validateSemanticInput(operation, input) { const query = input.query; if (query !== undefined) { const declared = new Set((operation.parameters ?? []).filter((parameter) => parameter.in === 'query').map((parameter) => parameter.name)); for (const [key, value] of Object.entries(query)) { if (!declared.has(key) || Array.isArray(value)) throw new Error('Invalid or duplicate query parameter: ' + key); } } if (operation.cursorBinding && query?.['page[after]'] !== undefined) validateCursorBinding(operation, query); const body = input.body; if (operation.operationId === 'updateOrderV2' && body?.lines !== undefined) { const ids = new Set(); const images = new Set(); for (const line of body.lines) { if (line.lineId !== null && ids.has(String(line.lineId))) throw new Error('Duplicate replacement lineId'); if (line.lineId !== null) ids.add(String(line.lineId)); if (line.imageFileId !== null && images.has(String(line.imageFileId))) throw new Error('An image file cannot be reused by multiple lines'); if (line.imageFileId !== null) images.add(String(line.imageFileId)); } } }",
+    "function validateCursorBinding(operation, query) { const raw = String(query['page[after]']); if (!/^v2\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(raw)) throw new Error('Invalid opaque cursor'); }",
+    "function canonicalFilters(query) { return JSON.stringify(Object.fromEntries(Object.entries(query).filter(([key]) => key.startsWith('filter[')).sort(([a], [b]) => a.localeCompare(b)))); }",
+    `function nextOrderStage(stage) { return { INITIAL_CONTACT: 'QUOTING', QUOTING: 'QUOTE_FOLLOW_UP', QUOTE_FOLLOW_UP: 'DEPOSIT_PENDING', DEPOSIT_PENDING: 'DEPOSIT_CONFIRMED', DEPOSIT_CONFIRMED: 'FULFILLMENT', FULFILLMENT: 'FOB_COMPLETED', FOB_COMPLETED: 'CLOSED' }[stage]; }
+function validateOrderState(payload) {
+  const order = payload ?? {}; const caps = order.capabilities ?? []; const transitions = order.allowedTransitions ?? [];
+  const terminal = order.status === 'FULFILLED' || order.status === 'CANCELLED' || order.stage === 'CLOSED';
+  if (terminal) { if (caps.length !== 0 || transitions.length !== 0) throw new Error('terminal order state must expose empty capabilities and allowedTransitions'); }
+  else {
+    const canUpdate = order.status === 'DRAFT' && ['INITIAL_CONTACT', 'QUOTING', 'QUOTE_FOLLOW_UP'].includes(order.stage);
+    const canTransition = nextOrderStage(order.stage) !== undefined;
+    const allowedCaps = new Set([...(canUpdate ? ['order.update'] : []), ...(canTransition ? ['order.transition'] : [])]);
+    if (caps.length !== new Set(caps).size || caps.some((cap) => !allowedCaps.has(cap))) throw new Error('order capabilities do not match independent permission projection');
+    if (caps.includes('order.update') && !canUpdate) throw new Error('order.update is not allowed for this status/stage');
+    if (caps.includes('order.transition') && !canTransition) throw new Error('order.transition is not allowed for this stage');
+    const expectedTransitions = caps.includes('order.transition') ? [{ action: 'ADVANCE', toStage: nextOrderStage(order.stage) }, { action: 'CANCEL' }] : [];
+    if (JSON.stringify(transitions) !== JSON.stringify(expectedTransitions)) throw new Error('allowedTransitions do not match independent transition capability');
+  }
+  validateOrderLines(order);
+}
+function validateOrderLines(order) {
+  for (const value of order.lines ?? []) {
+    if (value.itemKind === 'STANDARD') {
+      if (value.priceSnapshot?.sourceKind !== 'CATALOG_POLICY') throw new Error('STANDARD line must use CATALOG_POLICY price snapshot');
+      const sameCurrency = value.priceSnapshot?.sourceCurrency === order.currency;
+      if (sameCurrency) { if (value.fxSnapshot !== null) throw new Error('STANDARD same-currency snapshot must not carry FX'); }
+      else if (value.fxSnapshot === null || value.fxSnapshot === undefined || value.fxSnapshot.baseCurrency !== value.priceSnapshot?.sourceCurrency || value.fxSnapshot.quoteCurrency !== order.currency) throw new Error('STANDARD FX currency mismatch');
+    } else if (value.itemKind === 'NON_STANDARD' && (value.priceSnapshot?.sourceKind !== 'MANUAL_QUOTE' || value.priceSnapshot.sourceCurrency !== order.currency || value.fxSnapshot !== null)) throw new Error('NON_STANDARD snapshot semantics are invalid');
+  }
+}
+function validateResponseSemantics(operation, status, payload, headers, input) {
+  const state = payload?.state; const retry = headers['Retry-After']; const replay = headers['Idempotent-Replay']; const declaredReplay = operation.responses?.[String(status)]?.headers?.['Idempotent-Replay'] !== undefined;
+  if (status >= 400 && payload?.status !== status) throw new Error('Problem status must match HTTP status');
+  if (status >= 400 && payload?.requestId !== headers['X-Request-ID']) throw new Error('Problem requestId must match X-Request-ID');
+  if (replay !== undefined && replay !== 'true') throw new Error('Idempotent-Replay must be true'); if (replay !== undefined && !declaredReplay) throw new Error('Idempotent-Replay is forbidden for this response'); if (replay !== undefined && (status === 502 || status === 503 || (status === 500 && payload?.retryable === true))) throw new Error('recoverable problem cannot be replayed'); if ([429, 500, 502, 503].includes(status) && headers['Cache-Control'] !== 'no-store') throw new Error('Problem response requires Cache-Control no-store');
+  if (operation.operationId === 'getCommandStatusV2') { const commandOperation = findHeader(input?.headers, 'X-Command-Operation'); if (commandOperation !== undefined && payload?.operationId !== commandOperation) throw new Error('CommandStatus operationId must match X-Command-Operation'); if ((state === 'IN_PROGRESS' || state === 'RECOVERY_REQUIRED') && retry === undefined) throw new Error(state + ' command status requires Retry-After'); if (state !== 'IN_PROGRESS' && state !== 'RECOVERY_REQUIRED' && retry !== undefined) throw new Error('terminal command status forbids Retry-After'); if (headers['Content-Location'] !== '/api/v2/commands/status') throw new Error('command status Content-Location must be canonical'); }
+  if (status === 202 && operation.operationId !== 'getCommandStatusV2' && retry === undefined) throw new Error('202 command response requires Retry-After'); for (const name of ['Location', 'Content-Location']) { const value = headers[name]; if (value !== undefined && (!/^\\/api\\/v2\\//.test(value) || /[?#]/.test(value))) throw new Error('Invalid canonical href header ' + name); } if (status === 202 && headers['Content-Location'] !== '/api/v2/commands/status') throw new Error('202 Content-Location must be the command status resource');
+  if (status === 201 && operation.operationId.startsWith('create')) { const collection = { createProductV2: 'products', createSkuV2: 'skus', createOrderV2: 'orders' }[operation.operationId]; if (collection === undefined || typeof payload?.id !== 'string' || headers.Location !== '/api/v2/' + collection + '/' + payload.id) throw new Error('201 Location must identify this operation collection and body id'); }
+}`,
+  ].join('\n') + '\n';
+}
+
+function runtimeValidatorTypescript() {
+  return [
+    "import Ajv2020Module from 'ajv/dist/2020.js';",
+    "import addFormatsModule from 'ajv-formats';",
+    "const Ajv2020 = Ajv2020Module as unknown as new (options?: object) => { addSchema: (schema: object, key: string) => void; compile: (schema: object) => ((value: unknown) => boolean) & { errors?: unknown[] | null }; };",
+    "const addFormats = addFormatsModule as unknown as (instance: object) => void;",
+    "export interface RuntimeValidator { validate(schemaName: string, value: unknown): boolean; validateSchema(schema: object, value: unknown): boolean; readonly errors: unknown[] | null | undefined; }",
+    "export function createV2RuntimeValidator(document: Record<string, unknown>): RuntimeValidator {",
+    "  const ajv = new Ajv2020({ allErrors: true, strict: false, allowUnionTypes: true });",
+    "  addFormats(ajv);",
+    "  const schemas = (document.components as { schemas?: Record<string, object> }).schemas ?? {};",
+    "  for (const [name, schema] of Object.entries(schemas)) ajv.addSchema(schema, '#/components/schemas/' + name);",
+    "  const validators = new Map<string, ((value: unknown) => boolean) & { errors?: unknown[] | null }>();",
+    "  let errors: unknown[] | null | undefined;",
+    `  function orderStateErrors(value: unknown): unknown[] {
+    const order = value as { readonly status?: unknown; readonly stage?: unknown; readonly currency?: unknown; readonly capabilities?: unknown; readonly allowedTransitions?: unknown; readonly lines?: readonly Record<string, unknown>[] };
+    const caps = Array.isArray(order?.capabilities) ? order.capabilities as string[] : []; const transitions = Array.isArray(order?.allowedTransitions) ? order.allowedTransitions as Array<Record<string, unknown>> : [];
+    const terminal = order?.status === 'FULFILLED' || order?.status === 'CANCELLED' || order?.stage === 'CLOSED';
+    if (terminal) { if (caps.length !== 0 || transitions.length !== 0) return [{ instancePath: '', keyword: 'x-order-state', params: {}, message: 'terminal order state must expose empty capabilities and allowedTransitions' }]; }
+    else {
+      const next = ({ INITIAL_CONTACT: 'QUOTING', QUOTING: 'QUOTE_FOLLOW_UP', QUOTE_FOLLOW_UP: 'DEPOSIT_PENDING', DEPOSIT_PENDING: 'DEPOSIT_CONFIRMED', DEPOSIT_CONFIRMED: 'FULFILLMENT', FULFILLMENT: 'FOB_COMPLETED', FOB_COMPLETED: 'CLOSED' } as Record<string, string>)[String(order?.stage)];
+      const canUpdate = order?.status === 'DRAFT' && ['INITIAL_CONTACT', 'QUOTING', 'QUOTE_FOLLOW_UP'].includes(String(order?.stage)); const canTransition = next !== undefined;
+      const allowedCaps = new Set([...(canUpdate ? ['order.update'] : []), ...(canTransition ? ['order.transition'] : [])]);
+      if (caps.length !== new Set(caps).size || caps.some((cap) => !allowedCaps.has(cap))) return [{ instancePath: '', keyword: 'x-order-state', params: {}, message: 'order capabilities do not match independent permission projection' }];
+      if (caps.includes('order.update') && !canUpdate) return [{ instancePath: '', keyword: 'x-order-state', params: {}, message: 'order.update is not allowed for this status/stage' }];
+      if (caps.includes('order.transition') && !canTransition) return [{ instancePath: '', keyword: 'x-order-state', params: {}, message: 'order.transition is not allowed for this stage' }];
+      const expectedTransitions = caps.includes('order.transition') ? [{ action: 'ADVANCE', toStage: next }, { action: 'CANCEL' }] : [];
+      if (JSON.stringify(transitions) !== JSON.stringify(expectedTransitions)) return [{ instancePath: '', keyword: 'x-order-state', params: {}, message: 'allowedTransitions do not match independent transition capability' }];
+    }
+    for (const line of order.lines ?? []) { const snapshot = line.priceSnapshot as { sourceKind?: unknown; sourceCurrency?: unknown } | undefined; const fx = line.fxSnapshot as { baseCurrency?: unknown; quoteCurrency?: unknown } | null | undefined; const sameCurrency = snapshot?.sourceCurrency === order.currency; if (line.itemKind === 'STANDARD' && (snapshot?.sourceKind !== 'CATALOG_POLICY' || (sameCurrency ? fx !== null : fx === null || fx === undefined || fx.baseCurrency !== snapshot.sourceCurrency || fx.quoteCurrency !== order.currency))) return [{ instancePath: '/lines', keyword: 'x-order-line', params: {}, message: 'STANDARD price/FX snapshot semantics are invalid' }]; if (line.itemKind === 'NON_STANDARD' && (snapshot?.sourceKind !== 'MANUAL_QUOTE' || snapshot.sourceCurrency !== order.currency || fx !== null)) return [{ instancePath: '/lines', keyword: 'x-order-line', params: {}, message: 'NON_STANDARD price/FX snapshot semantics are invalid' }]; }
+    return [];
+  }`,
+    "  return { validate(schemaName, value) { let validator = validators.get(schemaName); if (validator === undefined) { const compiled = ajv.compile({ $ref: '#/components/schemas/' + schemaName }); validator = compiled; validators.set(schemaName, compiled); } const current = validator!; const valid = current(value); errors = current.errors; if (!valid) return false; const stateErrors = schemaName === 'OrderV2' ? orderStateErrors(value) : schemaName === 'OrderPage' && typeof value === 'object' && value !== null && Array.isArray((value as { readonly data?: unknown[] }).data) ? (value as { readonly data: unknown[] }).data.flatMap(orderStateErrors) : []; if (stateErrors.length > 0) { errors = stateErrors; return false; } return true; }, validateSchema(schema, value) { const current = ajv.compile(schema); const valid = current(value); errors = current.errors; return valid; }, get errors() { return errors; } };",
+    "}",
+  ].join('\n') + '\n';
+}
+
+function runtimeValidatorJavascript() {
+  return [
+    "import Ajv2020 from 'ajv/dist/2020.js';",
+    "import addFormats from 'ajv-formats';",
+    "export function createV2RuntimeValidator(document) {",
+    "  const ajv = new Ajv2020({ allErrors: true, strict: false, allowUnionTypes: true });",
+    "  addFormats(ajv);",
+    "  const validators = new Map(); let errors;",
+    "  for (const [name, schema] of Object.entries(document.components?.schemas ?? {})) ajv.addSchema(schema, '#/components/schemas/' + name);",
+    `  function orderStateErrors(value) {
+    const order = value ?? {}; const caps = Array.isArray(order.capabilities) ? order.capabilities : []; const transitions = Array.isArray(order.allowedTransitions) ? order.allowedTransitions : []; const terminal = order.status === 'FULFILLED' || order.status === 'CANCELLED' || order.stage === 'CLOSED';
+    if (terminal) { if (caps.length !== 0 || transitions.length !== 0) return [{ instancePath: '', keyword: 'x-order-state', params: {}, message: 'terminal order state must expose empty capabilities and allowedTransitions' }]; }
+    else { const next = { INITIAL_CONTACT: 'QUOTING', QUOTING: 'QUOTE_FOLLOW_UP', QUOTE_FOLLOW_UP: 'DEPOSIT_PENDING', DEPOSIT_PENDING: 'DEPOSIT_CONFIRMED', DEPOSIT_CONFIRMED: 'FULFILLMENT', FULFILLMENT: 'FOB_COMPLETED', FOB_COMPLETED: 'CLOSED' }[order.stage]; const canUpdate = order.status === 'DRAFT' && ['INITIAL_CONTACT', 'QUOTING', 'QUOTE_FOLLOW_UP'].includes(order.stage); const canTransition = next !== undefined; const allowedCaps = new Set([...(canUpdate ? ['order.update'] : []), ...(canTransition ? ['order.transition'] : [])]); if (caps.length !== new Set(caps).size || caps.some((cap) => !allowedCaps.has(cap))) return [{ instancePath: '', keyword: 'x-order-state', params: {}, message: 'order capabilities do not match independent permission projection' }]; if (caps.includes('order.update') && !canUpdate) return [{ instancePath: '', keyword: 'x-order-state', params: {}, message: 'order.update is not allowed for this status/stage' }]; if (caps.includes('order.transition') && !canTransition) return [{ instancePath: '', keyword: 'x-order-state', params: {}, message: 'order.transition is not allowed for this stage' }]; const expectedTransitions = caps.includes('order.transition') ? [{ action: 'ADVANCE', toStage: next }, { action: 'CANCEL' }] : []; if (JSON.stringify(transitions) !== JSON.stringify(expectedTransitions)) return [{ instancePath: '', keyword: 'x-order-state', params: {}, message: 'allowedTransitions do not match independent transition capability' }]; }
+    for (const line of order.lines ?? []) { const snapshot = line.priceSnapshot; const fx = line.fxSnapshot; const sameCurrency = snapshot?.sourceCurrency === order.currency; if (line.itemKind === 'STANDARD' && (snapshot?.sourceKind !== 'CATALOG_POLICY' || (sameCurrency ? fx !== null : fx === null || fx === undefined || fx.baseCurrency !== snapshot.sourceCurrency || fx.quoteCurrency !== order.currency))) return [{ instancePath: '/lines', keyword: 'x-order-line', params: {}, message: 'STANDARD price/FX snapshot semantics are invalid' }]; if (line.itemKind === 'NON_STANDARD' && (snapshot?.sourceKind !== 'MANUAL_QUOTE' || snapshot.sourceCurrency !== order.currency || fx !== null)) return [{ instancePath: '/lines', keyword: 'x-order-line', params: {}, message: 'NON_STANDARD price/FX snapshot semantics are invalid' }]; }
+    return [];
+  }`,
+    "  return { validate(schemaName, value) { let validator = validators.get(schemaName); if (validator === undefined) { validator = ajv.compile({ $ref: '#/components/schemas/' + schemaName }); validators.set(schemaName, validator); } const valid = validator(value); errors = validator.errors; if (!valid) return false; const stateErrors = schemaName === 'OrderV2' ? orderStateErrors(value) : schemaName === 'OrderPage' && value && Array.isArray(value.data) ? value.data.flatMap(orderStateErrors) : []; if (stateErrors.length > 0) { errors = stateErrors; return false; } return true; }, validateSchema(schema, value) { const validator = ajv.compile(schema); const valid = validator(value); errors = validator.errors; return valid; }, get errors() { return errors; } };",
+    "}",
+  ].join('\n') + '\n';
+}

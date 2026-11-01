@@ -33,7 +33,7 @@ const META_REQUIREMENTS: Record<string, (meta: ProblemMeta) => boolean> = {
   REVERSAL_WOULD_VIOLATE_INVARIANT: (meta) => Array.isArray(meta.violations) && meta.violations.length > 0 && meta.violations.every(isReversalViolation),
   REVERSAL_NOT_ALLOWED: (meta) => typeof meta.operationId === 'string' && typeof meta.operationType === 'string' && typeof meta.currentStatus === 'string',
   CUSTOMER_APPROVAL_STATE_CONFLICT: (meta) => typeof meta.customerId === 'string' && isCustomerStatus(meta.currentCustomerStatus) && isInteger(meta.currentVersion),
-  CSRF_FAILED: (meta) => meta.refreshHref === '/api/v1/auth/csrf',
+  CSRF_FAILED: (meta) => meta.refreshHref === '/api/v1/auth/csrf' || meta.refreshHref === '/api/v2/auth/csrf',
 };
 
 const STABLE_CODES = new Set([
@@ -195,7 +195,7 @@ export function validateProblemMeta(code: string, meta: unknown): true {
   if (requirement !== undefined && !requirement(meta)) {
     throw new ProblemError(internalProblem(`Typed metadata for ${code} is incomplete.`));
   }
-  if (code === 'CSRF_FAILED' && meta.refreshHref !== '/api/v1/auth/csrf') {
+  if (code === 'CSRF_FAILED' && meta.refreshHref !== '/api/v1/auth/csrf' && meta.refreshHref !== '/api/v2/auth/csrf') {
     throw new ProblemError(internalProblem('CSRF refresh href is not allowlisted.'));
   }
   if (STABLE_CODES.has(code) === false && code !== 'INTERNAL_ERROR') {
@@ -237,7 +237,7 @@ function isEtag(value: unknown): value is string {
 }
 
 function isApiHref(value: unknown): value is string {
-  return typeof value === 'string' && value.startsWith('/api/v1/') && !/^(?:javascript:|data:|https?:)/i.test(value);
+  return typeof value === 'string' && /^\/api\/v[12]\//.test(value) && !/[?#]/.test(value) && !/^(?:javascript:|data:|https?:)/i.test(value);
 }
 
 function isShortage(value: unknown): boolean {

@@ -479,7 +479,7 @@ function normalizeResponseHeaders(value: Record<string, string> | null | undefin
   for (const [name, headerValue] of Object.entries(value)) {
     const lowerName = name.toLowerCase();
     if (!allowed.has(lowerName) || typeof headerValue !== 'string' || headerValue.length === 0) throw new Error('Persisted response headers are invalid.');
-    if ((lowerName === 'location' || lowerName === 'content-location') && !headerValue.startsWith('/api/v1/')) throw new Error('Persisted response headers are invalid.');
+    if ((lowerName === 'location' || lowerName === 'content-location') && !/^\/api\/v[12]\//.test(headerValue)) throw new Error('Persisted response headers are invalid.');
     if (lowerName === 'etag' && !/^"v[1-9][0-9]*"$/.test(headerValue)) throw new Error('Persisted response headers are invalid.');
     if (lowerName === 'retry-after' && !/^[0-9]+$/.test(headerValue)) throw new Error('Persisted response headers are invalid.');
     if (lowerName === 'cache-control' && headerValue !== 'no-store') throw new Error('Persisted response headers are invalid.');

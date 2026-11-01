@@ -9,16 +9,22 @@ const MIGRATION_FILES = [
   ['002', '002_identity_authorization.sql'],
   ['003', '003_files.sql'],
   ['004', '004_crm_catalog_orders.sql'],
+  ['005', '005_catalog_orders_v2_expand.sql'],
+  ['006', '006_catalog_orders_v2_dual_version.sql'],
 ] as const;
 
 const FIXED_BOOTSTRAP_FILES = new Set([
   'crm-catalog-orders-http-postgres.test.ts',
   'idempotency-postgres.test.ts',
   'outbox-postgres.test.ts',
+  'v2-catalog-orders-http-postgres.test.ts',
 ]);
 
 export function bootstrapForIntegrationFile(fileName: string): string[] {
-  return FIXED_BOOTSTRAP_FILES.has(fileName) ? MIGRATION_FILES.map(([number]) => number) : [];
+  if (!FIXED_BOOTSTRAP_FILES.has(fileName)) return [];
+  return fileName === 'v2-catalog-orders-http-postgres.test.ts'
+    ? MIGRATION_FILES.map(([number]) => number)
+    : MIGRATION_FILES.filter(([number]) => number !== '005' && number !== '006').map(([number]) => number);
 }
 
 export function databaseNameForIntegrationFile(fileName: string, index: number, pid: number, suffix: string): string {

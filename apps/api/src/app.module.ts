@@ -30,9 +30,12 @@ import { PostgresCatalogStore } from './modules/catalog/infrastructure/postgres-
 import { OrdersController } from './modules/orders/transport/orders.controller.js';
 import { OrdersService } from './modules/orders/application/orders.service.js';
 import { PostgresOrdersStore } from './modules/orders/infrastructure/postgres-orders.store.js';
+import { V2Controller } from './modules/v2/v2.controller.js';
+import { PostgresOrderFileAuthorizationResolver } from './modules/v2/order-file-authorization.resolver.js';
+import type { RuntimeValidator as V2RuntimeValidator } from '../../../packages/contracts/openapi/v2/runtime-validator.js';
 
 @Injectable()
-class DatabasePoolProvider implements OnModuleDestroy {
+export class DatabasePoolProvider implements OnModuleDestroy {
   readonly pool: pg.Pool;
 
   constructor(@Inject('RUNTIME_CONFIG') config: RuntimeConfig) {
@@ -45,7 +48,7 @@ class DatabasePoolProvider implements OnModuleDestroy {
 }
 
 @Module({
-  controllers: [CsrfController, SessionController, CommandStatusController, IdentityController, FilesController, CrmController, CatalogController, OrdersController],
+  controllers: [CsrfController, SessionController, CommandStatusController, IdentityController, FilesController, CrmController, CatalogController, OrdersController, V2Controller],
   providers: [
     CsrfService,
     {
@@ -58,6 +61,7 @@ class DatabasePoolProvider implements OnModuleDestroy {
     { provide: LoginAttemptLimiter, useFactory: (database: DatabasePoolProvider, config: RuntimeConfig) => new LoginAttemptLimiter(config.nodeEnv === 'test' ? {} : { store: new PostgresLoginAttemptStore(database.pool) }), inject: [DatabasePoolProvider, 'RUNTIME_CONFIG'] },
     { provide: InMemoryIdempotencyStore, useFactory: () => new InMemoryIdempotencyStore() },
     DatabasePoolProvider,
+    { provide: 'DATABASE_POOL', useFactory: (database: DatabasePoolProvider) => database.pool, inject: [DatabasePoolProvider] },
     { provide: 'IDENTITY_STORE', useFactory: (database: DatabasePoolProvider): IdentityStore & IdentityMutationStore & IdentityAuditQueryStore => new PostgresIdentityStore(database.pool), inject: [DatabasePoolProvider] },
     { provide: IdentityCommandService, useFactory: (store: IdentityMutationStore & IdentityAuditQueryStore) => new IdentityCommandService(store), inject: ['IDENTITY_STORE'] },
     { provide: 'AUTHENTICATION_PROVIDER', useClass: DisabledAuthenticationProvider },
@@ -86,9 +90,14 @@ class DatabasePoolProvider implements OnModuleDestroy {
       inject: ['RUNTIME_CONFIG'],
     },
     {
+      provide: 'ORDER_FILE_AUTHORIZATION_RESOLVER',
+      useFactory: (database: DatabasePoolProvider) => new PostgresOrderFileAuthorizationResolver(database.pool),
+      inject: [DatabasePoolProvider],
+    },
+    {
       provide: FilesService,
-      useFactory: (store: PostgresFilesStore, objectStorage: ObjectStorageAdapter) => new FilesService(store, objectStorage),
-      inject: [PostgresFilesStore, 'OBJECT_STORAGE_ADAPTER'],
+      useFactory: (store: PostgresFilesStore, objectStorage: ObjectStorageAdapter, resolver: PostgresOrderFileAuthorizationResolver) => new FilesService(store, objectStorage, resolver),
+      inject: [PostgresFilesStore, 'OBJECT_STORAGE_ADAPTER', 'ORDER_FILE_AUTHORIZATION_RESOLVER'],
     },
     {
       provide: PostgresCrmStore,
@@ -121,15 +130,16 @@ class DatabasePoolProvider implements OnModuleDestroy {
       inject: [PostgresOrdersStore],
     },
   ],
-  exports: [CsrfService, InMemoryIdempotencyStore, CommandStatusService, IDEMPOTENCY_REPOSITORY, FilesService, PostgresFilesStore, 'OBJECT_STORAGE_ADAPTER', CrmService, CatalogService, OrdersService],
+  exports: [CsrfService, InMemoryIdempotencyStore, CommandStatusService, IDEMPOTENCY_REPOSITORY, FilesService, PostgresFilesStore, 'OBJECT_STORAGE_ADAPTER', CrmService, CatalogService, OrdersService, DatabasePoolProvider, 'DATABASE_POOL'],
 })
 export class AppModule {
-  static register(config: RuntimeConfig, validator: ContractValidator, authenticationProvider?: AuthenticationProvider): DynamicModule {
+  static register(config: RuntimeConfig, validator: ContractValidator, v2Validator?: V2RuntimeValidator, authenticationProvider?: AuthenticationProvider): DynamicModule {
     return {
       module: AppModule,
       providers: [
         { provide: 'RUNTIME_CONFIG', useValue: config },
         { provide: 'CONTRACT_VALIDATOR', useValue: validator },
+        { provide: 'V2_CONTRACT_VALIDATOR', useValue: v2Validator },
         ...(authenticationProvider === undefined ? [] : [{ provide: 'AUTHENTICATION_PROVIDER', useValue: authenticationProvider }]),
       ],
       exports: ['RUNTIME_CONFIG', 'CONTRACT_VALIDATOR'],

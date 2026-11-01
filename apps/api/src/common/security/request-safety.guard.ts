@@ -9,6 +9,8 @@ import type { ContractValidator } from '../../../../../packages/contracts/openap
 import { validateOperationRequest, type ClientCallInput } from '../../../../../packages/contracts/openapi/client.js';
 import type { AuthorizationPrincipal } from '../../modules/identity/domain/authz.js';
 import { SECURITY_AUDIT_FAILURE_REPORTER, type AuthenticationAuditInput, type SecurityAuditFailureReporter } from '../../modules/identity/application/session.service.js';
+import type { RuntimeValidator as V2RuntimeValidator } from '../../../../../packages/contracts/openapi/v2/runtime-validator.js';
+import { isV2Request, requiredSafetyHeader, validateV2Request, v2OperationForRequest } from '../../modules/v2/v2-contract.js';
 
 interface PrincipalRequest extends FastifyRequest {
   user?: AuthorizationPrincipal;
@@ -21,11 +23,13 @@ export class RequestSafetyGuard implements CanActivate {
     @Inject('CONTRACT_VALIDATOR') private readonly validator: ContractValidator,
     @Optional() @Inject('IDENTITY_STORE') private readonly securityAudit?: { recordAuthenticationAudit?(input: AuthenticationAuditInput): Promise<void> },
     @Optional() @Inject(SECURITY_AUDIT_FAILURE_REPORTER) private readonly reportAuditFailure: SecurityAuditFailureReporter = () => undefined,
+    @Optional() @Inject('V2_CONTRACT_VALIDATOR') private readonly v2Validator?: V2RuntimeValidator,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<PrincipalRequest>();
     const method = request.method.toUpperCase();
+    if (isV2Request(request)) return this.canActivateV2(request);
     const path = request.url.split('?')[0]?.replace(/^\/api\/v1/, '') ?? request.url;
     const contractPath = (request.routeOptions.url ?? path).replace(/^\/api\/v1/, '').replace(/:([A-Za-z][A-Za-z0-9_]*)/g, '{$1}');
     const operation = EXPECTED_OPERATION_MANIFEST.find((candidate) => candidate.method === method.toLowerCase() && candidate.path === contractPath);
@@ -89,6 +93,53 @@ export class RequestSafetyGuard implements CanActivate {
         requiresIfMatch: operation.ifMatch,
         requiresIdempotencyKey: operation.idempotency,
         body: requestBody,
+      });
+    } catch (error) {
+      await this.recordSafetyRejection(request, error instanceof ProblemError ? error.code : 'SAFETY_REJECTED');
+      throw error;
+    }
+    return true;
+  }
+
+  private async canActivateV2(request: PrincipalRequest): Promise<boolean> {
+    const operation = v2OperationForRequest(request);
+    const unsafe = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method.toUpperCase());
+    if (operation === undefined) {
+      if (unsafe) {
+        await this.recordSafetyRejection(request, 'UNSAFE_ROUTE');
+        throw new ProblemError(buildProblem({ status: 500, code: 'INTERNAL_ERROR', title: 'Unsafe v2 route is absent from the contract.', requestId: normalizeRequestId(request.headers['x-request-id']), retryable: false }));
+      }
+      return true;
+    }
+    if (this.v2Validator === undefined) throw new ProblemError(buildProblem({ status: 500, code: 'INTERNAL_ERROR', title: 'V2 contract validator is unavailable.', requestId: normalizeRequestId(request.headers['x-request-id']), retryable: false }));
+    const principal = request.user;
+    const sessionId = request.cookies?.session_id;
+    const validateStructure = () => validateV2Request(request, operation, this.v2Validator as V2RuntimeValidator);
+    if (!unsafe) {
+      if (principal === undefined && operation.operationId !== 'getCsrfTokenV2') {
+        await this.recordSafetyRejection(request, 'AUTHENTICATION_REQUIRED');
+        throw new ProblemError(buildProblem({ status: 401, code: 'AUTHENTICATION_REQUIRED', title: 'Authentication required', requestId: normalizeRequestId(request.headers['x-request-id']), retryable: false }));
+      }
+      validateStructure();
+      return true;
+    }
+    const csrfToken = headerString(request.headers['x-csrf-token']);
+    const idempotencyKey = headerString(request.headers['idempotency-key']);
+    const ifMatch = headerString(request.headers['if-match']);
+    try {
+      const expectedCsrfToken = sessionId === undefined ? undefined : this.csrf.currentToken(`session:${sessionId}`);
+      new RequestSafetyPipeline({ validateStructure }).validate({
+        method: request.method.toUpperCase() as 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+        operationId: operation.operationId,
+        authenticated: principal !== undefined,
+        csrfRefreshHref: '/api/v2/auth/csrf',
+        ...(csrfToken === undefined ? {} : { csrfToken }),
+        ...(expectedCsrfToken === undefined ? {} : { expectedCsrfToken }),
+        ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+        ...(ifMatch === undefined ? {} : { ifMatch }),
+        requiresIfMatch: requiredSafetyHeader(operation, 'If-Match'),
+        requiresIdempotencyKey: requiredSafetyHeader(operation, 'Idempotency-Key'),
+        body: request.body,
       });
     } catch (error) {
       await this.recordSafetyRejection(request, error instanceof ProblemError ? error.code : 'SAFETY_REJECTED');

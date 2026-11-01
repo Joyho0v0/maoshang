@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { fileURLToPath } from 'node:url';
 import { NestFactory } from '@nestjs/core';
+import { RequestMethod } from '@nestjs/common';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import cookie from '@fastify/cookie';
 import { AppModule } from './app.module.js';
@@ -18,19 +19,22 @@ import { IdempotencyExecutionInterceptor } from './common/security/idempotency-e
 import { IDEMPOTENCY_REPOSITORY } from './modules/integration/idempotency/postgres-idempotency-repository.js';
 import { FilesService } from './modules/files/application/files.service.js';
 import type { AuthenticationProvider } from './modules/identity/application/session.service.js';
+import { createV2RuntimeValidator } from '../../../packages/contracts/openapi/v2/runtime-validator.js';
 
 export async function createApp(options: { config?: RuntimeConfig; env?: Record<string, string | undefined>; authenticationProvider?: AuthenticationProvider } = {}): Promise<NestFastifyApplication> {
   const config = options.config ?? loadRuntimeConfig(options.env);
   const contractDocument = parse(await readFile(join(process.cwd(), 'packages/contracts/openapi/openapi.yaml'), 'utf8')) as Record<string, unknown>;
+  const v2ContractDocument = parse(await readFile(join(process.cwd(), 'packages/contracts/openapi/v2/openapi.yaml'), 'utf8')) as Record<string, unknown>;
   const contractValidator = createContractValidator(contractDocument);
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule.register(config, contractValidator, options.authenticationProvider), new FastifyAdapter({ logger: false }));
+  const v2ContractValidator = createV2RuntimeValidator(v2ContractDocument);
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule.register(config, contractValidator, v2ContractValidator, options.authenticationProvider), new FastifyAdapter({ logger: false }));
   await app.register(cookie as unknown as Parameters<typeof app.register>[0]);
-  app.setGlobalPrefix('api/v1');
-  app.useGlobalFilters(new ProblemExceptionFilter(contractValidator));
+  app.setGlobalPrefix('api/v1', { exclude: [{ path: 'api/v2/{*path}', method: RequestMethod.ALL }] });
+  app.useGlobalFilters(new ProblemExceptionFilter(contractValidator, v2ContractValidator));
   app.useGlobalGuards(app.get(AuthenticationGuard), app.get(RequestSafetyGuard));
   const files = app.get(FilesService);
   app.useGlobalInterceptors(
-    new ContractResponseValidationInterceptor(contractValidator),
+    new ContractResponseValidationInterceptor(contractValidator, v2ContractValidator),
     new IdempotencyExecutionInterceptor(app.get(IDEMPOTENCY_REPOSITORY), contractValidator, async (operationId, principal, request, stored) => {
       if (operationId !== 'createUploadIntent') return undefined;
       const fileId = stored.resource?.type === 'FILE' ? stored.resource.id : undefined;

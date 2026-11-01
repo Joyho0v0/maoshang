@@ -9,6 +9,11 @@ export default tseslint.config(
       'node_modules/**',
       'app.js',
       'packages/contracts/openapi/generated.ts',
+      // The v2 client is an approved generated artifact. Its runtime module
+      // intentionally targets browser globals and is linted by its generator
+      // typecheck rather than the repository TypeScript rule set.
+      'packages/contracts/openapi/v2/client.ts',
+      'packages/contracts/openapi/v2/client.mjs',
     ],
   },
   eslint.configs.recommended,

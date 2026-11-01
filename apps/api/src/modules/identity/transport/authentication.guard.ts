@@ -17,7 +17,7 @@ export class AuthenticationGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const path = request.url.split('?')[0] ?? request.url;
-    if (path === '/api/v1/auth/csrf' || (request.method.toUpperCase() === 'POST' && path === '/api/v1/auth/sessions')) return true;
+    if (path === '/api/v1/auth/csrf' || path === '/api/v2/auth/csrf' || (request.method.toUpperCase() === 'POST' && path === '/api/v1/auth/sessions')) return true;
 
     const sessionToken = request.cookies?.session_id;
     if (typeof sessionToken !== 'string' || sessionToken.length === 0) {

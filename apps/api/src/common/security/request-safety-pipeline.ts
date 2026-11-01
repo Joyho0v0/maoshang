@@ -14,6 +14,7 @@ export interface SafetyRequest {
   requiresIdempotencyKey: boolean;
   body: unknown;
   allowAnonymous?: boolean;
+  csrfRefreshHref?: string;
 }
 
 export interface SafetyPipelineHooks {
@@ -33,7 +34,7 @@ export class RequestSafetyPipeline {
     }
 
     if (!request.csrfToken || request.csrfToken !== request.expectedCsrfToken) {
-      throw this.error(403, 'CSRF_FAILED', 'CSRF validation failed.', true, { refreshHref: '/api/v1/auth/csrf' });
+      throw this.error(403, 'CSRF_FAILED', 'CSRF validation failed.', true, { refreshHref: request.csrfRefreshHref ?? '/api/v1/auth/csrf' });
     }
 
     this.hooks.validateStructure?.(request);

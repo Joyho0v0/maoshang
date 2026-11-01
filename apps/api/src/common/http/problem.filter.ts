@@ -4,10 +4,12 @@ import { buildProblem, normalizeRequestId, ProblemError, type ProblemViolation }
 import type { ContractValidator } from '../../../../../packages/contracts/openapi/runtime-validator.js';
 import { operations, type OperationId } from '../../../../../packages/contracts/openapi/generated-client.js';
 import type { GeneratedOperation, OperationResponseContract } from '../../../../../packages/contracts/openapi/client.js';
+import type { RuntimeValidator as V2RuntimeValidator } from '../../../../../packages/contracts/openapi/v2/runtime-validator.js';
+import { isV2Request, v2OperationForRequest } from '../../modules/v2/v2-contract.js';
 
 @Catch()
 export class ProblemExceptionFilter implements ExceptionFilter<unknown> {
-  constructor(private readonly validator?: ContractValidator) {}
+  constructor(private readonly validator?: ContractValidator, private readonly v2Validator?: V2RuntimeValidator) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const context = host.switchToHttp();
@@ -19,6 +21,19 @@ export class ProblemExceptionFilter implements ExceptionFilter<unknown> {
       : toProblem(exception, requestId);
     response.header('X-Request-ID', candidate.requestId).header('Cache-Control', 'no-store').type('application/problem+json');
     if (candidate.status === 429) response.header('Retry-After', '60');
+    if (isV2Request(request)) {
+      const operation = v2OperationForRequest(request);
+      // v1 keeps its historical top-level `violations` member.  The promoted
+      // v2 contract deliberately has one authoritative source under typed
+      // `meta`; passing the v1 envelope through here makes Problem400 fail
+      // `unevaluatedProperties: false` and turns a client 400 into a 500.
+      const v2Candidate = toV2Problem(candidate);
+      const problem = this.v2Validator !== undefined && operation !== undefined && isDeclaredV2Problem(operation, v2Candidate, response, this.v2Validator)
+        ? v2Candidate
+        : this.v2Validator === undefined || operation === undefined ? v2Candidate : internalProblem(requestId);
+      response.header('X-Request-ID', problem.requestId).status(problem.status).send(problem);
+      return;
+    }
     const operation = operationForRequest(request);
     const problem = this.validator === undefined || operation === undefined
       ? this.validator?.validate('Problem', candidate) === false
@@ -29,6 +44,29 @@ export class ProblemExceptionFilter implements ExceptionFilter<unknown> {
         : internalProblem(requestId);
     response.header('X-Request-ID', problem.requestId).status(problem.status).send(problem);
   }
+}
+
+function toV2Problem(candidate: ReturnType<typeof buildProblem>): ReturnType<typeof buildProblem> {
+  const { violations, ...withoutTopLevelViolations } = candidate;
+  if (violations === undefined) return withoutTopLevelViolations;
+  return {
+    ...withoutTopLevelViolations,
+    meta: { ...(withoutTopLevelViolations.meta ?? {}), kind: 'VALIDATION', violations },
+  };
+}
+
+function isDeclaredV2Problem(operation: ReturnType<typeof v2OperationForRequest>, candidate: ReturnType<typeof buildProblem>, response: FastifyReply, validator: V2RuntimeValidator): boolean {
+  if (operation === undefined) return false;
+  const responseContract = operation.responses[String(candidate.status)] as { readonly contentType?: string; readonly schema?: string; readonly headers?: Readonly<Record<string, { readonly required?: boolean; readonly schema?: object }>> } | undefined;
+  if (responseContract?.contentType !== 'application/problem+json' || responseContract.schema === undefined) return false;
+  if (!validator.validate(responseContract.schema, candidate)) return false;
+  for (const [name, header] of Object.entries(responseContract.headers ?? {})) {
+    const rawValue = response.getHeader(name);
+    const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+    if (value === undefined || value === null) { if (header.required) return false; continue; }
+    if (header.schema !== undefined && (typeof value !== 'string' || !validator.validateSchema(header.schema, value))) return false;
+  }
+  return true;
 }
 
 function isDeclaredProblem(operation: GeneratedOperation, candidate: ReturnType<typeof buildProblem>, response: FastifyReply, validator: ContractValidator): boolean {

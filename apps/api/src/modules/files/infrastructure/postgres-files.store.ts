@@ -147,6 +147,12 @@ export class PostgresFilesStore {
     return row === undefined ? undefined : mapFile(row);
   }
 
+  async findFileForUpdate(client: PoolClient, organizationId: string, fileId: string): Promise<FileRecord | undefined> {
+    const result = await client.query<FileRow>(fileSelect() + ' WHERE f.organization_id = $1 AND f.id = $2 FOR UPDATE', [organizationId, fileId]);
+    const row = result.rows[0];
+    return row === undefined ? undefined : mapFile(row);
+  }
+
   async findFileWithLinks(organizationId: string, fileId: string): Promise<FileWithLinks | undefined> {
     const file = await this.findFile(organizationId, fileId);
     if (file === undefined) return undefined;

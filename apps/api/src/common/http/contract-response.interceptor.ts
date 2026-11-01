@@ -5,13 +5,16 @@ import { buildProblem, normalizeRequestId, ProblemError } from './problem.js';
 import type { ContractValidator } from '../../../../../packages/contracts/openapi/runtime-validator.js';
 import { operations, type OperationId } from '../../../../../packages/contracts/openapi/generated-client.js';
 import type { GeneratedOperation } from '../../../../../packages/contracts/openapi/client.js';
+import type { RuntimeValidator as V2RuntimeValidator } from '../../../../../packages/contracts/openapi/v2/runtime-validator.js';
+import { isV2Request, validateV2Response, v2OperationForRequest } from '../../modules/v2/v2-contract.js';
 
 @Injectable()
 export class ContractResponseValidationInterceptor implements NestInterceptor {
-  constructor(private readonly validator: ContractValidator) {}
+  constructor(private readonly validator: ContractValidator, private readonly v2Validator?: V2RuntimeValidator) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<FastifyRequest>();
+    if (isV2Request(request)) return this.interceptV2(context, next, request);
     const operation = operationForRequest(request);
     if (operation === undefined) return next.handle();
     const response = context.switchToHttp().getResponse<FastifyReply>();
@@ -20,6 +23,21 @@ export class ContractResponseValidationInterceptor implements NestInterceptor {
       const status = String(response.statusCode ?? 200);
       ensureContractResponseContentType(operation as GeneratedOperation, Number(status), response);
       validateContractResponse(operation as GeneratedOperation, Number(status), value, response, this.validator, normalizeRequestId(request.headers['x-request-id']));
+      return value;
+    }));
+  }
+
+  private interceptV2(context: ExecutionContext, next: CallHandler, request: FastifyRequest): Observable<unknown> {
+    const operation = v2OperationForRequest(request);
+    if (operation === undefined || this.v2Validator === undefined) return next.handle();
+    const response = context.switchToHttp().getResponse<FastifyReply>();
+    if (response.getHeader('X-Request-ID') === undefined && typeof response.header === 'function') response.header('X-Request-ID', normalizeRequestId(request.headers['x-request-id']));
+    return next.handle().pipe(map((value: unknown) => {
+      const status = Number(response.statusCode ?? 200);
+      const responseContract = operation.responses[String(status)] as { readonly contentType?: string } | undefined;
+      const contentType = response.getHeader('content-type');
+      if ((contentType === undefined || contentType === null || contentType === '') && responseContract?.contentType !== undefined) response.header('content-type', responseContract.contentType);
+      validateV2Response(operation, status, value, { get: (name: string) => headerValue(response.getHeader(name)) }, this.v2Validator as V2RuntimeValidator);
       return value;
     }));
   }
@@ -78,4 +96,10 @@ function operationForRequest(request: FastifyRequest): GeneratedOperation | unde
   const path = (request.routeOptions.url ?? request.url.split('?')[0] ?? '').replace(/^\/api\/v1/, '').replace(/:([A-Za-z][A-Za-z0-9_]*)/g, '{$1}');
   const method = request.method.toUpperCase();
   return Object.values(operations).find((candidate) => candidate.method === method && candidate.path === path) as (typeof operations)[OperationId] | undefined;
+}
+
+function headerValue(value: string | string[] | number | undefined): string | null {
+  if (value === undefined) return null;
+  if (Array.isArray(value)) return value[0] ?? null;
+  return String(value);
 }

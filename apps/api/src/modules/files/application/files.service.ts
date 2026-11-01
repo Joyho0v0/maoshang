@@ -40,6 +40,10 @@ export interface FileCommandRequest {
   metadata?: Record<string, unknown>;
 }
 
+export interface OrderFileAuthorizationResolver {
+  resolve(organizationId: string, orderId: string, executor?: { query: PoolClient['query'] }): Promise<{ ownerUserId: string; businessGroupId: string | null } | undefined>;
+}
+
 export class FileIntentExpiredError extends Error {
   constructor() {
     super('The upload intent has expired.');
@@ -51,6 +55,7 @@ export class FilesService {
   constructor(
     private readonly store: PostgresFilesStore,
     private readonly objectStorage: ObjectStorageAdapter,
+    private readonly orderResolver?: OrderFileAuthorizationResolver,
   ) {}
 
   async createUploadIntent(principal: AuthorizationPrincipal, input: FileCreateRequest, requestId: string, client: PoolClient): Promise<{ file: FileRecord; href: string; transfer: UploadTransfer }> {
@@ -102,8 +107,8 @@ export class FilesService {
 
   async getFile(principal: AuthorizationPrincipal, fileId: string): Promise<FileRecord> {
     this.assertActive(principal);
-    const file = await this.store.findFile(principal.organizationId, fileId);
-    if (file === undefined || !canReadFileMetadata(principal, file)) throw new FileNotFoundError();
+    const file = await this.store.findFileWithLinks(principal.organizationId, fileId);
+    if (file === undefined || (!canReadFileMetadata(principal, file) && !(await this.hasAuthorizedLink(principal, file)))) throw new FileNotFoundError();
     return file;
   }
 
@@ -187,13 +192,37 @@ export class FilesService {
   async createDownloadIntent(principal: AuthorizationPrincipal, fileId: string, requestId: string): Promise<{ file: FileRecord; href: string; transfer: DownloadTransfer }> {
     this.assertActive(principal);
     const fileWithLinks = await this.store.findFileWithLinks(principal.organizationId, fileId);
-    if (fileWithLinks === undefined || !hasAuthorizedLink(principal, fileWithLinks)) throw new FileNotFoundError();
+    if (fileWithLinks === undefined || (!canReadFileMetadata(principal, fileWithLinks) && !(await this.hasAuthorizedLink(principal, fileWithLinks)))) throw new FileNotFoundError();
     if (fileWithLinks.status !== FileState.AVAILABLE) throw new FileCommandFailureError(fileNotReady(requestId, fileWithLinks));
     const transfer = await this.objectStorage.createDownloadTransfer({ objectKey: fileWithLinks.objectKey, expiresAt: new Date(Date.now() + DOWNLOAD_INTENT_TTL_MS) });
     const latest = await this.store.findFileWithLinks(principal.organizationId, fileId);
-    if (latest === undefined || latest.status !== FileState.AVAILABLE || !hasAuthorizedLink(principal, latest)) throw new FileNotFoundError();
+    if (latest === undefined || latest.status !== FileState.AVAILABLE || (!canReadFileMetadata(principal, latest) && !(await this.hasAuthorizedLink(principal, latest)))) throw new FileNotFoundError();
     await this.store.recordDownloadIssued(principal.organizationId, principal.userId, fileId, requestId);
     return { file: latest, href: `/api/v1/files/${fileId}`, transfer };
+  }
+
+  async linkOrderImage(client: PoolClient, input: { principal: AuthorizationPrincipal; fileId: string; orderId: string; ownerUserId: string; businessGroupId: string | null; requiredPermission: 'order.create' | 'order.update' }): Promise<void> {
+    this.assertActive(input.principal);
+    if (!input.principal.permissions.has('file.read') || !input.principal.permissions.has(input.requiredPermission)) throw new FileAuthorizationDeniedError();
+    const currentOrder = this.orderResolver === undefined ? undefined : await this.orderResolver.resolve(input.principal.organizationId, input.orderId, client);
+    const ownerUserId = currentOrder?.ownerUserId ?? input.ownerUserId;
+    const businessGroupId = currentOrder?.businessGroupId ?? input.businessGroupId;
+    const file = await this.store.findFileForUpdate(client, input.principal.organizationId, input.fileId);
+    const fileScope = input.principal.scopes.get('FILE');
+    const orderScope = input.principal.scopes.get('ORDER');
+    if (file === undefined || file.status !== FileState.AVAILABLE || fileScope === undefined || orderScope === undefined
+      || !matchesScope(fileScope, input.principal.userId, file.createdBy, file.businessGroupId)
+      || !matchesScope(orderScope, input.principal.userId, ownerUserId, businessGroupId)) throw new FileAuthorizationDeniedError();
+    await this.store.linkFile(client, {
+      organizationId: input.principal.organizationId,
+      fileId: input.fileId,
+      resourceType: 'ORDER',
+      resourceId: input.orderId,
+      purpose: 'IMAGE',
+      linkedBy: input.principal.userId,
+      resourceOwnerId: ownerUserId,
+      ...(businessGroupId === null ? {} : { resourceBusinessGroupId: businessGroupId }),
+    });
   }
 
   async linkAvailableFile(client: PoolClient, input: { principal: AuthorizationPrincipal; fileId: string; resourceType: string; resourceId: string; purpose: string; resourceOwnerId?: string; resourceBusinessGroupId?: string }): Promise<void> {
@@ -224,6 +253,38 @@ export class FilesService {
 
   private assertActive(principal: AuthorizationPrincipal): void {
     if (principal.status !== 'ACTIVE') throw new FileAuthorizationDeniedError();
+  }
+
+  private async hasAuthorizedLink(principal: AuthorizationPrincipal, file: FileWithLinks): Promise<boolean> {
+    const fileScope = principal.scopes.get('FILE');
+    if (fileScope === undefined) return false;
+    for (const link of file.links) {
+      const resourceType = link.resourceType.toUpperCase();
+      const resourceScope = principal.scopes.get(resourceType);
+      let ownerId = link.resourceOwnerId;
+      let groupId = link.resourceBusinessGroupId;
+      if (resourceType === 'ORDER' && this.orderResolver !== undefined) {
+        const current = await this.orderResolver.resolve(principal.organizationId, link.resourceId);
+        if (current === undefined) continue;
+        ownerId = current.ownerUserId;
+        groupId = current.businessGroupId ?? undefined;
+      }
+      if (isFileVisibleToPrincipal({
+        organizationId: file.organizationId,
+        principalOrganizationId: principal.organizationId,
+        createdBy: file.createdBy,
+        ...(file.businessGroupId === undefined ? {} : { businessGroupId: file.businessGroupId }),
+        linkedResourceType: resourceType,
+        linkedResourcePurpose: link.purpose,
+        ...(ownerId === undefined ? {} : { linkedResourceOwnerId: ownerId }),
+        ...(groupId === undefined ? {} : { linkedResourceGroupId: groupId }),
+        userId: principal.userId,
+        permissions: principal.permissions,
+        fileScope,
+        ...(resourceScope === undefined ? {} : { resourceScope }),
+      })) return true;
+    }
+    return false;
   }
 }
 
@@ -282,28 +343,6 @@ function canReadFileMetadata(principal: AuthorizationPrincipal, file: FileRecord
   if (scope.scopeType === 'ALL_ORG') return true;
   if (scope.scopeType === 'OWN') return file.createdBy === principal.userId;
   return file.businessGroupId !== undefined && scope.groupIds.includes(file.businessGroupId);
-}
-
-function hasAuthorizedLink(principal: AuthorizationPrincipal, file: FileWithLinks): boolean {
-  const fileScope = principal.scopes.get('FILE');
-  if (fileScope === undefined) return false;
-  return file.links.some((link) => {
-    const resourceScope = principal.scopes.get(link.resourceType.toUpperCase());
-    return isFileVisibleToPrincipal({
-      organizationId: file.organizationId,
-      principalOrganizationId: principal.organizationId,
-      createdBy: file.createdBy,
-      ...(file.businessGroupId === undefined ? {} : { businessGroupId: file.businessGroupId }),
-      linkedResourceType: link.resourceType,
-      linkedResourcePurpose: link.purpose,
-      ...(link.resourceOwnerId === undefined ? {} : { linkedResourceOwnerId: link.resourceOwnerId }),
-      ...(link.resourceBusinessGroupId === undefined ? {} : { linkedResourceGroupId: link.resourceBusinessGroupId }),
-      userId: principal.userId,
-      permissions: principal.permissions,
-      fileScope,
-      ...(resourceScope === undefined ? {} : { resourceScope }),
-    });
-  });
 }
 
 function resourceNotFound(requestId: string): ProblemDocument {
