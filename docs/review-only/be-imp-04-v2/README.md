@@ -119,13 +119,23 @@ tie-breaker for other single-column values. A cursor is an opaque signed v2
 value bound to operation/resource/organization/scope/authz/sort/filters/page
 size/last tuple. Cross-resource, cross-scope, changed-filter, duplicate, or
 unknown values fail with `400 VALIDATION_FAILED` before fetch or database work.
+The public client only checks the opaque `v2.<payload>.<signature>` envelope;
+the server-side review gate verifies the signature and compares every bound
+security/query dimension to the current request before opening a database
+cursor. Tampered signatures and cross-version, endpoint, organization, scope,
+sort, filter, and page-size replays are covered by the negative rehearsal.
 
 The response-header contract is declared per response rather than inferred:
 `X-Request-ID` and `Cache-Control: no-store` are required on successful
 responses; resource responses additionally require `ETag`; 201 responses
-require `Location` and may carry `Content-Location`/`Idempotent-Replay`;
+require `Location`, forbid `Content-Location`, and may carry
+`Idempotent-Replay`;
 202 responses require canonical `Content-Location: /api/v2/commands/status`
-and a positive `Retry-After`; terminal command statuses forbid Retry-After.
+and a positive `Retry-After`. `IN_PROGRESS` and `RECOVERY_REQUIRED` command
+statuses require `Retry-After`, while terminal statuses forbid it. Every
+Problem response requires `Cache-Control: no-store`; deterministic terminal
+Problems returned by an idempotent mutation may additionally carry
+`Idempotent-Replay: true` only on replay.
 All origin-relative href headers are `/api/v2/...` with no query or fragment.
 The generated client reads each declared header by its canonical key and
 rejects undeclared known headers.
@@ -145,6 +155,8 @@ pre-data-down (empty only) → post-data-forward-fix (data-preserving)
 
 `005` preserves v1 meanings and leaves v2 columns nullable. `006` stages
 checks/FKs as `NOT VALID`; validation is an explicit bounded operation. The
+preflight performs an independent live digest/identity/row-count machine gate
+in addition to the JSON Schema. The
 pre-data down guard checks snapshot tables and every v2 durable column with
 `IS NOT NULL`, including explicit `false` in boolean policy facts, before any
 drop. The post-data forward-fix validates constraints only and stops on

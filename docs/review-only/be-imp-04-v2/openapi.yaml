@@ -89,11 +89,11 @@ paths:
       responses:
         '201': { $ref: '#/components/responses/ProductCreated' }
         '202': { $ref: '#/components/responses/CommandStatusInProgress' }
-        '400': { $ref: '#/components/responses/Problem400' }
-        '401': { $ref: '#/components/responses/Problem401' }
-        '403': { $ref: '#/components/responses/Problem403' }
-        '409': { $ref: '#/components/responses/Problem409' }
-        '428': { $ref: '#/components/responses/Problem428' }
+        '400': { $ref: '#/components/responses/Problem400Mutation' }
+        '401': { $ref: '#/components/responses/Problem401Mutation' }
+        '403': { $ref: '#/components/responses/Problem403Mutation' }
+        '409': { $ref: '#/components/responses/Problem409Mutation' }
+        '428': { $ref: '#/components/responses/Problem428Mutation' }
         '429': { $ref: '#/components/responses/Problem429' }
         '500': { $ref: '#/components/responses/Problem500' }
         '502': { $ref: '#/components/responses/Problem502' }
@@ -126,12 +126,12 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/ProductUpdated' }
         '202': { $ref: '#/components/responses/CommandStatusInProgress' }
-        '400': { $ref: '#/components/responses/Problem400' }
-        '401': { $ref: '#/components/responses/Problem401' }
-        '403': { $ref: '#/components/responses/Problem403' }
-        '404': { $ref: '#/components/responses/Problem404' }
-        '409': { $ref: '#/components/responses/Problem409' }
-        '428': { $ref: '#/components/responses/Problem428' }
+        '400': { $ref: '#/components/responses/Problem400Mutation' }
+        '401': { $ref: '#/components/responses/Problem401Mutation' }
+        '403': { $ref: '#/components/responses/Problem403Mutation' }
+        '404': { $ref: '#/components/responses/Problem404Mutation' }
+        '409': { $ref: '#/components/responses/Problem409Mutation' }
+        '428': { $ref: '#/components/responses/Problem428Mutation' }
         '429': { $ref: '#/components/responses/Problem429' }
         '500': { $ref: '#/components/responses/Problem500' }
         '502': { $ref: '#/components/responses/Problem502' }
@@ -169,11 +169,11 @@ paths:
       responses:
         '201': { $ref: '#/components/responses/SkuCreated' }
         '202': { $ref: '#/components/responses/CommandStatusInProgress' }
-        '400': { $ref: '#/components/responses/Problem400' }
-        '401': { $ref: '#/components/responses/Problem401' }
-        '403': { $ref: '#/components/responses/Problem403' }
-        '409': { $ref: '#/components/responses/Problem409' }
-        '428': { $ref: '#/components/responses/Problem428' }
+        '400': { $ref: '#/components/responses/Problem400Mutation' }
+        '401': { $ref: '#/components/responses/Problem401Mutation' }
+        '403': { $ref: '#/components/responses/Problem403Mutation' }
+        '409': { $ref: '#/components/responses/Problem409Mutation' }
+        '428': { $ref: '#/components/responses/Problem428Mutation' }
         '429': { $ref: '#/components/responses/Problem429' }
         '500': { $ref: '#/components/responses/Problem500' }
         '502': { $ref: '#/components/responses/Problem502' }
@@ -213,12 +213,12 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/SkuUpdated' }
         '202': { $ref: '#/components/responses/CommandStatusInProgress' }
-        '400': { $ref: '#/components/responses/Problem400' }
-        '401': { $ref: '#/components/responses/Problem401' }
-        '403': { $ref: '#/components/responses/Problem403' }
-        '404': { $ref: '#/components/responses/Problem404' }
-        '409': { $ref: '#/components/responses/Problem409' }
-        '428': { $ref: '#/components/responses/Problem428' }
+        '400': { $ref: '#/components/responses/Problem400Mutation' }
+        '401': { $ref: '#/components/responses/Problem401Mutation' }
+        '403': { $ref: '#/components/responses/Problem403Mutation' }
+        '404': { $ref: '#/components/responses/Problem404Mutation' }
+        '409': { $ref: '#/components/responses/Problem409Mutation' }
+        '428': { $ref: '#/components/responses/Problem428Mutation' }
         '429': { $ref: '#/components/responses/Problem429' }
         '500': { $ref: '#/components/responses/Problem500' }
         '502': { $ref: '#/components/responses/Problem502' }
@@ -256,12 +256,12 @@ paths:
       responses:
         '201': { $ref: '#/components/responses/OrderCreated' }
         '202': { $ref: '#/components/responses/CommandStatusInProgress' }
-        '400': { $ref: '#/components/responses/Problem400' }
-        '401': { $ref: '#/components/responses/Problem401' }
-        '403': { $ref: '#/components/responses/Problem403' }
-        '404': { $ref: '#/components/responses/Problem404' }
-        '409': { $ref: '#/components/responses/Problem409' }
-        '428': { $ref: '#/components/responses/Problem428' }
+        '400': { $ref: '#/components/responses/Problem400Mutation' }
+        '401': { $ref: '#/components/responses/Problem401Mutation' }
+        '403': { $ref: '#/components/responses/Problem403Mutation' }
+        '404': { $ref: '#/components/responses/Problem404Mutation' }
+        '409': { $ref: '#/components/responses/Problem409Mutation' }
+        '428': { $ref: '#/components/responses/Problem428Mutation' }
         '429': { $ref: '#/components/responses/Problem429' }
         '500': { $ref: '#/components/responses/Problem500' }
         '502': { $ref: '#/components/responses/Problem502' }
@@ -296,12 +296,12 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/OrderUpdated' }
         '202': { $ref: '#/components/responses/CommandStatusInProgress' }
-        '400': { $ref: '#/components/responses/Problem400' }
-        '401': { $ref: '#/components/responses/Problem401' }
-        '403': { $ref: '#/components/responses/Problem403' }
-        '404': { $ref: '#/components/responses/Problem404' }
-        '409': { $ref: '#/components/responses/Problem409' }
-        '428': { $ref: '#/components/responses/Problem428' }
+        '400': { $ref: '#/components/responses/Problem400Mutation' }
+        '401': { $ref: '#/components/responses/Problem401Mutation' }
+        '403': { $ref: '#/components/responses/Problem403Mutation' }
+        '404': { $ref: '#/components/responses/Problem404Mutation' }
+        '409': { $ref: '#/components/responses/Problem409Mutation' }
+        '428': { $ref: '#/components/responses/Problem428Mutation' }
         '429': { $ref: '#/components/responses/Problem429' }
         '500': { $ref: '#/components/responses/Problem500' }
         '502': { $ref: '#/components/responses/Problem502' }
@@ -311,7 +311,7 @@ paths:
       tags: [orders]
       operationId: transitionOrderV2
       description: Adjacent stage advance or terminal cancellation. CANCEL preserves the last stage and overrides status to CANCELLED.
-      x-order-transition: { advance: adjacent-only, cancel: terminal, terminalStatuses: [CANCELLED, FULFILLED, CLOSED], capabilityEnum: [order.update, order.transition], allowedOrder: [ADVANCE, CANCEL] }
+      x-order-transition: { advance: adjacent-only, cancel: terminal, terminalStatuses: [CANCELLED, FULFILLED], terminalStages: [CLOSED], capabilityEnum: [order.update, order.transition], allowedOrder: [ADVANCE, CANCEL] }
       x-safety: { csrf: required, idempotency: required, ifMatch: required }
       parameters:
         - { $ref: '#/components/parameters/ResourceId' }
@@ -323,12 +323,12 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/OrderUpdated' }
         '202': { $ref: '#/components/responses/CommandStatusInProgress' }
-        '400': { $ref: '#/components/responses/Problem400' }
-        '401': { $ref: '#/components/responses/Problem401' }
-        '403': { $ref: '#/components/responses/Problem403' }
-        '404': { $ref: '#/components/responses/Problem404' }
-        '409': { $ref: '#/components/responses/Problem409' }
-        '428': { $ref: '#/components/responses/Problem428' }
+        '400': { $ref: '#/components/responses/Problem400Mutation' }
+        '401': { $ref: '#/components/responses/Problem401Mutation' }
+        '403': { $ref: '#/components/responses/Problem403Mutation' }
+        '404': { $ref: '#/components/responses/Problem404Mutation' }
+        '409': { $ref: '#/components/responses/Problem409Mutation' }
+        '428': { $ref: '#/components/responses/Problem428Mutation' }
         '429': { $ref: '#/components/responses/Problem429' }
         '500': { $ref: '#/components/responses/Problem500' }
         '502': { $ref: '#/components/responses/Problem502' }
@@ -404,6 +404,7 @@ components:
     ETag: { required: true, schema: { type: string, pattern: '^"v[1-9][0-9]*"$' } }
     Location: { required: true, schema: { type: string, pattern: "^/api/v2/[A-Za-z0-9._~!$&'()*+,;=:@/-]+$" } }
     ContentLocation: { required: false, schema: { type: string, pattern: "^/api/v2/[A-Za-z0-9._~!$&'()*+,;=:@/-]+$" } }
+    CommandStatusContentLocation: { required: true, schema: { type: string, const: /api/v2/commands/status } }
     CacheControl: { required: true, schema: { type: string, const: no-store } }
     IdempotentReplay: { required: false, schema: { type: string, enum: ['true'] } }
     RetryAfter: { required: true, schema: { type: string, pattern: '^[1-9][0-9]*$' } }
@@ -415,27 +416,33 @@ components:
     OrderPage: { description: Order page, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderPage' } } } }
     Product: { description: Product read, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProductV2' } } } }
     ProductUpdated: { description: Updated product, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProductV2' } } } }
-    ProductCreated: { description: Created product, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Content-Location: { $ref: '#/components/headers/ContentLocation' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProductV2' } } } }
+    ProductCreated: { description: Created product, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProductV2' } } } }
     Sku: { description: SKU read, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/SkuV2' } } } }
     SkuUpdated: { description: Updated SKU, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/SkuV2' } } } }
-    SkuCreated: { description: Created SKU, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Content-Location: { $ref: '#/components/headers/ContentLocation' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/SkuV2' } } } }
+    SkuCreated: { description: Created SKU, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/SkuV2' } } } }
     Order: { description: Order read, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderV2' } } } }
     OrderUpdated: { description: Updated order, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderV2' } } } }
-    OrderCreated: { description: Created order, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Content-Location: { $ref: '#/components/headers/ContentLocation' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderV2' } } } }
+    OrderCreated: { description: Created order, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderV2' } } } }
     FileStatus: { description: Files-owned file status, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/FileStatusV2' } } } }
     FileDownloadIntent: { description: Short-lived Files-owned download intent, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/FileDownloadIntentV2' } } } }
-    CommandStatus: { description: Command status; Retry-After is required only for IN_PROGRESS body state, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Retry-After: { $ref: '#/components/headers/RetryAfter', required: false } }, content: { application/json: { schema: { $ref: '#/components/schemas/CommandStatus' } } } }
-    CommandStatusInProgress: { description: Command accepted, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Content-Location: { $ref: '#/components/headers/ContentLocation', required: true }, Retry-After: { $ref: '#/components/headers/RetryAfter' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/CommandStatusInProgressV2' } } } }
-    Problem400: { description: Validation problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem400' } } } }
-    Problem401: { description: Authentication problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem401' } } } }
-    Problem403: { description: Authorization or CSRF problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem403' } } } }
-    Problem404: { description: Hidden resource problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem404' } } } }
-    Problem409: { description: Conflict problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem409' } } } }
-    Problem428: { description: Missing required precondition, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem428' } } } }
-    Problem429: { description: Rate limit problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Retry-After: { $ref: '#/components/headers/RetryAfter' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem429' } } } }
-    Problem500: { description: Internal problem; terminal response validation and recoverable unknown result are separate typed branches, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem500' } } } }
-    Problem502: { description: Recoverable dependency failure, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem502' } } } }
-    Problem503: { description: Recoverable dependency unavailable, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem503' } } } }
+    CommandStatus: { description: Command status; Content-Location is required and Retry-After is required for IN_PROGRESS or RECOVERY_REQUIRED body state, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Content-Location: { $ref: '#/components/headers/CommandStatusContentLocation' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Retry-After: { $ref: '#/components/headers/RetryAfter', required: false } }, content: { application/json: { schema: { $ref: '#/components/schemas/CommandStatus' } } } }
+    CommandStatusInProgress: { description: Command accepted, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Content-Location: { $ref: '#/components/headers/CommandStatusContentLocation' }, Retry-After: { $ref: '#/components/headers/RetryAfter' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/CommandStatusInProgressV2' } } } }
+    Problem400: { description: Validation problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem400' } } } }
+    Problem401: { description: Authentication problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem401' } } } }
+    Problem403: { description: Authorization or CSRF problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem403' } } } }
+    Problem404: { description: Hidden resource problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem404' } } } }
+    Problem409: { description: Conflict problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem409' } } } }
+    Problem428: { description: Missing required precondition, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem428' } } } }
+    Problem429: { description: Rate limit problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Retry-After: { $ref: '#/components/headers/RetryAfter' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem429' } } } }
+    Problem500: { description: Internal problem; terminal response validation and recoverable unknown result are separate typed branches, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem500' } } } }
+    Problem502: { description: Recoverable dependency failure, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem502' } } } }
+    Problem503: { description: Recoverable dependency unavailable, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem503' } } } }
+    Problem400Mutation: { description: Terminal mutation validation problem; Idempotent-Replay is emitted only on a replay, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem400' } } } }
+    Problem401Mutation: { description: Terminal mutation authentication problem; Idempotent-Replay is emitted only on a replay, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem401' } } } }
+    Problem403Mutation: { description: Terminal mutation authorization problem; Idempotent-Replay is emitted only on a replay, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem403' } } } }
+    Problem404Mutation: { description: Terminal mutation hidden-resource problem; Idempotent-Replay is emitted only on a replay, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem404' } } } }
+    Problem409Mutation: { description: Terminal mutation conflict problem; Idempotent-Replay is emitted only on a replay, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem409' } } } }
+    Problem428Mutation: { description: Terminal mutation precondition problem; Idempotent-Replay is emitted only on a replay, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem428' } } } }
   schemas:
     Uuid: { type: string, format: uuid }
     Currency: { type: string, pattern: '^[A-Z]{3}$' }
@@ -611,10 +618,10 @@ components:
       oneOf:
         - type: object
           required: [status, stage]
-          properties: { status: { const: DRAFT }, stage: { const: INITIAL_CONTACT } }
+          properties: { status: { const: DRAFT }, stage: { enum: [INITIAL_CONTACT, QUOTING, QUOTE_FOLLOW_UP] } }
         - type: object
           required: [status, stage]
-          properties: { status: { const: CONFIRMED }, stage: { enum: [QUOTING, QUOTE_FOLLOW_UP, DEPOSIT_PENDING, DEPOSIT_CONFIRMED, FULFILLMENT, FOB_COMPLETED] } }
+          properties: { status: { const: CONFIRMED }, stage: { enum: [DEPOSIT_PENDING, DEPOSIT_CONFIRMED, FULFILLMENT, FOB_COMPLETED] } }
         - type: object
           required: [status, stage]
           properties: { status: { const: FULFILLED }, stage: { const: CLOSED } }
@@ -648,9 +655,9 @@ components:
       maxLength: 4096
       pattern: '^v2\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
       description: Opaque signed cursor. Payload binds version, operation, resource, organization, scopeFingerprint, authzVersion, normalized sort/filters, pageSize and lastTuple.
-    ProductSortV2: { type: string, enum: [name, '-name', createdAt, '-createdAt', updatedAt, '-updatedAt', '-updatedAt,-id'] }
-    SkuSortV2: { type: string, enum: [skuCode, '-skuCode', name, '-name', createdAt, '-createdAt', updatedAt, '-updatedAt', '-updatedAt,-id'] }
-    OrderSortV2: { type: string, enum: [orderNo, '-orderNo', createdAt, '-createdAt', updatedAt, '-updatedAt', '-updatedAt,-id'] }
+    ProductSortV2: { type: string, enum: [name, '-name', status, '-status', id, '-id', createdAt, '-createdAt', updatedAt, '-updatedAt', '-updatedAt,-id'] }
+    SkuSortV2: { type: string, enum: [skuCode, '-skuCode', name, '-name', status, '-status', id, '-id', createdAt, '-createdAt', updatedAt, '-updatedAt', '-updatedAt,-id'] }
+    OrderSortV2: { type: string, enum: [orderNo, '-orderNo', status, '-status', id, '-id', createdAt, '-createdAt', updatedAt, '-updatedAt', '-updatedAt,-id'] }
     ProductPage:
       type: object
       required: [data, page]

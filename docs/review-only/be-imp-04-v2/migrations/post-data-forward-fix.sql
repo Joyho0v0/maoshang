@@ -18,6 +18,28 @@ BEGIN
   END IF;
 END $$;
 
+-- Existing v1 policy rows are checked before any VALIDATE succeeds. This is
+-- intentionally independent from the trigger installed by 006 so pre-trigger
+-- ambiguity cannot pass forward-fix silently.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM catalog.price_policy a
+    JOIN catalog.price_policy b
+      ON b.organization_id = a.organization_id
+     AND b.sku_id = a.sku_id
+     AND b.id > a.id
+     AND b.is_primary IS TRUE
+     AND tstzrange(b.valid_from, COALESCE(b.valid_to, 'infinity'::timestamptz), '[)')
+       && tstzrange(a.valid_from, COALESCE(a.valid_to, 'infinity'::timestamptz), '[)')
+    WHERE a.is_primary IS TRUE
+      AND a.currency <> b.currency
+  ) THEN
+    RAISE EXCEPTION 'post-data forward-fix refused: existing cross-currency overlapping primary price policy' USING ERRCODE = '55000';
+  END IF;
+END $$;
+
 -- Validation is the only post-data action. Invalid legacy-null v2 facts abort
 -- this transaction and remain available for an explicit owner-led fix.
 ALTER TABLE catalog.sku VALIDATE CONSTRAINT sku_v2_standardization_mode_ck;

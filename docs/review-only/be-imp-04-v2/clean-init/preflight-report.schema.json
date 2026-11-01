@@ -40,7 +40,7 @@
     "strategy": { "const": "NEW_DATABASE" }
   },
   "allOf": [
-    { "if": { "properties": { "decision": { "const": "PROCEED" } } }, "then": { "required": ["stopReasons"], "properties": { "stopReasons": { "maxItems": 0 }, "database": { "properties": { "readOnly": { "const": false }, "recovery": { "const": false } } }, "activeSessions": { "properties": { "external": { "const": 0 } } }, "organizations": { "maxItems": 0 } } } },
+    { "if": { "properties": { "decision": { "const": "PROCEED" } } }, "then": { "required": ["stopReasons"], "properties": { "stopReasons": { "maxItems": 0 }, "database": { "properties": { "readOnly": { "const": false }, "recovery": { "const": false } } }, "activeSessions": { "properties": { "external": { "const": 0 } } }, "organizations": { "maxItems": 0 }, "ownedTables": { "items": { "properties": { "rowCount": { "const": 0 }, "organizationIds": { "maxItems": 0 } } } }, "verification": { "properties": { "migrationDigestMatch": { "const": true }, "seedDigestMatch": { "const": true }, "ownerAndScopeClear": { "const": true } } } } } },
     { "if": { "properties": { "decision": { "const": "STOP" } } }, "then": { "required": ["stopReasons"], "properties": { "stopReasons": { "minItems": 1 } } } }
   ],
   "$defs": { "uuid": { "type": "string", "format": "uuid" }, "gitRevision": { "type": "string", "pattern": "^[a-f0-9]{40}$" }, "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }

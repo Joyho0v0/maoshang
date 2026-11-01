@@ -35,6 +35,27 @@ function countRefs(value) {
   return count;
 }
 
+const reviewCursorSecret = 'JOYHO-33-review-only-cursor-secret';
+function makeReviewCursor(payload) {
+  const payloadSegment = Buffer.from(JSON.stringify({ ...payload, lastTuple: payload.lastTuple ?? ['2026-11-01T00:00:00.000Z', '55555555-5555-4555-8555-555555555555'] })).toString('base64url');
+  const signature = createHash('sha256').update(`${reviewCursorSecret}:${payloadSegment}`).digest('base64url');
+  return `v2.${payloadSegment}.${signature}`;
+}
+
+function verifyReviewCursor(raw, expected) {
+  if (typeof raw !== 'string') return false;
+  const parts = raw.split('.');
+  if (parts.length !== 3 || parts[0] !== 'v2') return false;
+  const [version, payloadSegment, signature] = parts;
+  void version;
+  const expectedSignature = createHash('sha256').update(`${reviewCursorSecret}:${payloadSegment}`).digest('base64url');
+  if (signature !== expectedSignature) return false;
+  let payload;
+  try { payload = JSON.parse(Buffer.from(payloadSegment, 'base64url').toString('utf8')); } catch { return false; }
+  for (const key of ['version', 'operation', 'resource', 'organization', 'scopeFingerprint', 'authzVersion', 'sort', 'filters', 'pageSize']) if (payload[key] !== expected[key]) return false;
+  return Array.isArray(payload.lastTuple) && payload.lastTuple.length === 2;
+}
+
 function operationsOf(document) {
   return Object.entries(document.paths ?? {}).flatMap(([path, item]) =>
     Object.entries(item).filter(([method]) => methods.has(method)).map(([method, operation]) => ({ path, method, operation })),
@@ -156,7 +177,12 @@ function independentLint(document, dereferenced) {
 
   const sortEnums = ['ProductSortV2', 'SkuSortV2', 'OrderSortV2'].map((name) => schema(dereferenced, name).enum);
   assert(sortEnums[0]?.includes('-updatedAt,-id') && sortEnums[1]?.includes('-updatedAt,-id') && sortEnums[2]?.includes('-updatedAt,-id'), 'composite default sort is not explicit for every list');
-  assert(sortEnums[0]?.includes('name') && sortEnums[1]?.includes('skuCode') && sortEnums[2]?.includes('orderNo'), 'resource sort allowlist is incomplete');
+  const requiredSorts = [
+    ['ProductSortV2', ['name', '-name', 'status', '-status', 'id', '-id']],
+    ['SkuSortV2', ['skuCode', '-skuCode', 'name', '-name', 'status', '-status', 'id', '-id']],
+    ['OrderSortV2', ['orderNo', '-orderNo', 'status', '-status', 'id', '-id']],
+  ];
+  for (const [name, literals] of requiredSorts) for (const literal of literals) assert(schema(dereferenced, name).enum.includes(literal), `${name} is missing exact literal ${literal}`);
   for (const parameterName of ['ProductSort', 'SkuSort', 'OrderSort']) assert(document.components.parameters[parameterName]?.schema?.$ref?.endsWith('/' + parameterName + 'V2'), `${parameterName} is not generated from its literal union`);
   assert(schema(dereferenced, 'CursorV2').pattern?.startsWith('^v2\\.'), 'cursor does not carry a versioned machine binding');
   assert(document.components.parameters.PageAfter.schema.$ref?.endsWith('/CursorV2'), 'page cursor is not bound to CursorV2');
@@ -171,6 +197,10 @@ function independentLint(document, dereferenced) {
   assert(document.components.responses.CommandStatusInProgress.headers['Retry-After'], '202 command response lacks Retry-After');
   assert(document.components.responses.CommandStatusInProgress.headers['Content-Location'], '202 command response lacks Content-Location');
   assert(document.components.responses.CommandStatus.headers['Retry-After'], 'command status response lacks conditional Retry-After declaration');
+  assert(document.components.responses.CommandStatus.headers['Content-Location']?.$ref?.endsWith('/CommandStatusContentLocation'), 'command status Content-Location is not canonical');
+  for (const name of ['ProductCreated', 'SkuCreated', 'OrderCreated']) assert(!document.components.responses[name].headers['Content-Location'], `${name} must forbid Content-Location`);
+  for (const name of ['Problem400', 'Problem401', 'Problem403', 'Problem404', 'Problem409', 'Problem428', 'Problem429', 'Problem500', 'Problem502', 'Problem503']) assert(document.components.responses[name].headers['Cache-Control'], `${name} lacks required no-store Cache-Control`);
+  for (const name of ['Problem400Mutation', 'Problem401Mutation', 'Problem403Mutation', 'Problem404Mutation', 'Problem409Mutation', 'Problem428Mutation']) assert(document.components.responses[name].headers['Idempotent-Replay'], `${name} lacks mutation replay header`);
   assert(document.paths['/products/{id}']?.patch?.responses?.['200']?.$ref?.endsWith('/ProductUpdated'), 'product mutation does not use mutation response header matrix');
   assert(document.paths['/skus/{id}']?.patch?.responses?.['200']?.$ref?.endsWith('/SkuUpdated'), 'SKU mutation does not use mutation response header matrix');
   assert(document.paths['/orders/{id}']?.patch?.responses?.['200']?.$ref?.endsWith('/OrderUpdated'), 'order mutation does not use mutation response header matrix');
@@ -186,7 +216,7 @@ function compileFixtures(dereferenced) {
   const orderValidator = validators.get('OrderCreateRequestV2');
   let validCount = 0;
   for (const [name, value] of Object.entries(fixtures.valid)) {
-    const validator = name === 'problemFileNotReady' ? validators.get('Problem409')
+    const validator = name === 'problemFileNotReady' || name === 'skuUnclassifiedStateConflict' ? validators.get('Problem409')
       : name === 'fileStatus' ? validators.get('FileStatusV2')
         : name === 'fileDownloadIntent' ? validators.get('FileDownloadIntentV2')
           : name.startsWith('file') ? validators.get('FileStatusV2')
@@ -203,6 +233,7 @@ function compileFixtures(dereferenced) {
           : name.startsWith('sku') ? validators.get('SkuCreateRequestV2')
             : orderValidator;
     assert(validator(value), `${name} should validate: ${JSON.stringify(validator.errors)}`);
+    if (name === 'skuUnclassifiedStateConflict') assert(value.meta.currentState === 'UNCLASSIFIED' && value.meta.resourceType === 'SKU', 'legacy-null state conflict fixture lost its exact machine state');
     validCount += 1;
   }
   let invalidCount = 0;
@@ -244,6 +275,19 @@ function compileFixtures(dereferenced) {
               : orderValidator;
     assert(!validator(value), `${name} unexpectedly validated`);
     invalidCount += 1;
+  }
+  const projectionCases = [
+    ['DRAFT', 'INITIAL_CONTACT'], ['DRAFT', 'QUOTING'], ['DRAFT', 'QUOTE_FOLLOW_UP'],
+    ['CONFIRMED', 'DEPOSIT_PENDING'], ['CONFIRMED', 'DEPOSIT_CONFIRMED'], ['CONFIRMED', 'FULFILLMENT'], ['CONFIRMED', 'FOB_COMPLETED'],
+    ['FULFILLED', 'CLOSED'], ['CANCELLED', 'INITIAL_CONTACT'], ['CANCELLED', 'FOB_COMPLETED'],
+  ];
+  for (const [status, stage] of projectionCases) {
+    const candidate = { ...fixtures.valid.orderResponse, status, stage };
+    assert(validators.get('OrderV2')(candidate), `order status-stage projection rejected valid ${status}/${stage}`);
+  }
+  for (const [status, stage] of [['DRAFT', 'DEPOSIT_PENDING'], ['CONFIRMED', 'QUOTING'], ['FULFILLED', 'FULFILLMENT'], ['CANCELLED', 'CLOSED']]) {
+    const candidate = { ...fixtures.valid.orderResponse, status, stage };
+    assert(!validators.get('OrderV2')(candidate), `order status-stage projection accepted invalid ${status}/${stage}`);
   }
   assert(fixtures.query?.valid?.productDefaultComposite?.sort === '-updatedAt,-id' && fixtures.query?.valid?.skuDefaultComposite?.sort === '-updatedAt,-id' && fixtures.query?.valid?.orderDefaultComposite?.sort === '-updatedAt,-id', 'query fixture lost canonical composite default');
   assert(fixtures.query?.valid?.orderCursor?.['page[after]']?.startsWith('v2.'), 'query fixture lacks versioned cursor');
@@ -332,8 +376,8 @@ async function runGeneratedGate() {
     const clientModule = await import(pathToFileURL(join(output, 'client.mjs')).href);
     const validator = validatorModule.createV2RuntimeValidator(documentValue);
     const fixtures = JSON.parse(awaitReadFixtures);
-    const runtimeFixtures = ['fileStatus', 'fileDownloadIntent', 'commandInProgress', 'commandRecovery', 'commandSucceeded', 'commandFailed', 'problemCsrfFailed', 'problemDependencyFailure', 'problemDependencyUnavailable', 'orderResponse']
-      .map((name) => [name, validator.validate(name === 'fileStatus' ? 'FileStatusV2' : name === 'fileDownloadIntent' ? 'FileDownloadIntentV2' : name.startsWith('command') ? 'CommandStatus' : name === 'problemDependencyFailure' ? 'Problem502' : name === 'problemDependencyUnavailable' ? 'Problem503' : name === 'orderResponse' ? 'OrderV2' : 'Problem403', fixtures.valid[name])]);
+    const runtimeFixtures = ['fileStatus', 'fileDownloadIntent', 'commandInProgress', 'commandRecovery', 'commandSucceeded', 'commandFailed', 'problemCsrfFailed', 'problemDependencyFailure', 'problemDependencyUnavailable', 'skuUnclassifiedStateConflict', 'orderResponse']
+      .map((name) => [name, validator.validate(name === 'fileStatus' ? 'FileStatusV2' : name === 'fileDownloadIntent' ? 'FileDownloadIntentV2' : name.startsWith('command') ? 'CommandStatus' : name === 'problemDependencyFailure' ? 'Problem502' : name === 'problemDependencyUnavailable' ? 'Problem503' : name === 'skuUnclassifiedStateConflict' ? 'Problem409' : name === 'orderResponse' ? 'OrderV2' : 'Problem403', fixtures.valid[name])]);
     assert(runtimeFixtures.every(([, valid]) => valid), 'generated runtime validator rejected valid fixtures: ' + JSON.stringify(validator.errors));
     const fileId = fixtures.valid.fileStatus.id;
     let observed;
@@ -391,11 +435,18 @@ async function runGeneratedGate() {
     assert(invalidResponseHeaderRejected, 'generated client accepted a response header that violates const/pattern schema');
     const commandStatusClient = new clientModule.GeneratedV2Client({
       validator,
-      fetch: async () => new Response(JSON.stringify(fixtures.valid.commandInProgress), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store' } }),
+      fetch: async () => new Response(JSON.stringify(fixtures.valid.commandInProgress), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store', 'content-location': '/api/v2/commands/status' } }),
     });
     let missingRetryRejected = false;
     try { await commandStatusClient.call('getCommandStatusV2', { headers: { 'Idempotency-Key': 'status-key', 'X-Command-Operation': 'createOrderV2', 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch (error) { missingRetryRejected = /requires Retry-After/i.test(error?.message ?? ''); }
     assert(missingRetryRejected, 'command status accepted IN_PROGRESS without Retry-After');
+    const recoveryStatusClient = new clientModule.GeneratedV2Client({
+      validator,
+      fetch: async () => new Response(JSON.stringify(fixtures.valid.commandRecovery), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store', 'content-location': '/api/v2/commands/status' } }),
+    });
+    let missingRecoveryRetryRejected = false;
+    try { await recoveryStatusClient.call('getCommandStatusV2', { headers: { 'Idempotency-Key': 'recovery-key', 'X-Command-Operation': 'createOrderV2', 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch (error) { missingRecoveryRetryRejected = /requires Retry-After/i.test(error?.message ?? ''); }
+    assert(missingRecoveryRetryRejected, 'command status accepted RECOVERY_REQUIRED without Retry-After');
     const validOrderClient = new clientModule.GeneratedV2Client({
       validator,
       fetch: async (url, init) => {
@@ -411,7 +462,7 @@ async function runGeneratedGate() {
     let errorObserved = false;
     const errorClient = new clientModule.GeneratedV2Client({
       validator,
-      fetch: async () => new Response(JSON.stringify(fixtures.valid.problemFileNotReady), { status: 409, headers: { 'content-type': 'application/problem+json', 'x-request-id': '77777777-7777-4777-8777-777777777777' } }),
+      fetch: async () => new Response(JSON.stringify(fixtures.valid.problemFileNotReady), { status: 409, headers: { 'content-type': 'application/problem+json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store' } }),
     });
     try {
       await errorClient.call('createFileDownloadIntentV2', { pathParams: { fileId }, headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16' } });
@@ -442,10 +493,13 @@ async function runGeneratedGate() {
     await requestGateClient.call('createOrderV2', { headers: requestHeaders, body: fixtures.valid.standardSameCurrency });
     await requestGateClient.call('createOrderV2', { headers: requestHeaders, body: fixtures.valid.nonStandard });
     assert(requestFetchCount === 2, 'valid STANDARD/NON_STANDARD requests did not reach fetch exactly once each');
+    const expectedCursor = { version: 2, operation: 'listOrdersV2', resource: 'ORDER', organization: '66666666-6666-4666-8666-666666666666', scopeFingerprint: 'synthetic', authzVersion: '1', sort: '-updatedAt,-id', filters: '{"filter[status]":"DRAFT"}', pageSize: 20 };
     let queryFetchCount = 0;
     const queryClient = new clientModule.GeneratedV2Client({
       validator,
-      fetch: async () => {
+      fetch: async (url) => {
+        const rawCursor = new URL(String(url), 'http://v2-contract.invalid').searchParams.get('page[after]');
+        if (rawCursor !== null && !verifyReviewCursor(rawCursor, expectedCursor)) throw new Error('INVALID_CURSOR');
         queryFetchCount += 1;
         return new Response(JSON.stringify({ data: [], page: { nextCursor: null, hasNext: false } }), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store' } });
       },
@@ -460,9 +514,23 @@ async function runGeneratedGate() {
     try { await queryClient.call('listProductsV2', { query: fixtures.query.invalid.productUnknownStatus, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch { invalidStatusRejected = true; }
     let invalidSkuRejected = false;
     try { await queryClient.call('listSkusV2', { query: fixtures.query.invalid.skuUnknownSort, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch { invalidSkuRejected = true; }
+    let duplicateStatusRejected = false;
+    try { await queryClient.call('listOrdersV2', { query: fixtures.query.invalid.duplicateStatus, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch { duplicateStatusRejected = true; }
     let invalidCursorRejected = false;
-    try { await queryClient.call('listOrdersV2', { query: fixtures.query.invalid.crossResourceCursor, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch { invalidCursorRejected = true; }
-    assert(invalidQueryRejected && invalidStatusRejected && invalidSkuRejected && invalidCursorRejected && queryFetchCount === 4, `query gate did not fail before fetch (${queryFetchCount} calls)`);
+    try { await queryClient.call('listOrdersV2', { query: fixtures.query.invalid.crossResourceCursor, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch (error) { invalidCursorRejected = /INVALID_CURSOR/.test(error?.message ?? ''); }
+    assert(invalidQueryRejected && invalidStatusRejected && invalidSkuRejected && duplicateStatusRejected && invalidCursorRejected && queryFetchCount === 4, `query gate did not fail before fetch (${queryFetchCount} calls)`);
+    const cursorChecks = [
+      ['valid', fixtures.query.valid.orderCursor['page[after]'], true],
+      ['cross-resource', fixtures.query.invalid.crossResourceCursor['page[after]'], false],
+      ['tampered-signature', fixtures.query.valid.orderCursor['page[after]'].replace(/\.[^.]+$/, '.forged'), false],
+      ['cross-version', makeReviewCursor({ ...expectedCursor, version: 1 }), false],
+      ['cross-organization', makeReviewCursor({ ...expectedCursor, organization: '99999999-9999-4999-8999-999999999999' }), false],
+      ['cross-scope', makeReviewCursor({ ...expectedCursor, scopeFingerprint: 'attacker-selected-scope' }), false],
+      ['cross-sort', makeReviewCursor({ ...expectedCursor, sort: 'id' }), false],
+      ['cross-filter', makeReviewCursor({ ...expectedCursor, filters: '{}' }), false],
+      ['cross-page-size', makeReviewCursor({ ...expectedCursor, pageSize: 100 }), false],
+    ];
+    for (const [label, raw, expected] of cursorChecks) assert(verifyReviewCursor(raw, expectedCursor) === expected, `server cursor gate mismatch for ${label}`);
     let updateFetchCount = 0;
     const updateClient = new clientModule.GeneratedV2Client({
       validator,
@@ -472,6 +540,10 @@ async function runGeneratedGate() {
     await updateClient.call('updateOrderV2', { pathParams: { id: fixtures.valid.orderResponse.id }, headers: updateHeaders, body: fixtures.valid.orderUpdateReplacement });
     for (const name of ['orderUpdateDuplicateLineId', 'orderUpdateSameImage']) { let rejected = false; try { await updateClient.call('updateOrderV2', { pathParams: { id: fixtures.valid.orderResponse.id }, headers: updateHeaders, body: fixtures.invalid[name] }); } catch { rejected = true; } assert(rejected, `order edit semantic gate accepted ${name}`); }
     assert(updateFetchCount === 1, `order edit invalid semantic request reached fetch (${updateFetchCount})`);
+    const orderEditHarness = fileURLToPath(new URL('./clean-init/order-edit-rehearsal.mjs', import.meta.url));
+    const orderEditRun = spawnSync(process.execPath, [orderEditHarness, fixturesPath], { encoding: 'utf8' });
+    assert(orderEditRun.status === 0, `order edit transaction rehearsal failed: ${orderEditRun.stdout}${orderEditRun.stderr}`);
+    process.stdout.write(orderEditRun.stdout);
     const harness = fileURLToPath(new URL('./clean-init/dual-version-harness.mjs', import.meta.url));
     const v1OpenApi = fileURLToPath(new URL('../../../packages/contracts/openapi/openapi.yaml', import.meta.url));
     const tsx = join(process.cwd(), 'node_modules/.bin/tsx');

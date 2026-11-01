@@ -21,6 +21,8 @@ BEGIN
      OR binding.cluster_identifier IS DISTINCT FROM (pg_control_system()).system_identifier::text
      OR binding.project_id IS DISTINCT FROM 'JOYHO-33'
      OR binding.disposable IS DISTINCT FROM true
+     OR binding.manifest_digest IS DISTINCT FROM 'fba455528a90779eb149e55d59ec2f393bbdf2e865f30cd44001e03d4e2f7cef'
+     OR binding.seed_sql_digest IS DISTINCT FROM '596b75db57c4f26184f7f6d5f3d5b0f65ef7d9917ef86e1d5b70b65540e9248c'
      OR binding.manifest_digest !~ '^[a-f0-9]{64}$'
      OR binding.seed_sql_digest !~ '^[a-f0-9]{64}$'
      OR binding.policy_id IS DISTINCT FROM 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid

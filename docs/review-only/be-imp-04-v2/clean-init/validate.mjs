@@ -1,4 +1,4 @@
-/* global URL, console */
+/* global URL, console, structuredClone */
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -25,9 +25,24 @@ const validateSeed = ajv.compile(seedSchema);
 assert(validatePreflight(preflight), `preflight example invalid: ${JSON.stringify(validatePreflight.errors)}`);
 assert(validatePreflight(stopReport), `stop example invalid: ${JSON.stringify(validatePreflight.errors)}`);
 assert(validateSeed(seed), `seed example invalid: ${JSON.stringify(validateSeed.errors)}`);
+function preflightProceedGate(report) {
+  return report.decision === 'PROCEED'
+    && report.stopReasons.length === 0
+    && report.database.readOnly === false
+    && report.database.recovery === false
+    && report.activeSessions.external === 0
+    && report.organizations.length === 0
+    && report.ownedTables.every((table) => table.rowCount === 0 && table.organizationIds.length === 0)
+    && report.verification.migrationDigestMatch === true
+    && report.verification.seedDigestMatch === true
+    && report.verification.ownerAndScopeClear === true
+    && report.migrations.historyDigest === report.migrations.expectedHistoryDigest;
+}
+assert(preflightProceedGate(preflight), 'PROCEED example does not satisfy the independent machine gate');
 assert(preflight.reportVersion === 2 && preflight.decision === 'PROCEED' && preflight.activeSessions.external === 0, 'proceed report is not fail-closed');
 assert(preflight.exactRevision && preflight.workspace && preflight.database.oid && preflight.database.clusterIdentifier, 'proceed report lacks live identity binding facts');
 assert(preflight.migrations.historyDigest === preflight.migrations.expectedHistoryDigest && preflight.verification.migrationDigestMatch && preflight.verification.seedDigestMatch && preflight.verification.ownerAndScopeClear, 'proceed report does not prove digest/owner closure');
+assert(preflight.ownedTables.every((table) => table.rowCount === 0 && table.organizationIds.length === 0) && preflight.organizations.length === 0, 'proceed report does not prove empty owned scope');
 assert(stopReport.decision === 'STOP' && stopReport.stopReasons.length > 0, 'stop report lacks explicit stop reasons');
 assert(seed.synthetic === true && seed.environmentClass === 'disposable-local', 'seed is not synthetic disposable data');
 assert(seed.skus.every((sku) => sku.orderable && sku.standardizationMode && sku.policies.some((policy) => policy.isPrimary && policy.lifecycle === 'ACTIVE')), 'orderable SKU lacks explicit active primary policy facts');
@@ -46,10 +61,20 @@ for (const [name, value] of Object.entries(fixtures.invalid)) {
 
 const seedDigest = createHash('sha256').update(JSON.stringify(seed)).digest('hex');
 const seedSql = await readFile(pathOf('seed.sql'), 'utf8');
-const seedSqlDigest = createHash('sha256').update(seedSql).digest('hex');
+const seedSqlDigest = createHash('sha256').update(seedSql.replaceAll('596b75db57c4f26184f7f6d5f3d5b0f65ef7d9917ef86e1d5b70b65540e9248c', '__SEED_SQL_CANONICAL_DIGEST__')).digest('hex');
 assert(seed.skus[0].policies[0].id === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' && seed.skus[0].policies[0].unitPrice === '19.9900' && seed.skus[0].policies[0].riskBufferBps === 25, 'manifest policy facts are not canonical');
 for (const needle of [seed.skus[0].policies[0].id, seed.skus[0].policies[0].unitPrice, String(seed.skus[0].policies[0].riskBufferBps), seed.orders[0].lines[0].lineId, seed.orders[0].lines[0].priceSnapshot.sourcePolicyId]) assert(seedSql.includes(needle), `seed SQL does not contain manifest fact ${needle}`);
-assert(seedSqlDigest.length === 64 && seedDigest.length === 64, 'seed digests were not computed from raw inputs');
+assert(seedSqlDigest === '596b75db57c4f26184f7f6d5f3d5b0f65ef7d9917ef86e1d5b70b65540e9248c' && seedDigest.length === 64, 'seed digests were not computed from approved raw inputs');
+
+const fakeDigest = structuredClone(preflight);
+fakeDigest.migrations.expectedHistoryDigest = 'f'.repeat(64);
+assert(!validatePreflight(fakeDigest) || !preflightProceedGate(fakeDigest), 'PROCEED accepted a migration digest mismatch');
+const falseVerification = structuredClone(preflight);
+falseVerification.verification = { migrationDigestMatch: false, seedDigestMatch: false, ownerAndScopeClear: false };
+assert(!validatePreflight(falseVerification) || !preflightProceedGate(falseVerification), 'PROCEED accepted false verification facts');
+const nonEmpty = structuredClone(preflight);
+nonEmpty.ownedTables[0].rowCount = 9;
+assert(!validatePreflight(nonEmpty) || !preflightProceedGate(nonEmpty), 'PROCEED accepted non-empty owned data');
 console.log(`CLEAN_INIT_PREFLIGHT exit=0 proceed=1 stop=1 externalSessions=0 closedUnion=PROCEED|STOP liveIdentity=oid+cluster`);
 console.log(`CLEAN_INIT_SEED_SCHEMA exit=0 synthetic=1 orderableSkus=${seed.skus.length} seededOrders=${seed.orders.length}`);
 console.log(`CLEAN_INIT_SEED_DIGEST exit=0 manifest=${seedDigest} sql=${seedSqlDigest} facts=policy+price+risk+line+sourcePolicy`);

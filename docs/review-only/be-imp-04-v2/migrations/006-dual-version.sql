@@ -4,6 +4,27 @@ BEGIN;
 SET LOCAL lock_timeout = '2s';
 SET LOCAL statement_timeout = '30s';
 
+-- Installation is fail-closed: v1 rows written before this review-only trigger
+-- must not leave an existing cross-currency overlapping-primary ambiguity.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM catalog.price_policy a
+    JOIN catalog.price_policy b
+      ON b.organization_id = a.organization_id
+     AND b.sku_id = a.sku_id
+     AND b.id > a.id
+     AND b.is_primary IS TRUE
+     AND tstzrange(b.valid_from, COALESCE(b.valid_to, 'infinity'::timestamptz), '[)')
+       && tstzrange(a.valid_from, COALESCE(a.valid_to, 'infinity'::timestamptz), '[)')
+    WHERE a.is_primary IS TRUE
+      AND a.currency <> b.currency
+  ) THEN
+    RAISE EXCEPTION 'existing cross-currency overlapping primary price policy requires owner forward-fix' USING ERRCODE = '55000';
+  END IF;
+END $$;
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'price_policy_v2_window_excl' AND conrelid = 'catalog.price_policy'::regclass) THEN
