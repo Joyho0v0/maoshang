@@ -121,7 +121,13 @@ async function applyReviewMigration(db, name) {
 }
 
 async function createDatabase(db) {
-  docker(['exec', container, 'createdb', '-U', 'postgres', db]);
+  let created;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    created = docker(['exec', container, 'createdb', '-U', 'postgres', db], { allowFailure: true });
+    if (created.status === 0) break;
+    if (attempt === 19) throw new Error(`createdb ${db} did not become available:\n${created.stdout ?? ''}${created.stderr ?? ''}`);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+  }
   for (const name of ['001_foundation.sql', '002_identity_authorization.sql', '003_files.sql', '004_crm_catalog_orders.sql']) await applyMigration(db, name);
 }
 
