@@ -95,10 +95,17 @@ The current package does not execute these commands automatically. The review
 record must preserve the exact database name, command, exit code, row/object
 counts and cleanup query for each isolated run.
 
-## Explicit non-goals
+## Explicit non-goals and exact-contract boundary
 
-There is no historical legacy-data conversion, replacement snapshot/repoint workflow,
-run ledger, gap count, or input approval table in this package. Existing v1
-and v2 contract decisions for Order edit/cancel, response headers and
-sort/filter remain pending the Chief Web Systems Architect's exact decision;
-this migration plan does not select their API semantics.
+There is no historical legacy-data conversion, replacement snapshot/repoint
+workflow, run ledger, gap count, or input approval table in this package. H-05
+is resolved for this non-production scope by clean initialization; a real-data
+mapping would require a new, separately authorized migration design.
+
+The exact v2 API decisions are machine-defined in `openapi.yaml`: Order edit
+is complete replacement via `PATCH /api/v2/orders/{id}`, transition is the
+`ADVANCE|CANCEL` action union, the response header matrix is per status, and
+list queries use resource allowlists plus a signed cursor binding.
+`response-header-matrix.md` records the same required/optional/forbidden facts
+for reviewer traceability. A v2 promotion still requires the two architecture
+reviews; this package never modifies v1 or installs a formal 005+ migration.

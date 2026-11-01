@@ -1,11 +1,14 @@
 {
-  "reportVersion": 1,
+  "reportVersion": 2,
   "projectId": "JOYHO-33",
+  "exactRevision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "workspace": "/review/joyho-33",
   "decision": "PROCEED",
+  "stopReasons": [],
   "environment": { "class": "disposable-local", "projectMarker": "JOYHO-33", "disposable": true, "owner": "local-review" },
   "database": { "host": "127.0.0.1", "port": 55414, "name": "be_imp_04_cleaninit_20261101_a", "oid": 16384, "owner": "joyho14_u1", "readOnly": false, "recovery": false, "clusterIdentifier": "local-pg16-review", "serverVersion": "16.4" },
-  "migrations": { "historyDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "expectedHistoryDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "expandDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
-  "seed": { "manifestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "manifestVersion": 1, "synthetic": true },
+  "migrations": { "historyDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "expectedHistoryDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "migrationDigests": [{ "name": "001_foundation.sql", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }], "expandDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+  "seed": { "manifestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "sqlDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "manifestVersion": 1, "synthetic": true },
   "ownedTables": [
     { "schema": "org", "table": "organization", "rowCount": 0, "organizationIds": [] },
     { "schema": "catalog", "table": "sku", "rowCount": 0, "organizationIds": [] },
@@ -13,6 +16,9 @@
   ],
   "organizations": [],
   "activeSessions": { "total": 1, "external": 0, "sources": ["preflight connection"] },
-  "approval": { "approvedBy": "review-owner", "approvedAt": "2026-11-01T05:00:00Z", "executedBy": "review-runner", "stopAndRecoveryPlan": "Stop on identity, row-count, checksum, validation, or smoke mismatch; drop only this named database after evidence export." },
+  "approval": { "approvedBy": "review-owner", "approvedAt": "2026-11-01T05:00:00Z", "executedBy": "review-runner" },
+  "plan": { "verification": "Live identity, row counts, migration and seed digests are checked before writes.", "stopAndRecovery": "Stop on any mismatch; drop only this named database after evidence export." },
+  "verification": { "migrationDigestMatch": true, "seedDigestMatch": true, "ownerAndScopeClear": true },
+  "recovery": { "mode": "DROP_NAMED_DATABASE", "owner": "review-owner" },
   "strategy": "NEW_DATABASE"
 }

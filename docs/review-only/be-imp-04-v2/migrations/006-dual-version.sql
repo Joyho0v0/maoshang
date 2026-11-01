@@ -21,6 +21,62 @@ CREATE UNIQUE INDEX IF NOT EXISTS price_policy_v2_primary_open_uq
   ON catalog.price_policy (organization_id, sku_id)
   WHERE is_primary IS TRUE AND valid_to IS NULL;
 
+-- Canonical policy lifecycle: [valid_from, valid_to) is half-open. The SKU
+-- lock serializes same-SKU writers before the overlap test; the test spans
+-- currencies so a primary policy cannot be ambiguous even when currencies
+-- differ. This remains review-only and is not a formal migration.
+CREATE OR REPLACE FUNCTION catalog.enforce_v2_price_policy_window()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.valid_to IS NOT NULL AND NEW.valid_to <= NEW.valid_from THEN
+    RAISE EXCEPTION 'price policy validity window must be half-open and non-empty' USING ERRCODE = '23514';
+  END IF;
+  IF NEW.is_primary IS TRUE THEN
+    PERFORM pg_advisory_xact_lock(hashtextextended(NEW.organization_id::text || ':' || NEW.sku_id::text, 0));
+    IF EXISTS (
+      SELECT 1
+      FROM catalog.price_policy p
+      WHERE p.organization_id = NEW.organization_id
+        AND p.sku_id = NEW.sku_id
+        AND p.is_primary IS TRUE
+        AND p.id <> NEW.id
+        AND tstzrange(p.valid_from, COALESCE(p.valid_to, 'infinity'::timestamptz), '[)')
+          && tstzrange(NEW.valid_from, COALESCE(NEW.valid_to, 'infinity'::timestamptz), '[)')
+    ) THEN
+      RAISE EXCEPTION 'only one overlapping primary price policy is allowed per organization and SKU' USING ERRCODE = '23P01';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS price_policy_v2_window_guard ON catalog.price_policy;
+CREATE TRIGGER price_policy_v2_window_guard
+  BEFORE INSERT OR UPDATE ON catalog.price_policy
+  FOR EACH ROW EXECUTE FUNCTION catalog.enforce_v2_price_policy_window();
+
+CREATE OR REPLACE FUNCTION catalog.enforce_v2_price_policy_version()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF (NEW.currency, NEW.unit_price, NEW.valid_from, NEW.valid_to, NEW.is_primary, NEW.risk_buffer_bps)
+     IS DISTINCT FROM
+     (OLD.currency, OLD.unit_price, OLD.valid_from, OLD.valid_to, OLD.is_primary, OLD.risk_buffer_bps)
+     AND NEW.version <> OLD.version + 1 THEN
+    RAISE EXCEPTION 'price policy facts require an atomic canonical version bump' USING ERRCODE = '40001';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS price_policy_v2_version_guard ON catalog.price_policy;
+CREATE TRIGGER price_policy_v2_version_guard
+  BEFORE UPDATE ON catalog.price_policy
+  FOR EACH ROW EXECUTE FUNCTION catalog.enforce_v2_price_policy_version();
+
 CREATE OR REPLACE FUNCTION catalog.prevent_v2_snapshot_mutation()
 RETURNS trigger
 LANGUAGE plpgsql

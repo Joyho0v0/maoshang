@@ -11,6 +11,7 @@ import SwaggerParser from '@apidevtools/swagger-parser';
 const root = new URL('./', import.meta.url);
 const documentPath = new URL('./openapi.yaml', root).pathname;
 const fixturesPath = new URL('./fixtures.json', root).pathname;
+const manifestPath = new URL('./manifest.json', root).pathname;
 const methods = new Set(['get', 'put', 'post', 'delete', 'patch', 'options', 'head', 'trace']);
 
 function assert(condition, message) {
@@ -132,6 +133,48 @@ function independentLint(document, dereferenced) {
   const skuProperties = schema(dereferenced, 'SkuCreateRequestV2').properties;
   assert(skuProperties.baseUnit['x-default'] === 'unit' && skuProperties.trackingMode['x-default'] === 'NONE' && skuProperties.lowStockThreshold['x-default'] === '0', 'SKU omission defaults are not explicit');
   assert(document.info?.['x-contract-status'] === 'PENDING_REVIEW', 'candidate was accidentally promoted');
+
+  const updateOrder = document.paths['/orders/{id}']?.patch;
+  assert(updateOrder?.operationId === 'updateOrderV2', 'order edit operation is not canonical');
+  assert(updateOrder?.['x-order-edit']?.replacement === 'complete-ordered' && updateOrder['x-order-edit']?.snapshots === 'append-and-repoint' && updateOrder['x-order-edit']?.unknownResult === 'recovery', 'order edit transaction semantics are not machine-declared');
+  assert(updateOrder?.['x-safety']?.csrf === 'required' && updateOrder['x-safety'].idempotency === 'required' && updateOrder['x-safety'].ifMatch === 'required', 'order edit safety contract is incomplete');
+  const updateSchema = schema(dereferenced, 'OrderUpdateRequestV2');
+  assert(updateSchema.properties?.metadata && updateSchema.properties?.lines, 'order edit must expose metadata and complete replacement lines');
+  assert(schema(dereferenced, 'OrderLineReplacementV2').discriminator?.propertyName === 'itemKind', 'order replacement line discriminator is missing');
+  assert(schema(dereferenced, 'OrderLineReplacementV2').oneOf?.length === 2, 'order replacement line branches are incomplete');
+  assert(schema(dereferenced, 'OrderStandardLineReplacementV2').required.includes('lineId') && schema(dereferenced, 'OrderStandardLineReplacementV2').required.includes('imageFileId'), 'standard replacement line lacks stable nullable lineId/imageFileId');
+  assert(schema(dereferenced, 'OrderNonStandardLineReplacementV2').required.includes('quotedUnitPrice'), 'non-standard replacement line lacks order-currency quote');
+
+  const transition = schema(dereferenced, 'OrderTransitionRequestV2');
+  assert(transition.discriminator?.propertyName === 'action' && transition.oneOf?.length === 2, 'order transition action discriminator is not closed');
+  assert(schema(dereferenced, 'OrderCancelActionV2').properties?.toStage === undefined, 'CANCEL action illegally accepts toStage');
+  const orderProjection = schema(dereferenced, 'OrderV2');
+  assert(orderProjection.required.includes('capabilities') && orderProjection.required.includes('allowedTransitions'), 'order projection capabilities/transitions are not required');
+  assert(schema(dereferenced, 'OrderCapabilityV2').enum?.join(',') === 'order.update,order.transition', 'order capability enum is not exact');
+  assert(schema(dereferenced, 'AllowedTransitionV2').oneOf?.length === 2, 'allowed transition union is not closed');
+  assert(document.paths['/orders/{id}/transitions']?.post?.['x-order-transition']?.advance === 'adjacent-only', 'transition adjacency is not machine-declared');
+
+  const sortEnums = ['ProductSortV2', 'SkuSortV2', 'OrderSortV2'].map((name) => schema(dereferenced, name).enum);
+  assert(sortEnums[0]?.includes('-updatedAt,-id') && sortEnums[1]?.includes('-updatedAt,-id') && sortEnums[2]?.includes('-updatedAt,-id'), 'composite default sort is not explicit for every list');
+  assert(sortEnums[0]?.includes('name') && sortEnums[1]?.includes('skuCode') && sortEnums[2]?.includes('orderNo'), 'resource sort allowlist is incomplete');
+  for (const parameterName of ['ProductSort', 'SkuSort', 'OrderSort']) assert(document.components.parameters[parameterName]?.schema?.$ref?.endsWith('/' + parameterName + 'V2'), `${parameterName} is not generated from its literal union`);
+  assert(schema(dereferenced, 'CursorV2').pattern?.startsWith('^v2\\.'), 'cursor does not carry a versioned machine binding');
+  assert(document.components.parameters.PageAfter.schema.$ref?.endsWith('/CursorV2'), 'page cursor is not bound to CursorV2');
+  for (const [path, operation] of [['/products', document.paths['/products']?.get], ['/skus', document.paths['/skus']?.get], ['/orders', document.paths['/orders']?.get]]) {
+    assert(operation?.['x-cursor-binding']?.fields?.join(',') === 'version,operation,resource,organization,scopeFingerprint,authzVersion,sort,filters,pageSize,lastTuple', `${path} cursor binding is incomplete`);
+  }
+
+  const responseHeaderNames = ['X-Request-ID', 'ETag', 'Location', 'Content-Location', 'Cache-Control', 'Retry-After', 'Idempotent-Replay'];
+  for (const response of Object.values(document.components.responses ?? {})) {
+    for (const name of Object.keys(response.headers ?? {})) assert(responseHeaderNames.includes(name), `response has undeclared header ${name}`);
+  }
+  assert(document.components.responses.CommandStatusInProgress.headers['Retry-After'], '202 command response lacks Retry-After');
+  assert(document.components.responses.CommandStatusInProgress.headers['Content-Location'], '202 command response lacks Content-Location');
+  assert(document.components.responses.CommandStatus.headers['Retry-After'], 'command status response lacks conditional Retry-After declaration');
+  assert(document.paths['/products/{id}']?.patch?.responses?.['200']?.$ref?.endsWith('/ProductUpdated'), 'product mutation does not use mutation response header matrix');
+  assert(document.paths['/skus/{id}']?.patch?.responses?.['200']?.$ref?.endsWith('/SkuUpdated'), 'SKU mutation does not use mutation response header matrix');
+  assert(document.paths['/orders/{id}']?.patch?.responses?.['200']?.$ref?.endsWith('/OrderUpdated'), 'order mutation does not use mutation response header matrix');
+  assert(document.paths['/orders/{id}/transitions']?.post?.responses?.['200']?.$ref?.endsWith('/OrderUpdated'), 'order transition does not use mutation response header matrix');
 }
 
 function compileFixtures(dereferenced) {
@@ -150,6 +193,8 @@ function compileFixtures(dereferenced) {
             : name === 'problemDependencyFailure' ? validators.get('Problem502')
               : name === 'problemDependencyUnavailable' ? validators.get('Problem503')
                 : name === 'orderResponse' ? validators.get('OrderV2')
+                    : name === 'orderUpdateReplacement' || name === 'orderUpdateMetadataOnly' ? validators.get('OrderUpdateRequestV2')
+                    : name === 'orderAdvanceAction' || name === 'orderCancelAction' ? validators.get('OrderTransitionRequestV2')
           : name === 'csrfToken' ? validators.get('CsrfToken')
             : name.startsWith('command') ? validators.get('CommandStatus')
               : name === 'problemCsrfFailed' ? validators.get('Problem403')
@@ -169,6 +214,16 @@ function compileFixtures(dereferenced) {
       invalidCount += 1;
       continue;
     }
+    if (name === 'orderUpdateDuplicateLineId' || name === 'orderUpdateSameImage') {
+      const validator = validators.get('OrderUpdateRequestV2');
+      assert(validator(value), `${name} should be schema-valid before semantic replacement rejection: ${JSON.stringify(validator.errors)}`);
+      const lines = value.lines;
+      const duplicateLine = name === 'orderUpdateDuplicateLineId' && new Set(lines.filter((line) => line.lineId !== null).map((line) => line.lineId)).size !== lines.filter((line) => line.lineId !== null).length;
+      const duplicateImage = name === 'orderUpdateSameImage' && new Set(lines.filter((line) => line.imageFileId !== null).map((line) => line.imageFileId)).size !== lines.filter((line) => line.imageFileId !== null).length;
+      assert(duplicateLine || duplicateImage, `${name} fixture does not exercise a semantic replacement rejection`);
+      invalidCount += 1;
+      continue;
+    }
     const validator = name === 'rateTooPrecise' ? validators.get('DecimalRate')
       : name === 'amountIntegerOverflow' ? validators.get('DecimalAmount')
         : name === 'fileAvailableAsNotReady' || name === 'v1StatusHrefFallback' ? validators.get('Problem409')
@@ -183,11 +238,16 @@ function compileFixtures(dereferenced) {
                   : name === 'csrfLegacyToken' ? validators.get('CsrfToken')
                     : name === 'thresholdWrongScale' ? validators.get('SkuCreateRequestV2')
           : name === 'fileBadHref' ? validators.get('FileStatusV2')
-            : name === 'skuMissingStandardization' ? validators.get('SkuCreateRequestV2')
+              : name === 'skuMissingStandardization' ? validators.get('SkuCreateRequestV2')
+              : name.startsWith('orderUpdate') ? validators.get('OrderUpdateRequestV2')
+                : name.startsWith('orderAdvance') || name.startsWith('orderCancel') ? validators.get('OrderTransitionRequestV2')
               : orderValidator;
     assert(!validator(value), `${name} unexpectedly validated`);
     invalidCount += 1;
   }
+  assert(fixtures.query?.valid?.productDefaultComposite?.sort === '-updatedAt,-id' && fixtures.query?.valid?.skuDefaultComposite?.sort === '-updatedAt,-id' && fixtures.query?.valid?.orderDefaultComposite?.sort === '-updatedAt,-id', 'query fixture lost canonical composite default');
+  assert(fixtures.query?.valid?.orderCursor?.['page[after]']?.startsWith('v2.'), 'query fixture lacks versioned cursor');
+  assert(fixtures.query?.invalid?.unknownSort?.sort === 'priority' && fixtures.query?.invalid?.duplicateStatus?.['filter[status]'] === 'DRAFT,DRAFT', 'query invalid fixtures are incomplete');
   return { schemaCount: validators.size, validCount, invalidCount };
 }
 
@@ -287,6 +347,13 @@ async function runGeneratedGate() {
     const fileStatusResponse = await client.call('getFileStatusV2', { pathParams: { fileId }, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
     assert(observed?.url === '/api/v2/files/' + fileId && observed.method === 'GET' && observed.credentials === 'include', 'generated client did not serialize the v2 URL/request correctly');
     assert(fileStatusResponse.headers['X-Request-ID'] === '77777777-7777-4777-8777-777777777777' && fileStatusResponse.headers['Cache-Control'] === 'no-store', 'generated response header type keys are not readable at runtime');
+    const forbiddenHeaderClient = new clientModule.GeneratedV2Client({
+      validator,
+      fetch: async () => new Response(JSON.stringify(fixtures.valid.fileStatus), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store', etag: '"v1"' } }),
+    });
+    let forbiddenHeaderRejected = false;
+    try { await forbiddenHeaderClient.call('getFileStatusV2', { pathParams: { fileId }, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch (error) { forbiddenHeaderRejected = /Forbidden response header ETag/i.test(error?.message ?? ''); }
+    assert(forbiddenHeaderRejected, 'generated client accepted a forbidden response header');
     const orderBody = fixtures.valid.standardSameCurrency;
     let orderObserved;
     const orderClient = new clientModule.GeneratedV2Client({
@@ -303,9 +370,17 @@ async function runGeneratedGate() {
       missingResponseHeaderRejected = /required response header/i.test(error?.message ?? '');
     }
     assert(missingResponseHeaderRejected, 'generated client accepted a 202 response missing required response headers');
+    let individuallyMissingHeaders = 0;
+    for (const missing of ['X-Request-ID', 'Cache-Control', 'Content-Location', 'Retry-After']) {
+      const headers = { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store', 'content-location': '/api/v2/commands/status', 'retry-after': '1' };
+      delete headers[missing.toLowerCase()];
+      const individualClient = new clientModule.GeneratedV2Client({ validator, fetch: async () => new Response(JSON.stringify(fixtures.valid.commandInProgress), { status: 202, headers }) });
+      try { await individualClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'r1-generation-key' }, body: orderBody }); } catch (error) { if (new RegExp(`required response header ${missing}`, 'i').test(error?.message ?? '')) individuallyMissingHeaders += 1; }
+    }
+    assert(individuallyMissingHeaders === 4, `required response header matrix only rejected ${individuallyMissingHeaders}/4 omissions`);
     const invalidResponseHeaderClient = new clientModule.GeneratedV2Client({
       validator,
-      fetch: async () => new Response(JSON.stringify(fixtures.valid.commandInProgress), { status: 202, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'public', 'content-location': '/api/v2/commands/44444444-4444-4444-8444-444444444444', 'retry-after': '1' } }),
+      fetch: async () => new Response(JSON.stringify(fixtures.valid.commandInProgress), { status: 202, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'public', 'content-location': '/api/v2/commands/status', 'retry-after': '1' } }),
     });
     let invalidResponseHeaderRejected = false;
     try {
@@ -314,11 +389,18 @@ async function runGeneratedGate() {
       invalidResponseHeaderRejected = /Invalid response header Cache-Control/i.test(error?.message ?? '');
     }
     assert(invalidResponseHeaderRejected, 'generated client accepted a response header that violates const/pattern schema');
+    const commandStatusClient = new clientModule.GeneratedV2Client({
+      validator,
+      fetch: async () => new Response(JSON.stringify(fixtures.valid.commandInProgress), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store' } }),
+    });
+    let missingRetryRejected = false;
+    try { await commandStatusClient.call('getCommandStatusV2', { headers: { 'Idempotency-Key': 'status-key', 'X-Command-Operation': 'createOrderV2', 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch (error) { missingRetryRejected = /requires Retry-After/i.test(error?.message ?? ''); }
+    assert(missingRetryRejected, 'command status accepted IN_PROGRESS without Retry-After');
     const validOrderClient = new clientModule.GeneratedV2Client({
       validator,
       fetch: async (url, init) => {
         orderObserved = { url, method: init.method, headers: Object.fromEntries(init.headers.entries()), body: init.body, credentials: init.credentials };
-        return new Response(JSON.stringify(fixtures.valid.commandInProgress), { status: 202, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store', 'content-location': '/api/v2/commands/44444444-4444-4444-8444-444444444444', 'retry-after': '1' } });
+        return new Response(JSON.stringify(fixtures.valid.commandInProgress), { status: 202, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store', 'content-location': '/api/v2/commands/status', 'retry-after': '1' } });
       },
     });
     await validOrderClient.call('createOrderV2', { headers: { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'r1-generation-key' }, body: orderBody });
@@ -342,7 +424,7 @@ async function runGeneratedGate() {
       validator,
       fetch: async () => {
         requestFetchCount += 1;
-        return new Response(JSON.stringify(fixtures.valid.commandInProgress), { status: 202, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store', 'content-location': '/api/v2/commands/44444444-4444-4444-8444-444444444444', 'retry-after': '1' } });
+        return new Response(JSON.stringify(fixtures.valid.commandInProgress), { status: 202, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store', 'content-location': '/api/v2/commands/status', 'retry-after': '1' } });
       },
     });
     const requestHeaders = { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'request-gate-key' };
@@ -360,6 +442,36 @@ async function runGeneratedGate() {
     await requestGateClient.call('createOrderV2', { headers: requestHeaders, body: fixtures.valid.standardSameCurrency });
     await requestGateClient.call('createOrderV2', { headers: requestHeaders, body: fixtures.valid.nonStandard });
     assert(requestFetchCount === 2, 'valid STANDARD/NON_STANDARD requests did not reach fetch exactly once each');
+    let queryFetchCount = 0;
+    const queryClient = new clientModule.GeneratedV2Client({
+      validator,
+      fetch: async () => {
+        queryFetchCount += 1;
+        return new Response(JSON.stringify({ data: [], page: { nextCursor: null, hasNext: false } }), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store' } });
+      },
+    });
+    await queryClient.call('listProductsV2', { query: fixtures.query.valid.productDefaultComposite, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
+    await queryClient.call('listSkusV2', { query: fixtures.query.valid.skuDefaultComposite, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
+    await queryClient.call('listOrdersV2', { query: fixtures.query.valid.orderDefaultComposite, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
+    await queryClient.call('listOrdersV2', { query: fixtures.query.valid.orderCursor, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } });
+    let invalidQueryRejected = false;
+    try { await queryClient.call('listOrdersV2', { query: fixtures.query.invalid.unknownSort, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch { invalidQueryRejected = true; }
+    let invalidStatusRejected = false;
+    try { await queryClient.call('listProductsV2', { query: fixtures.query.invalid.productUnknownStatus, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch { invalidStatusRejected = true; }
+    let invalidSkuRejected = false;
+    try { await queryClient.call('listSkusV2', { query: fixtures.query.invalid.skuUnknownSort, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch { invalidSkuRejected = true; }
+    let invalidCursorRejected = false;
+    try { await queryClient.call('listOrdersV2', { query: fixtures.query.invalid.crossResourceCursor, headers: { 'X-Request-ID': '77777777-7777-4777-8777-777777777777' } }); } catch { invalidCursorRejected = true; }
+    assert(invalidQueryRejected && invalidStatusRejected && invalidSkuRejected && invalidCursorRejected && queryFetchCount === 4, `query gate did not fail before fetch (${queryFetchCount} calls)`);
+    let updateFetchCount = 0;
+    const updateClient = new clientModule.GeneratedV2Client({
+      validator,
+      fetch: async () => { updateFetchCount += 1; return new Response(JSON.stringify(fixtures.valid.orderResponse), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', etag: '"v2"', 'cache-control': 'no-store' } }); },
+    });
+    const updateHeaders = { 'X-CSRF-Token': 'csrf-token-value-with-at-least-16', 'Idempotency-Key': 'edit-key', 'If-Match': '"v1"' };
+    await updateClient.call('updateOrderV2', { pathParams: { id: fixtures.valid.orderResponse.id }, headers: updateHeaders, body: fixtures.valid.orderUpdateReplacement });
+    for (const name of ['orderUpdateDuplicateLineId', 'orderUpdateSameImage']) { let rejected = false; try { await updateClient.call('updateOrderV2', { pathParams: { id: fixtures.valid.orderResponse.id }, headers: updateHeaders, body: fixtures.invalid[name] }); } catch { rejected = true; } assert(rejected, `order edit semantic gate accepted ${name}`); }
+    assert(updateFetchCount === 1, `order edit invalid semantic request reached fetch (${updateFetchCount})`);
     const harness = fileURLToPath(new URL('./clean-init/dual-version-harness.mjs', import.meta.url));
     const v1OpenApi = fileURLToPath(new URL('../../../packages/contracts/openapi/openapi.yaml', import.meta.url));
     const tsx = join(process.cwd(), 'node_modules/.bin/tsx');
@@ -394,6 +506,11 @@ const cleanInitValidator = fileURLToPath(new URL('./clean-init/validate.mjs', im
 const cleanInitRun = spawnSync(process.execPath, [cleanInitValidator], { encoding: 'utf8' });
 assert(cleanInitRun.status === 0, `clean-init schema gate failed: ${cleanInitRun.stdout}${cleanInitRun.stderr}`);
 const generationStats = await runGeneratedGate();
+const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+const candidateOpenapiDigest = createHash('sha256').update(await readFile(documentPath)).digest('hex');
+assert(manifest.status === 'PENDING_REVIEW' && manifest.operationCount === operationIds.length, 'manifest is not a pending 18-operation candidate');
+assert(manifest.candidateDigests.openapi === candidateOpenapiDigest && manifest.candidateDigests.generatedTypes === generationStats.typesSha256 && manifest.candidateDigests.generatedClient === generationStats.clientSha256, 'manifest candidate digests do not match the generated review artifact');
+console.log(`V2_REVIEW_MANIFEST exit=0 status=${manifest.status} openapi=${candidateOpenapiDigest} types=${generationStats.typesSha256} client=${generationStats.clientSha256}`);
 console.log(`V2_REVIEW_PARSE exit=0 operations=${operationIds.length} paths=${Object.keys(parsed.paths).length}`);
 console.log(`V2_REVIEW_DEREFERENCE exit=0 unresolvedRefs=${unresolvedRefs}`);
 console.log(`V2_REVIEW_LINT exit=0 checks=R1,R2,R3,R4,R5,R6,R7,R8,P3-01`);

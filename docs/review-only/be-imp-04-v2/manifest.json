@@ -31,9 +31,9 @@
     "generatedClient": "b4a017cef65a11018f70321f624e3456708d55fdea638b9683a57fb610b5712c"
   },
   "candidateDigests": {
-    "openapi": "c643c55afcfc30e516a4e96debaf813476049f2946d59fe4fa3390eb674da29c",
-    "generatedTypes": "bd8b88b57d1afc9c6cafd7dc5f109f2ab544fc2cecab03a5dfefa632bffdd56f",
-    "generatedClient": "74fdd109fdb0a1512da9602cdb4cdeb2352d11bc1301348d9ee3d27e7fcc0294"
+    "openapi": "ecf7c5a319044910d201bb55c622bbce51db193b8e05589c8d4e08a33ee2f4b5",
+    "generatedTypes": "1b2bb7f6c67a12a6f0f86418d759e0b2911b74ef9d86eaf67c058cc08fdbb55e",
+    "generatedClient": "47742d9d07c3739f72d8b61b70aa4ba91e952a9b466e58324475cb36b36e5583"
   },
   "initialization": {
     "mode": "CLEAN_INIT",

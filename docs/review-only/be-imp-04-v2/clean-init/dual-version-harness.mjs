@@ -41,7 +41,7 @@ const v2Client = new clientModule.GeneratedV2Client({
     v2Url = url;
     return new Response(JSON.stringify({ data: [], page: { nextCursor: null, hasNext: false } }), {
       status: 200,
-      headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777' },
+      headers: { 'content-type': 'application/json', 'x-request-id': '77777777-7777-4777-8777-777777777777', 'cache-control': 'no-store' },
     });
   },
 });

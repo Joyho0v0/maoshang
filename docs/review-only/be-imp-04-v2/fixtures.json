@@ -189,9 +189,19 @@
         "imageFileId": null
       }],
       "totalAmount": "39.9800",
-      "allowedTransitions": ["QUOTING"],
-      "capabilities": ["order.read"]
+      "allowedTransitions": [{ "action": "ADVANCE", "toStage": "QUOTING" }, { "action": "CANCEL" }],
+      "capabilities": ["order.update", "order.transition"]
     },
+    "orderUpdateReplacement": {
+      "lines": [
+        { "itemKind": "STANDARD", "lineId": "33333333-3333-4333-8333-333333333333", "skuId": "11111111-1111-4111-8111-111111111111", "quantity": "2.000000", "imageFileId": null },
+        { "itemKind": "NON_STANDARD", "lineId": null, "name": "Replacement label", "unit": "piece", "quantity": "1.000000", "quotedUnitPrice": "5.0000", "standardizationMode": "NONE", "imageFileId": null }
+      ],
+      "metadata": { "replacement": true }
+    },
+    "orderAdvanceAction": { "action": "ADVANCE", "toStage": "QUOTING" },
+    "orderCancelAction": { "action": "CANCEL", "reason": "customer requested cancellation" },
+    "orderUpdateMetadataOnly": { "metadata": { "priority": "HIGH" } },
     "skuMinimal": {
       "productId": "88888888-8888-4888-8888-888888888888",
       "skuCode": "SKU-MINIMAL",
@@ -298,6 +308,10 @@
     "fileAvailableAsNotReady": { "type": "urn:autoflow:problem:file-not-ready", "title": "File is not ready", "status": 409, "code": "FILE_NOT_READY", "requestId": "77777777-7777-4777-8777-777777777777", "retryable": true, "meta": { "kind": "FILE_NOT_READY", "fileId": "33333333-3333-4333-8333-333333333333", "state": "AVAILABLE", "statusHref": "/api/v2/files/33333333-3333-4333-8333-333333333333" } },
     "fileUnknownState": { "id": "33333333-3333-4333-8333-333333333333", "version": 1, "status": "UNKNOWN", "updatedAt": "2026-10-31T00:00:00Z", "href": "/api/v2/files/33333333-3333-4333-8333-333333333333" },
     "nonStandardStrict": { "customerId": "66666666-6666-4666-8666-666666666666", "orderNo": "BAD-STRICT", "currency": "USD", "lines": [{ "itemKind": "NON_STANDARD", "name": "x", "unit": "piece", "quantity": "1", "quotedUnitPrice": "1.0000", "standardizationMode": "STRICT" }] },
+    "orderUpdateDuplicateLineId": { "lines": [{ "itemKind": "STANDARD", "lineId": "33333333-3333-4333-8333-333333333333", "skuId": "11111111-1111-4111-8111-111111111111", "quantity": "1", "imageFileId": null }, { "itemKind": "STANDARD", "lineId": "33333333-3333-4333-8333-333333333333", "skuId": "11111111-1111-4111-8111-111111111111", "quantity": "1", "imageFileId": null }] },
+    "orderCancelWithStage": { "action": "CANCEL", "toStage": "CLOSED" },
+    "orderAdvanceMissingStage": { "action": "ADVANCE" },
+    "orderUpdateSameImage": { "lines": [{ "itemKind": "STANDARD", "lineId": null, "skuId": "11111111-1111-4111-8111-111111111111", "quantity": "1", "imageFileId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }, { "itemKind": "STANDARD", "lineId": null, "skuId": "11111111-1111-4111-8111-111111111111", "quantity": "1", "imageFileId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }] },
     "v1StatusHrefFallback": { "type": "urn:autoflow:problem:file-not-ready", "title": "File is not ready", "status": 409, "code": "FILE_NOT_READY", "requestId": "77777777-7777-4777-8777-777777777777", "retryable": true, "meta": { "kind": "FILE_NOT_READY", "fileId": "33333333-3333-4333-8333-333333333333", "state": "SCANNING", "statusHref": "/api/v1/files/33333333-3333-4333-8333-333333333333" } },
     "skuMissingStandardization": { "productId": "88888888-8888-4888-8888-888888888888", "skuCode": "SKU-BAD", "name": "Bad SKU", "unit": "piece" },
     "problemWrongRecoverability": { "type": "urn:autoflow:problem:dependency-unavailable", "title": "Dependency unavailable", "status": 503, "code": "DEPENDENCY_UNAVAILABLE", "requestId": "77777777-7777-4777-8777-777777777777", "retryable": false },
@@ -330,5 +344,20 @@
     },
     "commandRecoveryWithProblem": { "commandId": "44444444-4444-4444-8444-444444444444", "operationId": "createOrderV2", "state": "RECOVERY_REQUIRED", "startedAt": "2026-10-31T00:00:00Z", "expiresAt": "2026-10-31T00:01:00Z", "retryAfterMs": 1, "completedAt": null, "httpStatus": null, "resource": null, "resultHref": null, "problem": { "type": "urn:autoflow:problem:internal-error", "title": "Internal server error", "status": 500, "code": "INTERNAL_ERROR", "requestId": "77777777-7777-4777-8777-777777777777", "retryable": true } },
     "csrfLegacyToken": { "token": "legacy-token-value", "expiresAt": "2026-10-31T00:05:00Z" }
+  },
+  "query": {
+    "valid": {
+      "productDefaultComposite": { "sort": "-updatedAt,-id", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "skuDefaultComposite": { "sort": "-updatedAt,-id", "page[size]": 20, "filter[status]": "ACTIVE" },
+      "orderDefaultComposite": { "sort": "-updatedAt,-id", "page[size]": 20, "filter[status]": "DRAFT" },
+      "orderCursor": { "sort": "-updatedAt,-id", "page[size]": 20, "filter[status]": "DRAFT", "page[after]": "v2.eyJ2ZXJzaW9uIjoyLCJvcGVyYXRpb24iOiJsaXN0T3JkZXJzVjIiLCJyZXNvdXJjZSI6Ik9SREVSIiwib3JnYW5pemF0aW9uIjoiNjY2NjY2NjYtNjY2Ni00NjY2LTg2NjYtNjY2NjY2NjY2NjY2Iiwic2NvcGVGaW5nZXJwcmludCI6InN5bnRoZXRpYyIsImF1dGh6VmVyc2lvbiI6IjEiLCJzb3J0IjoiLXVwZGF0ZWRBdCwtaWQiLCJmaWx0ZXJzIjoie1wiZmlsdGVyW3N0YXR1c11cIjpcIkRSQUZUXCJ9IiwicGFnZVNpemUiOjIwLCJsYXN0VHVwbGUiOlsiMjAyNi0xMS0wMVQwMDowMDowMC4wMDBaIiwiNTU1NTU1NTUtNTU1NS00NTU1LTg1NTUtNTU1NTU1NTU1NTU1Il19.c2lnbmF0dXJl" }
+    },
+    "invalid": {
+      "productUnknownStatus": { "filter[status]": "ARCHIVED" },
+      "skuUnknownSort": { "sort": "priority" },
+      "unknownSort": { "sort": "priority" },
+      "duplicateStatus": { "filter[status]": "DRAFT,DRAFT" },
+      "crossResourceCursor": { "sort": "-updatedAt,-id", "page[after]": "v2.eyJ2ZXJzaW9uIjoyLCJvcGVyYXRpb24iOiJsaXN0U2t1c1YyIiwicmVzb3VyY2UiOiJTS1UiLCJvcmdhbml6YXRpb24iOiI2NjY2NjY2Ni02NjY2LTQ2NjYtODY2Ni02NjY2NjY2NjY2NjY2Iiwic2NvcGVGaW5nZXJwcmludCI6InN5bnRoZXRpYyIsImF1dGh6VmVyc2lvbiI6IjEiLCJzb3J0IjoiLXVwZGF0ZWRBdCwtaWQiLCJmaWx0ZXJzIjoie30iLCJwYWdlU2l6ZSI6MjAsImxhc3RUdXBsZSI6WyIyMDI2LTExLTAxVDAwOjAwOjAwLjAwMFoiLCIxNjE2MTYxNi0xNjE2LTQxNjEtODE2MS0xNjE2MTYxNjE2MTYxNiJdfQ.c2lnbmF0dXJl" }
+    }
   }
 }

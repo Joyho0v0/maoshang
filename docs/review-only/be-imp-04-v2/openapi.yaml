@@ -15,6 +15,7 @@ tags:
   - { name: commands }
   - { name: catalog }
   - { name: orders }
+  - { name: files }
 paths:
   /auth/csrf:
     get:
@@ -59,11 +60,13 @@ paths:
     get:
       tags: [catalog]
       operationId: listProductsV2
+      description: Product list uses a single status filter and a resource-specific sort union. Other single-column sorts append the same-direction id tie-breaker; string comparisons use COLLATE "C".
+      x-cursor-binding: { fields: [version, operation, resource, organization, scopeFingerprint, authzVersion, sort, filters, pageSize, lastTuple], resource: PRODUCT, defaultSort: '-updatedAt,-id', filterAllowlist: [ACTIVE, INACTIVE], collation: C, tieBreaker: id }
       parameters:
         - { $ref: '#/components/parameters/PageAfter' }
         - { $ref: '#/components/parameters/PageSize' }
         - { $ref: '#/components/parameters/ProductStatusFilter' }
-        - { $ref: '#/components/parameters/Sort' }
+        - { $ref: '#/components/parameters/ProductSort' }
         - { $ref: '#/components/parameters/RequestIdHeader' }
       responses:
         '200': { $ref: '#/components/responses/ProductPage' }
@@ -121,7 +124,7 @@ paths:
         - { $ref: '#/components/parameters/RequestIdHeader' }
       requestBody: { $ref: '#/components/requestBodies/ProductUpdateRequestV2' }
       responses:
-        '200': { $ref: '#/components/responses/Product' }
+        '200': { $ref: '#/components/responses/ProductUpdated' }
         '202': { $ref: '#/components/responses/CommandStatusInProgress' }
         '400': { $ref: '#/components/responses/Problem400' }
         '401': { $ref: '#/components/responses/Problem401' }
@@ -137,11 +140,13 @@ paths:
     get:
       tags: [catalog]
       operationId: listSkusV2
+      description: SKU list uses a single status filter and a resource-specific sort union. Other single-column sorts append the same-direction id tie-breaker; string comparisons use COLLATE "C".
+      x-cursor-binding: { fields: [version, operation, resource, organization, scopeFingerprint, authzVersion, sort, filters, pageSize, lastTuple], resource: SKU, defaultSort: '-updatedAt,-id', filterAllowlist: [ACTIVE, INACTIVE], collation: C, tieBreaker: id }
       parameters:
         - { $ref: '#/components/parameters/PageAfter' }
         - { $ref: '#/components/parameters/PageSize' }
         - { $ref: '#/components/parameters/SkuStatusFilter' }
-        - { $ref: '#/components/parameters/Sort' }
+        - { $ref: '#/components/parameters/SkuSort' }
         - { $ref: '#/components/parameters/RequestIdHeader' }
       responses:
         '200': { $ref: '#/components/responses/SkuPage' }
@@ -206,7 +211,7 @@ paths:
         - { $ref: '#/components/parameters/RequestIdHeader' }
       requestBody: { $ref: '#/components/requestBodies/SkuUpdateRequestV2' }
       responses:
-        '200': { $ref: '#/components/responses/Sku' }
+        '200': { $ref: '#/components/responses/SkuUpdated' }
         '202': { $ref: '#/components/responses/CommandStatusInProgress' }
         '400': { $ref: '#/components/responses/Problem400' }
         '401': { $ref: '#/components/responses/Problem401' }
@@ -222,11 +227,13 @@ paths:
     get:
       tags: [orders]
       operationId: listOrdersV2
+      description: Order list uses a single status filter and a resource-specific sort union. Other single-column sorts append the same-direction id tie-breaker; string comparisons use COLLATE "C".
+      x-cursor-binding: { fields: [version, operation, resource, organization, scopeFingerprint, authzVersion, sort, filters, pageSize, lastTuple], resource: ORDER, defaultSort: '-updatedAt,-id', filterAllowlist: [DRAFT, CONFIRMED, FULFILLED, CANCELLED], collation: C, tieBreaker: id }
       parameters:
         - { $ref: '#/components/parameters/PageAfter' }
         - { $ref: '#/components/parameters/PageSize' }
         - { $ref: '#/components/parameters/OrderStatusFilter' }
-        - { $ref: '#/components/parameters/Sort' }
+        - { $ref: '#/components/parameters/OrderSort' }
         - { $ref: '#/components/parameters/RequestIdHeader' }
       responses:
         '200': { $ref: '#/components/responses/OrderPage' }
@@ -277,6 +284,8 @@ paths:
     patch:
       tags: [orders]
       operationId: updateOrderV2
+      description: Complete replacement edit. Only DRAFT orders at INITIAL_CONTACT, QUOTING, or QUOTE_FOLLOW_UP may be edited. Existing line IDs omitted from the replacement are removed; new lines use lineId null.
+      x-order-edit: { stages: [INITIAL_CONTACT, QUOTING, QUOTE_FOLLOW_UP], status: DRAFT, replacement: complete-ordered, metadata: complete-when-present, snapshots: append-and-repoint, imageReuse: forbidden, unknownResult: recovery }
       x-safety: { csrf: required, idempotency: required, ifMatch: required }
       parameters:
         - { $ref: '#/components/parameters/CsrfHeader' }
@@ -285,7 +294,7 @@ paths:
         - { $ref: '#/components/parameters/RequestIdHeader' }
       requestBody: { $ref: '#/components/requestBodies/OrderUpdateRequestV2' }
       responses:
-        '200': { $ref: '#/components/responses/Order' }
+        '200': { $ref: '#/components/responses/OrderUpdated' }
         '202': { $ref: '#/components/responses/CommandStatusInProgress' }
         '400': { $ref: '#/components/responses/Problem400' }
         '401': { $ref: '#/components/responses/Problem401' }
@@ -301,6 +310,8 @@ paths:
     post:
       tags: [orders]
       operationId: transitionOrderV2
+      description: Adjacent stage advance or terminal cancellation. CANCEL preserves the last stage and overrides status to CANCELLED.
+      x-order-transition: { advance: adjacent-only, cancel: terminal, terminalStatuses: [CANCELLED, FULFILLED, CLOSED], capabilityEnum: [order.update, order.transition], allowedOrder: [ADVANCE, CANCEL] }
       x-safety: { csrf: required, idempotency: required, ifMatch: required }
       parameters:
         - { $ref: '#/components/parameters/ResourceId' }
@@ -310,7 +321,7 @@ paths:
         - { $ref: '#/components/parameters/RequestIdHeader' }
       requestBody: { $ref: '#/components/requestBodies/OrderTransitionRequestV2' }
       responses:
-        '200': { $ref: '#/components/responses/Order' }
+        '200': { $ref: '#/components/responses/OrderUpdated' }
         '202': { $ref: '#/components/responses/CommandStatusInProgress' }
         '400': { $ref: '#/components/responses/Problem400' }
         '401': { $ref: '#/components/responses/Problem401' }
@@ -372,9 +383,11 @@ components:
     IfMatchHeader: { name: If-Match, in: header, required: true, schema: { type: string, pattern: '^"v[1-9][0-9]*"$' } }
     RequestIdHeader: { name: X-Request-ID, in: header, required: false, schema: { $ref: '#/components/schemas/Uuid' } }
     CommandOperationHeader: { name: X-Command-Operation, in: header, required: true, schema: { type: string, pattern: '^(create|update|transition)(Product|Sku|Order)V2$' } }
-    PageAfter: { name: 'page[after]', in: query, required: false, schema: { type: string, minLength: 1, maxLength: 1024 } }
+    PageAfter: { name: 'page[after]', in: query, required: false, schema: { $ref: '#/components/schemas/CursorV2' } }
     PageSize: { name: 'page[size]', in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
-    Sort: { name: sort, in: query, required: false, schema: { type: string, enum: [createdAt, '-createdAt', updatedAt, '-updatedAt'] } }
+    ProductSort: { name: sort, in: query, required: false, schema: { $ref: '#/components/schemas/ProductSortV2' } }
+    SkuSort: { name: sort, in: query, required: false, schema: { $ref: '#/components/schemas/SkuSortV2' } }
+    OrderSort: { name: sort, in: query, required: false, schema: { $ref: '#/components/schemas/OrderSortV2' } }
     ProductStatusFilter: { name: 'filter[status]', in: query, required: false, schema: { type: string, enum: [ACTIVE, INACTIVE] } }
     SkuStatusFilter: { name: 'filter[status]', in: query, required: false, schema: { type: string, enum: [ACTIVE, INACTIVE] } }
     OrderStatusFilter: { name: 'filter[status]', in: query, required: false, schema: { type: string, enum: [DRAFT, CONFIRMED, FULFILLED, CANCELLED] } }
@@ -389,27 +402,30 @@ components:
   headers:
     RequestId: { required: true, schema: { $ref: '#/components/schemas/Uuid' } }
     ETag: { required: true, schema: { type: string, pattern: '^"v[1-9][0-9]*"$' } }
-    Location: { required: true, schema: { type: string, pattern: '^/api/v2/' } }
-    ContentLocation: { required: false, schema: { type: string, pattern: '^/api/v2/' } }
+    Location: { required: true, schema: { type: string, pattern: "^/api/v2/[A-Za-z0-9._~!$&'()*+,;=:@/-]+$" } }
+    ContentLocation: { required: false, schema: { type: string, pattern: "^/api/v2/[A-Za-z0-9._~!$&'()*+,;=:@/-]+$" } }
     CacheControl: { required: true, schema: { type: string, const: no-store } }
     IdempotentReplay: { required: false, schema: { type: string, enum: ['true'] } }
     RetryAfter: { required: true, schema: { type: string, pattern: '^[1-9][0-9]*$' } }
   responses:
     CsrfToken: { description: CSRF token, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/CsrfToken' } } } }
     Session: { description: Current session, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
-    ProductPage: { description: Product page, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProductPage' } } } }
-    SkuPage: { description: SKU page, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/json: { schema: { $ref: '#/components/schemas/SkuPage' } } } }
-    OrderPage: { description: Order page, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderPage' } } } }
-    Product: { description: Product, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProductV2' } } } }
-    ProductCreated: { description: Created product, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProductV2' } } } }
-    Sku: { description: SKU, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/SkuV2' } } } }
-    SkuCreated: { description: Created SKU, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/SkuV2' } } } }
-    Order: { description: Order, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderV2' } } } }
-    OrderCreated: { description: Created order, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderV2' } } } }
+    ProductPage: { description: Product page, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProductPage' } } } }
+    SkuPage: { description: SKU page, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/SkuPage' } } } }
+    OrderPage: { description: Order page, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderPage' } } } }
+    Product: { description: Product read, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProductV2' } } } }
+    ProductUpdated: { description: Updated product, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProductV2' } } } }
+    ProductCreated: { description: Created product, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Content-Location: { $ref: '#/components/headers/ContentLocation' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/ProductV2' } } } }
+    Sku: { description: SKU read, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/SkuV2' } } } }
+    SkuUpdated: { description: Updated SKU, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/SkuV2' } } } }
+    SkuCreated: { description: Created SKU, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Content-Location: { $ref: '#/components/headers/ContentLocation' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/SkuV2' } } } }
+    Order: { description: Order read, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderV2' } } } }
+    OrderUpdated: { description: Updated order, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderV2' } } } }
+    OrderCreated: { description: Created order, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, ETag: { $ref: '#/components/headers/ETag' }, Location: { $ref: '#/components/headers/Location' }, Content-Location: { $ref: '#/components/headers/ContentLocation' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/OrderV2' } } } }
     FileStatus: { description: Files-owned file status, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/FileStatusV2' } } } }
     FileDownloadIntent: { description: Short-lived Files-owned download intent, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/FileDownloadIntentV2' } } } }
-    CommandStatus: { description: Command status, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' } }, content: { application/json: { schema: { $ref: '#/components/schemas/CommandStatus' } } } }
-    CommandStatusInProgress: { description: Command accepted, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Content-Location: { $ref: '#/components/headers/ContentLocation' }, Retry-After: { $ref: '#/components/headers/RetryAfter' } }, content: { application/json: { schema: { $ref: '#/components/schemas/CommandStatusInProgressV2' } } } }
+    CommandStatus: { description: Command status; Retry-After is required only for IN_PROGRESS body state, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Retry-After: { $ref: '#/components/headers/RetryAfter', required: false } }, content: { application/json: { schema: { $ref: '#/components/schemas/CommandStatus' } } } }
+    CommandStatusInProgress: { description: Command accepted, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' }, Cache-Control: { $ref: '#/components/headers/CacheControl' }, Content-Location: { $ref: '#/components/headers/ContentLocation', required: true }, Retry-After: { $ref: '#/components/headers/RetryAfter' }, Idempotent-Replay: { $ref: '#/components/headers/IdempotentReplay' } }, content: { application/json: { schema: { $ref: '#/components/schemas/CommandStatusInProgressV2' } } } }
     Problem400: { description: Validation problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem400' } } } }
     Problem401: { description: Authentication problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem401' } } } }
     Problem403: { description: Authorization or CSRF problem, headers: { X-Request-ID: { $ref: '#/components/headers/RequestId' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem403' } } } }
@@ -514,13 +530,39 @@ components:
     OrderUpdateRequestV2:
       type: object
       minProperties: 1
-      properties: { metadata: { type: object, additionalProperties: true } }
+      description: Complete replacement when lines is present. metadata is a complete public-metadata replacement; omitted properties are unchanged.
+      properties: { metadata: { type: object, additionalProperties: true }, lines: { type: array, minItems: 1, maxItems: 1000, items: { $ref: '#/components/schemas/OrderLineReplacementV2' } } }
       additionalProperties: false
     OrderTransitionRequestV2:
+      oneOf:
+        - { $ref: '#/components/schemas/OrderAdvanceActionV2' }
+        - { $ref: '#/components/schemas/OrderCancelActionV2' }
+      discriminator: { propertyName: action, mapping: { ADVANCE: '#/components/schemas/OrderAdvanceActionV2', CANCEL: '#/components/schemas/OrderCancelActionV2' } }
+    OrderAdvanceActionV2:
       type: object
-      required: [toStage]
-      properties: { toStage: { $ref: '#/components/schemas/OrderStage' }, reason: { type: string, minLength: 1, maxLength: 2048 } }
+      required: [action, toStage]
+      properties: { action: { const: ADVANCE }, toStage: { $ref: '#/components/schemas/OrderStage' }, reason: { type: string, minLength: 1, maxLength: 2048, pattern: '.*\S.*' } }
       additionalProperties: false
+    OrderCancelActionV2:
+      type: object
+      required: [action]
+      properties: { action: { const: CANCEL }, reason: { type: string, minLength: 1, maxLength: 2048, pattern: '.*\S.*' } }
+      additionalProperties: false
+    OrderStandardLineReplacementV2:
+      type: object
+      required: [itemKind, lineId, skuId, quantity, imageFileId]
+      properties: { itemKind: { const: STANDARD }, lineId: { anyOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] }, skuId: { $ref: '#/components/schemas/Uuid' }, quantity: { $ref: '#/components/schemas/DecimalQuantity' }, imageFileId: { anyOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] } }
+      additionalProperties: false
+    OrderNonStandardLineReplacementV2:
+      type: object
+      required: [itemKind, lineId, name, unit, quantity, quotedUnitPrice, standardizationMode, imageFileId]
+      properties: { itemKind: { const: NON_STANDARD }, lineId: { anyOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] }, name: { type: string, minLength: 1, maxLength: 256 }, unit: { type: string, minLength: 1, maxLength: 32 }, quantity: { $ref: '#/components/schemas/DecimalQuantity' }, quotedUnitPrice: { $ref: '#/components/schemas/DecimalAmount' }, standardizationMode: { type: string, enum: [SIMPLE, NONE] }, imageFileId: { anyOf: [{ $ref: '#/components/schemas/Uuid' }, { type: 'null' }] } }
+      additionalProperties: false
+    OrderLineReplacementV2:
+      oneOf:
+        - { $ref: '#/components/schemas/OrderStandardLineReplacementV2' }
+        - { $ref: '#/components/schemas/OrderNonStandardLineReplacementV2' }
+      discriminator: { propertyName: itemKind, mapping: { STANDARD: '#/components/schemas/OrderStandardLineReplacementV2', NON_STANDARD: '#/components/schemas/OrderNonStandardLineReplacementV2' } }
     PriceSnapshotV2:
       type: object
       required: [sourceKind, sourceCurrency, sourceUnitPrice, capturedAt]
@@ -560,14 +602,55 @@ components:
       additionalProperties: false
     OrderV2:
       type: object
-      required: [id, organizationId, version, createdAt, updatedAt, customerId, orderNo, currency, status, stage, lines, totalAmount, allowedTransitions]
-      properties: { id: { $ref: '#/components/schemas/Uuid' }, organizationId: { $ref: '#/components/schemas/Uuid' }, version: { type: integer, minimum: 1 }, createdAt: { $ref: '#/components/schemas/DateTime' }, updatedAt: { $ref: '#/components/schemas/DateTime' }, customerId: { $ref: '#/components/schemas/Uuid' }, orderNo: { type: string, minLength: 1, maxLength: 64 }, currency: { $ref: '#/components/schemas/Currency' }, status: { $ref: '#/components/schemas/OrderStatus' }, stage: { $ref: '#/components/schemas/OrderStage' }, lines: { type: array, minItems: 1, maxItems: 1000, items: { $ref: '#/components/schemas/OrderLineV2' } }, totalAmount: { $ref: '#/components/schemas/DecimalAmount' }, allowedTransitions: { type: array, items: { $ref: '#/components/schemas/OrderStage' }, uniqueItems: true }, capabilities: { type: array, items: { type: string, pattern: '^[a-z][a-z0-9.:-]{1,127}$' }, uniqueItems: true }, metadata: { type: object, additionalProperties: true } }
+      required: [id, organizationId, version, createdAt, updatedAt, customerId, orderNo, currency, status, stage, lines, totalAmount, capabilities, allowedTransitions]
+      description: status is the stage projection except CANCELLED, which overrides while retaining the last stage. Terminal statuses have empty allowedTransitions.
+      properties: { id: { $ref: '#/components/schemas/Uuid' }, organizationId: { $ref: '#/components/schemas/Uuid' }, version: { type: integer, minimum: 1 }, createdAt: { $ref: '#/components/schemas/DateTime' }, updatedAt: { $ref: '#/components/schemas/DateTime' }, customerId: { $ref: '#/components/schemas/Uuid' }, orderNo: { type: string, minLength: 1, maxLength: 64 }, currency: { $ref: '#/components/schemas/Currency' }, status: { $ref: '#/components/schemas/OrderStatus' }, stage: { $ref: '#/components/schemas/OrderStage' }, lines: { type: array, minItems: 1, maxItems: 1000, items: { $ref: '#/components/schemas/OrderLineV2' } }, totalAmount: { $ref: '#/components/schemas/DecimalAmount' }, allowedTransitions: { type: array, items: { $ref: '#/components/schemas/AllowedTransitionV2' }, uniqueItems: true }, capabilities: { type: array, items: { $ref: '#/components/schemas/OrderCapabilityV2' }, uniqueItems: true }, metadata: { type: object, additionalProperties: true } }
+      allOf: [{ $ref: '#/components/schemas/OrderStatusStageProjectionV2' }]
       additionalProperties: false
+    OrderStatusStageProjectionV2:
+      oneOf:
+        - type: object
+          required: [status, stage]
+          properties: { status: { const: DRAFT }, stage: { const: INITIAL_CONTACT } }
+        - type: object
+          required: [status, stage]
+          properties: { status: { const: CONFIRMED }, stage: { enum: [QUOTING, QUOTE_FOLLOW_UP, DEPOSIT_PENDING, DEPOSIT_CONFIRMED, FULFILLMENT, FOB_COMPLETED] } }
+        - type: object
+          required: [status, stage]
+          properties: { status: { const: FULFILLED }, stage: { const: CLOSED } }
+        - type: object
+          required: [status, stage]
+          properties: { status: { const: CANCELLED }, stage: { enum: [INITIAL_CONTACT, QUOTING, QUOTE_FOLLOW_UP, DEPOSIT_PENDING, DEPOSIT_CONFIRMED, FULFILLMENT, FOB_COMPLETED] } }
+    OrderCapabilityV2: { type: string, enum: [order.update, order.transition] }
+    AllowedAdvanceTransitionV2:
+      type: object
+      required: [action, toStage]
+      properties: { action: { const: ADVANCE }, toStage: { $ref: '#/components/schemas/OrderStage' } }
+      additionalProperties: false
+    AllowedCancelTransitionV2:
+      type: object
+      required: [action]
+      properties: { action: { const: CANCEL } }
+      additionalProperties: false
+    AllowedTransitionV2:
+      oneOf:
+        - { $ref: '#/components/schemas/AllowedAdvanceTransitionV2' }
+        - { $ref: '#/components/schemas/AllowedCancelTransitionV2' }
+      discriminator: { propertyName: action, mapping: { ADVANCE: '#/components/schemas/AllowedAdvanceTransitionV2', CANCEL: '#/components/schemas/AllowedCancelTransitionV2' } }
     PageMeta:
       type: object
       required: [nextCursor, hasNext]
-      properties: { nextCursor: { anyOf: [{ type: string, minLength: 1 }, { type: 'null' }] }, hasNext: { type: boolean } }
+      properties: { nextCursor: { anyOf: [{ $ref: '#/components/schemas/CursorV2' }, { type: 'null' }] }, hasNext: { type: boolean } }
       additionalProperties: false
+    CursorV2:
+      type: string
+      minLength: 12
+      maxLength: 4096
+      pattern: '^v2\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
+      description: Opaque signed cursor. Payload binds version, operation, resource, organization, scopeFingerprint, authzVersion, normalized sort/filters, pageSize and lastTuple.
+    ProductSortV2: { type: string, enum: [name, '-name', createdAt, '-createdAt', updatedAt, '-updatedAt', '-updatedAt,-id'] }
+    SkuSortV2: { type: string, enum: [skuCode, '-skuCode', name, '-name', createdAt, '-createdAt', updatedAt, '-updatedAt', '-updatedAt,-id'] }
+    OrderSortV2: { type: string, enum: [orderNo, '-orderNo', createdAt, '-createdAt', updatedAt, '-updatedAt', '-updatedAt,-id'] }
     ProductPage:
       type: object
       required: [data, page]

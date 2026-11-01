@@ -61,6 +61,8 @@ BEGIN
 END $$;
 
 DROP TRIGGER IF EXISTS price_policy_v2_lifecycle_guard ON catalog.price_policy;
+DROP TRIGGER IF EXISTS price_policy_v2_window_guard ON catalog.price_policy;
+DROP TRIGGER IF EXISTS price_policy_v2_version_guard ON catalog.price_policy;
 DO $$
 BEGIN
   IF to_regclass('catalog.price_snapshot_v2') IS NOT NULL THEN
@@ -72,6 +74,8 @@ BEGIN
 END $$;
 
 DROP FUNCTION IF EXISTS catalog.prevent_v2_snapshot_mutation();
+DROP FUNCTION IF EXISTS catalog.enforce_v2_price_policy_window();
+DROP FUNCTION IF EXISTS catalog.enforce_v2_price_policy_version();
 ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_image_file_fk;
 ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_fx_snapshot_fk;
 ALTER TABLE orders.order_item DROP CONSTRAINT IF EXISTS order_item_v2_price_snapshot_fk;

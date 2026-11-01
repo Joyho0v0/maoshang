@@ -52,7 +52,7 @@ function operationDefinitions(document) {
           })),
         }];
       }));
-      return { operationId: operation.operationId, method: method.toUpperCase(), path, requestSchema: schemaName(requestBody), parameters, responses };
+      return { operationId: operation.operationId, method: method.toUpperCase(), path, requestSchema: schemaName(requestBody), parameters, responses, cursorBinding: operation['x-cursor-binding'] };
     }),
   );
 }
@@ -75,6 +75,7 @@ function schemaType(value) {
   if (value?.type === 'integer' || value?.type === 'number') return 'number';
   if (value?.type === 'boolean') return 'boolean';
   if (value?.type === 'array') return `ReadonlyArray<${schemaType(value.items ?? {})}>`;
+  if (Array.isArray(value?.anyOf)) return value.anyOf.map((item) => schemaType(item)).join(' | ');
   return 'string';
 }
 
@@ -90,11 +91,13 @@ function headerType(headers) {
 
 function operationMetadata(operations) {
   return Object.fromEntries(operations.map((operation) => [operation.operationId, {
+    operationId: operation.operationId,
     method: operation.method,
     path: operation.path,
     requestSchema: operation.requestSchema,
     parameters: operation.parameters,
     responses: operation.responses,
+    cursorBinding: operation.cursorBinding,
   }]));
 }
 
@@ -103,8 +106,8 @@ function inputType(operation) {
   const query = operation.parameters.filter((parameter) => parameter.in === 'query');
   const headers = operation.parameters.filter((parameter) => parameter.in === 'header');
   const fields = [];
-  if (path.length > 0) fields.push('pathParams: { ' + path.map((parameter) => parameter.name + ': string').join('; ') + ' }');
-  if (query.length > 0) fields.push('query?: { ' + query.map((parameter) => JSON.stringify(parameter.name) + '?: string | number').join('; ') + ' }');
+  if (path.length > 0) fields.push('pathParams: { ' + path.map((parameter) => JSON.stringify(parameter.name) + ': ' + schemaType(parameter.schema)).join('; ') + ' }');
+  if (query.length > 0) fields.push('query?: { ' + query.map((parameter) => JSON.stringify(parameter.name) + (parameter.required ? '' : '?') + ': ' + schemaType(parameter.schema)).join('; ') + ' }');
   if (headers.length > 0) fields.push('headers: ' + headerTypeName(operation.operationId));
   if (operation.requestSchema !== undefined) fields.push('body: components[\'schemas\'][' + JSON.stringify(operation.requestSchema) + ']');
   return fields.length === 0 ? 'Record<never, never>' : '{ ' + fields.join('; ') + ' }';
@@ -165,19 +168,31 @@ function clientTypescript(operations) {
     "    if (contract === undefined) throw new Error('Undeclared HTTP status ' + response.status);",
     "    const payload = await response.text().then((text) => text.length === 0 ? undefined : JSON.parse(text) as unknown);",
     "    const responseHeaders: Record<string, string> = {}; for (const [name, header] of Object.entries(contract.headers ?? {})) { const value = response.headers.get(name); if (value === null && header.required) throw new Error('Missing required response header ' + name); if (value !== null && header.schema !== undefined && !this.options.validator.validateSchema(header.schema, value)) throw new Error('Invalid response header ' + name); if (value !== null) responseHeaders[name] = value; }",
+    "    for (const name of ['X-Request-ID', 'ETag', 'Location', 'Content-Location', 'Cache-Control', 'Retry-After', 'Idempotent-Replay']) if (!(name in (contract.headers ?? {})) && response.headers.get(name) !== null) throw new Error('Forbidden response header ' + name);",
+    "    validateResponseSemantics(operation, response.status, payload, responseHeaders);",
     "    if (contract.schema !== undefined && !this.options.validator.validate(contract.schema, payload)) throw new Error('Invalid response schema ' + contract.schema);",
     "    if (!response.ok) throw new ApiProblemError(response.status, payload as OperationErrorMap[Id], responseHeaders);",
     "    return { status: response.status, data: payload as OperationResponseMap[Id], headers: responseHeaders } as unknown as OperationResponseMap[Id];",
     "  }",
     "}",
     "function findHeader(headers: Record<string, unknown> | undefined, name: string): unknown { const key = Object.keys(headers ?? {}).find((candidate) => candidate.toLowerCase() === name.toLowerCase()); return key === undefined ? undefined : headers?.[key]; }",
-    "function validateOperationInput(operation: { readonly parameters?: readonly { readonly name: string; readonly in: string; readonly required?: boolean; readonly schema?: object }[]; readonly requestSchema?: string }, input: Record<string, unknown>, validator: RuntimeValidator): void {",
+    "function validateOperationInput(operation: { readonly operationId: string; readonly parameters?: readonly { readonly name: string; readonly in: string; readonly required?: boolean; readonly schema?: object }[]; readonly requestSchema?: string; readonly cursorBinding?: { readonly resource?: string; readonly defaultSort?: string } }, input: Record<string, unknown>, validator: RuntimeValidator): void {",
     "  const containers: Record<string, Record<string, unknown> | undefined> = { path: (input.pathParams as Record<string, unknown> | undefined), query: (input.query as Record<string, unknown> | undefined), header: (input.headers as Record<string, unknown> | undefined) };",
     "  const declaredHeaders = new Set((operation.parameters ?? []).filter((parameter) => parameter.in === 'header').map((parameter) => parameter.name.toLowerCase()));",
     "  for (const parameter of operation.parameters ?? []) { const value = parameter.in === 'header' ? findHeader(containers.header, parameter.name) : containers[parameter.in]?.[parameter.name]; if (value === undefined) { if (parameter.required) throw new Error('Missing required ' + parameter.in + ' parameter: ' + parameter.name); continue; } if (parameter.in === 'header' && typeof value !== 'string') throw new Error('Invalid header: ' + parameter.name); if (parameter.schema !== undefined && !validator.validateSchema(parameter.schema, value)) throw new Error('Invalid ' + parameter.in + ' parameter: ' + parameter.name); }",
     "  for (const name of Object.keys(containers.header ?? {})) if (!declaredHeaders.has(name.toLowerCase())) throw new Error('Unknown header: ' + name);",
     "  if (operation.requestSchema !== undefined) { if (!Object.hasOwn(input, 'body') || !validator.validate(operation.requestSchema, input.body)) throw new Error('Invalid ' + operation.requestSchema + ' request body.'); } else if (Object.hasOwn(input, 'body')) throw new Error('Operation does not accept a request body.');",
+    "  validateSemanticInput(operation, input, validator);",
     "}",
+    "function validateSemanticInput(operation: { readonly operationId: string; readonly cursorBinding?: { readonly resource?: string; readonly defaultSort?: string } }, input: Record<string, unknown>, validator: RuntimeValidator): void {",
+    "  const query = input.query as Record<string, unknown> | undefined; if (operation.cursorBinding && query?.['page[after]'] !== undefined) validateCursorBinding(operation, query);",
+    "  const body = input.body as Record<string, unknown> | undefined; if (operation.operationId === 'updateOrderV2' && body?.lines !== undefined) { const ids = new Set<string>(); const images = new Set<string>(); for (const line of body.lines as Array<Record<string, unknown>>) { if (line.lineId !== null && ids.has(String(line.lineId))) throw new Error('Duplicate replacement lineId'); if (line.lineId !== null) ids.add(String(line.lineId)); if (line.imageFileId !== null && images.has(String(line.imageFileId))) throw new Error('An image file cannot be reused by multiple lines'); if (line.imageFileId !== null) images.add(String(line.imageFileId)); } }",
+    "}",
+    "function validateCursorBinding(operation: { readonly operationId: string; readonly cursorBinding?: { readonly resource?: string; readonly defaultSort?: string } }, query: Record<string, unknown>): void {",
+    "  const raw = String(query['page[after]']); const parts = raw.split('.'); if (parts.length !== 3) throw new Error('Invalid cursor binding'); let payload: Record<string, unknown>; try { payload = JSON.parse(decodeURIComponent(escape(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - parts[1].length % 4) % 4))))); } catch { throw new Error('Invalid cursor binding'); } const expectedSort = query.sort === undefined ? operation.cursorBinding?.defaultSort : String(query.sort); if (payload.version !== 2 || payload.operation !== operation.operationId || payload.resource !== operation.cursorBinding?.resource || typeof payload.organization !== 'string' || typeof payload.scopeFingerprint !== 'string' || typeof payload.authzVersion !== 'string' || payload.sort !== expectedSort || payload.pageSize !== Number(query['page[size]'] ?? 20) || payload.filters !== canonicalFilters(query)) throw new Error('Invalid cursor binding'); if (!Array.isArray(payload.lastTuple) || payload.lastTuple.length < 2) throw new Error('Invalid cursor binding');",
+    "}",
+    "function canonicalFilters(query: Record<string, unknown>): string { return JSON.stringify(Object.fromEntries(Object.entries(query).filter(([key]) => key.startsWith('filter[')).sort(([a], [b]) => a.localeCompare(b)))); }",
+    "function validateResponseSemantics(operation: { readonly operationId: string }, status: number, payload: unknown, headers: Record<string, string>): void { const state = (payload as { state?: string } | undefined)?.state; const retry = headers['Retry-After']; if (operation.operationId === 'getCommandStatusV2' && state === 'IN_PROGRESS' && retry === undefined) throw new Error('IN_PROGRESS command status requires Retry-After'); if (operation.operationId === 'getCommandStatusV2' && state !== 'IN_PROGRESS' && retry !== undefined) throw new Error('terminal command status forbids Retry-After'); if (status === 202 && operation.operationId !== 'getCommandStatusV2' && retry === undefined) throw new Error('202 command response requires Retry-After'); for (const name of ['Location', 'Content-Location']) { const value = headers[name]; if (value !== undefined && (!/^\\/api\\/v2\\//.test(value) || /[?#]/.test(value))) throw new Error('Invalid canonical href header ' + name); } if (status === 202 && headers['Content-Location'] !== '/api/v2/commands/status') throw new Error('202 Content-Location must be the command status resource'); if (status === 201 && headers.Location !== undefined && !new RegExp('^/api/v2/(products|skus|orders)/[0-9a-f-]+$').test(headers.Location)) throw new Error('201 Location must identify a v2 resource'); }",
   ];
   return lines.join('\n') + '\n';
 }
@@ -202,6 +217,8 @@ function clientJavascript(operations) {
     "    if (contract === undefined) throw new Error('Undeclared HTTP status ' + response.status);",
     "    const payload = await response.text().then((text) => text.length === 0 ? undefined : JSON.parse(text));",
     "    const responseHeaders = {}; for (const [name, header] of Object.entries(contract.headers ?? {})) { const value = response.headers.get(name); if (value === null && header.required) throw new Error('Missing required response header ' + name); if (value !== null && header.schema !== undefined && !this.validator.validateSchema(header.schema, value)) throw new Error('Invalid response header ' + name); if (value !== null) responseHeaders[name] = value; }",
+    "    for (const name of ['X-Request-ID', 'ETag', 'Location', 'Content-Location', 'Cache-Control', 'Retry-After', 'Idempotent-Replay']) if (!(name in (contract.headers ?? {})) && response.headers.get(name) !== null) throw new Error('Forbidden response header ' + name);",
+    "    validateResponseSemantics(operation, response.status, payload, responseHeaders);",
     "    if (contract.schema !== undefined && !this.validator.validate(contract.schema, payload)) throw new Error('Invalid response schema ' + contract.schema);",
     "    if (!response.ok) { const error = new Error('API request failed.'); error.status = response.status; error.problem = payload; error.headers = responseHeaders; throw error; }",
     "    return { status: response.status, data: payload, headers: responseHeaders };",
@@ -215,7 +232,12 @@ function clientJavascript(operations) {
     "  for (const parameter of operation.parameters ?? []) { const value = parameter.in === 'header' ? findHeader(containers.header, parameter.name) : containers[parameter.in]?.[parameter.name]; if (value === undefined) { if (parameter.required) throw new Error('Missing required ' + parameter.in + ' parameter: ' + parameter.name); continue; } if (parameter.in === 'header' && typeof value !== 'string') throw new Error('Invalid header: ' + parameter.name); if (parameter.schema !== undefined && !validator.validateSchema(parameter.schema, value)) throw new Error('Invalid ' + parameter.in + ' parameter: ' + parameter.name); }",
     "  for (const name of Object.keys(containers.header ?? {})) if (!declaredHeaders.has(name.toLowerCase())) throw new Error('Unknown header: ' + name);",
     "  if (operation.requestSchema !== undefined) { if (!Object.hasOwn(input, 'body') || !validator.validate(operation.requestSchema, input.body)) throw new Error('Invalid ' + operation.requestSchema + ' request body.'); } else if (Object.hasOwn(input, 'body')) throw new Error('Operation does not accept a request body.');",
+    "  validateSemanticInput(operation, input);",
     "}",
+    "function validateSemanticInput(operation, input) { const query = input.query; if (operation.cursorBinding && query?.['page[after]'] !== undefined) validateCursorBinding(operation, query); const body = input.body; if (operation.operationId === 'updateOrderV2' && body?.lines !== undefined) { const ids = new Set(); const images = new Set(); for (const line of body.lines) { if (line.lineId !== null && ids.has(String(line.lineId))) throw new Error('Duplicate replacement lineId'); if (line.lineId !== null) ids.add(String(line.lineId)); if (line.imageFileId !== null && images.has(String(line.imageFileId))) throw new Error('An image file cannot be reused by multiple lines'); if (line.imageFileId !== null) images.add(String(line.imageFileId)); } } }",
+    "function validateCursorBinding(operation, query) { const raw = String(query['page[after]']); const parts = raw.split('.'); if (parts.length !== 3) throw new Error('Invalid cursor binding'); let payload; try { payload = JSON.parse(decodeURIComponent(escape(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - parts[1].length % 4) % 4))))); } catch { throw new Error('Invalid cursor binding'); } const expectedSort = query.sort === undefined ? operation.cursorBinding?.defaultSort : String(query.sort); if (payload.version !== 2 || payload.operation !== operation.operationId || payload.resource !== operation.cursorBinding?.resource || typeof payload.organization !== 'string' || typeof payload.scopeFingerprint !== 'string' || typeof payload.authzVersion !== 'string' || payload.sort !== expectedSort || payload.pageSize !== Number(query['page[size]'] ?? 20) || payload.filters !== canonicalFilters(query)) throw new Error('Invalid cursor binding'); if (!Array.isArray(payload.lastTuple) || payload.lastTuple.length < 2) throw new Error('Invalid cursor binding'); }",
+    "function canonicalFilters(query) { return JSON.stringify(Object.fromEntries(Object.entries(query).filter(([key]) => key.startsWith('filter[')).sort(([a], [b]) => a.localeCompare(b)))); }",
+    "function validateResponseSemantics(operation, status, payload, headers) { const state = payload?.state; const retry = headers['Retry-After']; if (operation.operationId === 'getCommandStatusV2' && state === 'IN_PROGRESS' && retry === undefined) throw new Error('IN_PROGRESS command status requires Retry-After'); if (operation.operationId === 'getCommandStatusV2' && state !== 'IN_PROGRESS' && retry !== undefined) throw new Error('terminal command status forbids Retry-After'); if (status === 202 && operation.operationId !== 'getCommandStatusV2' && retry === undefined) throw new Error('202 command response requires Retry-After'); for (const name of ['Location', 'Content-Location']) { const value = headers[name]; if (value !== undefined && (!/^\\/api\\/v2\\//.test(value) || /[?#]/.test(value))) throw new Error('Invalid canonical href header ' + name); } if (status === 202 && headers['Content-Location'] !== '/api/v2/commands/status') throw new Error('202 Content-Location must be the command status resource'); if (status === 201 && headers.Location !== undefined && !new RegExp('^/api/v2/(products|skus|orders)/[0-9a-f-]+$').test(headers.Location)) throw new Error('201 Location must identify a v2 resource'); }",
   ].join('\n') + '\n';
 }
 

@@ -7,8 +7,9 @@ copied over the frozen v1 artifact or generated files.
 The package is intentionally self-contained:
 
 - `openapi.yaml` is the complete parseable v2 candidate with 18 operations.
-  Four Order/catalog contract decisions remain `HUMAN_INPUT_REQUIRED`; this
-  package does not invent their endpoint or schema semantics.
+  The exact Order edit/cancel, response-header, and sort/filter/cursor
+  decisions are incorporated in this candidate. They are review inputs, not
+  promotion approval; no competing shape or compatibility alias is retained.
 - `validate.mjs` is the single review entry point. It performs parser,
   dereference, independent contract checks, AJV fixture validation, real
   temporary types/client/runtime-validator generation, request-gate tests,
@@ -91,6 +92,44 @@ calling `fetch`; discriminator mixing, client price/snapshot/FX/policy fields,
 invalid UUIDs, malformed headers, and unknown body properties therefore have
 `fetchCount=0` evidence.
 
+## Exact Order and list contract
+
+`PATCH /api/v2/orders/{id}` (`updateOrderV2`) is the sole edit operation. It
+requires CSRF, Idempotency-Key, If-Match, and `order.update`. Its body is
+closed to `metadata` and `lines`: metadata is a complete replacement when
+present, while lines are a complete ordered replacement when present. Each
+line carries `lineId: uuid|null`; null creates a line, an existing UUID edits
+that Order line, and an omitted existing UUID removes it. Duplicate IDs,
+duplicate image IDs, cross-Order IDs, item-kind changes, and concurrent
+disappearance are rejected before a partial write. STANDARD lines are priced
+by the server policy and NON_STANDARD lines quote only in the Order currency.
+
+`POST /api/v2/orders/{id}/transitions` (`transitionOrderV2`) accepts only the
+closed `ADVANCE {toStage, reason?}` or `CANCEL {reason?}` action union.
+`CANCEL` cannot carry `toStage`; the reason is trimmed to 1–2048 characters.
+Order status is the stage projection except that CANCELLED retains its stage
+as an explicit terminal override. `capabilities` and `allowedTransitions`
+are required response arrays; the latter contains closed action objects in
+stable ADVANCE-then-CANCEL order and is empty for read-only or terminal state.
+
+List query types are resource-specific. Product/SKU/Order status is a
+single-value allowlisted enum; sort is an exact resource-specific union with
+`-updatedAt,-id` as the explicit default and an implicit same-direction ID
+tie-breaker for other single-column values. A cursor is an opaque signed v2
+value bound to operation/resource/organization/scope/authz/sort/filters/page
+size/last tuple. Cross-resource, cross-scope, changed-filter, duplicate, or
+unknown values fail with `400 VALIDATION_FAILED` before fetch or database work.
+
+The response-header contract is declared per response rather than inferred:
+`X-Request-ID` and `Cache-Control: no-store` are required on successful
+responses; resource responses additionally require `ETag`; 201 responses
+require `Location` and may carry `Content-Location`/`Idempotent-Replay`;
+202 responses require canonical `Content-Location: /api/v2/commands/status`
+and a positive `Retry-After`; terminal command statuses forbid Retry-After.
+All origin-relative href headers are `/api/v2/...` with no query or fragment.
+The generated client reads each declared header by its canonical key and
+rejects undeclared known headers.
+
 ## Migration rehearsal and ownership
 
 Run only in a newly created, uniquely named local disposable database after
@@ -121,8 +160,11 @@ bootstrap.
   their explicit defaults.
 - STANDARD/NON_STANDARD, price/FX snapshots, Files live-parent authorization,
   Problem/recovery semantics, Order edit/cancel, response-header matrix, and
-  sort/filter allowlists are only promoted after their respective exact system
-  decisions and both architecture reviews.
+  sort/filter allowlists are exact review inputs and are only promoted after
+  both architecture reviews.
 - H-05 contains no historical conversion input for this clean-init scope. Synthetic seed
   values are test fixtures only and must never be treated as business or
   production data.
+
+`problem-matrix.md` and `response-header-matrix.md` mirror the machine
+contract for reviewer traceability; `openapi.yaml` remains authoritative.

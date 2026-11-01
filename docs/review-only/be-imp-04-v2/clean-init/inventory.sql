@@ -17,9 +17,13 @@ BEGIN
 END $$;
 SELECT 'CLEAN_INIT_SCHEMA' AS evidence,
        current_database() AS database_name,
+       (SELECT oid FROM pg_database WHERE datname = current_database()) AS database_oid,
+       current_user AS owner,
+       inet_server_port() AS port,
+       (pg_control_system()).system_identifier AS cluster_identifier,
        current_setting('server_version') AS server_version,
-       current_setting('review_v2.project_marker', true) AS project_marker,
-       current_setting('review_v2.disposable', true) AS disposable;
+       pg_is_in_recovery() AS recovery,
+       current_setting('default_transaction_read_only') AS read_only;
 SELECT n.nspname AS schema_name, c.relname AS object_name, c.relkind AS object_kind
   FROM pg_class c
   JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -42,6 +46,8 @@ SELECT table_schema, table_name, column_name, is_nullable, data_type
    ('orders', 'order_item', 'source_unit_price'),
    ('orders', 'order_item', 'effective_unit_price_v2'),
    ('orders', 'order_item', 'line_amount_v2'),
+   ('orders', 'order_item', 'price_snapshot_v2_id'),
+   ('orders', 'order_item', 'fx_snapshot_v2_id'),
    ('orders', 'order_item', 'price_source_kind'),
    ('orders', 'order_item', 'price_captured_at'),
    ('orders', 'order_item', 'image_file_id')
