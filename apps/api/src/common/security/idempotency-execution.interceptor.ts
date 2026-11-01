@@ -5,10 +5,10 @@ import { canonicalRequestHash } from './canonical-request.js';
 import { EXPECTED_OPERATION_MANIFEST } from '../../../../../packages/contracts/openapi/contract-manifest.js';
 import { operations, type OperationId } from '../../../../../packages/contracts/openapi/generated-client.js';
 import { CommandFailureError, IdempotencyConflictError, isResourceReference, type CommandResult, type CommandStatus, type ResourceReference } from '../../modules/integration/idempotency/in-memory-idempotency-store.js';
-import type { PostgresIdempotencyInput, PostgresIdempotencyRepository } from '../../modules/integration/idempotency/postgres-idempotency-repository.js';
+import { IdempotencyOwnershipLostError, type PostgresIdempotencyInput, type PostgresIdempotencyRepository } from '../../modules/integration/idempotency/postgres-idempotency-repository.js';
 import type { GeneratedOperation } from '../../../../../packages/contracts/openapi/client.js';
 import type { ContractValidator } from '../../../../../packages/contracts/openapi/runtime-validator.js';
-import { buildProblem, normalizeRequestId, ProblemError } from '../http/problem.js';
+import { buildProblem, normalizeRequestId, ProblemError, RecoverableProblemError } from '../http/problem.js';
 import { ensureContractResponseContentType, validateContractResponse } from '../http/contract-response.interceptor.js';
 import { restoreIdempotencyTransaction, setIdempotencyTransaction } from './idempotency-transaction-context.js';
 import type { AuthorizationPrincipal } from '../../modules/identity/domain/authz.js';
@@ -119,6 +119,15 @@ export class IdempotencyExecutionInterceptor implements NestInterceptor {
         })));
       }
       if (error instanceof CommandFailureError) return throwError(() => new ProblemError(error.problem));
+      if (error instanceof IdempotencyOwnershipLostError) {
+        return throwError(() => new RecoverableProblemError(buildProblem({
+          status: 500,
+          code: 'INTERNAL_ERROR',
+          title: 'Internal server error',
+          requestId: normalizeRequestId(request.headers['x-request-id']),
+          retryable: true,
+        })));
+      }
       return throwError(() => error);
     }));
   }

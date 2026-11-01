@@ -287,7 +287,10 @@ export class PostgresIdempotencyRepository {
             await client.query('ROLLBACK TO SAVEPOINT idempotency_command');
             savepointActive = false;
           }
-          if (error instanceof IdempotencyOwnershipLostError) return { kind: 'ownership-lost' as const, error };
+          if (error instanceof IdempotencyOwnershipLostError) {
+            await this.releaseForRecovery(client, claim.commandId, claim.ownerToken as Buffer, error.name);
+            return { kind: 'ownership-lost' as const, error };
+          }
           if (error instanceof CommandFailureError) {
             await this.fail(client, claim.commandId, claim.ownerToken as Buffer, error.problem);
             return { kind: 'failure' as const, error };

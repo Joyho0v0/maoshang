@@ -358,7 +358,7 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
   it('keeps an unknown HTTP 500 recoverable until a later owner can complete the command', async () => {
     PostgresCustomerController.executions = 0;
     PostgresCustomerController.temporaryFailure = true;
-    const recoveryRepository = new PostgresIdempotencyRepository(pool, { leaseDurationMs: 5 });
+    const recoveryRepository = new PostgresIdempotencyRepository(pool, { leaseDurationMs: 50 });
     const contract = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
     const validator = createContractValidator(contract);
     const app = await NestFactory.create<NestFastifyApplication>(PostgresCustomerModule, new FastifyAdapter({ logger: false }));
@@ -385,6 +385,51 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
       const conflict = await app.getHttpAdapter().getInstance().inject({ ...request, payload: { name: 'Different body' } });
       expect(conflict.statusCode).toBe(409);
       expect(conflict.json()).toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
+
+      PostgresCustomerController.executions = 0;
+      const repositoryWithFence = recoveryRepository as unknown as {
+        fenceOwner: (client: unknown, claim: unknown) => Promise<unknown>;
+      };
+      const originalFenceOwner = repositoryWithFence.fenceOwner.bind(recoveryRepository);
+      let delayFence = true;
+      repositoryWithFence.fenceOwner = async (client, claim) => {
+        if (delayFence) {
+          delayFence = false;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        return originalFenceOwner(client, claim);
+      };
+      try {
+        const ownershipKey = `http-postgres-fence-loss-${randomUUID()}`;
+        const ownershipRequest = { ...request, headers: { ...request.headers, 'idempotency-key': ownershipKey }, payload: { name: 'Fence loss customer' } };
+        const ownershipBefore = await pool.query<{ outbox_count: number; audit_event_count: number; audit_legacy_count: number }>(
+          `SELECT
+             (SELECT count(*)::int FROM integration.outbox_event WHERE organization_id = $1) AS outbox_count,
+             (SELECT count(*)::int FROM audit.audit_event WHERE organization_id = $1) AS audit_event_count,
+             (SELECT count(*)::int FROM audit.event WHERE organization_id = $1) AS audit_legacy_count`,
+          [organizationId],
+        );
+        const ownershipFailure = await app.getHttpAdapter().getInstance().inject(ownershipRequest);
+        expect(ownershipFailure.statusCode).toBe(500);
+        expect(ownershipFailure.json()).toMatchObject({ status: 500, code: 'INTERNAL_ERROR', retryable: true });
+        await expect(recoveryRepository.withTransaction((client) => recoveryRepository.statusByKey(client, { actorId, organizationId, operationId: 'createCustomer', idempotencyKey: ownershipKey }))).resolves.toMatchObject({ state: 'RECOVERY_REQUIRED', httpStatus: null, problem: null });
+        expect(PostgresCustomerController.executions).toBe(0);
+        const ownershipAfterFailure = await pool.query<{ outbox_count: number; audit_event_count: number; audit_legacy_count: number }>(
+          `SELECT
+             (SELECT count(*)::int FROM integration.outbox_event WHERE organization_id = $1) AS outbox_count,
+             (SELECT count(*)::int FROM audit.audit_event WHERE organization_id = $1) AS audit_event_count,
+             (SELECT count(*)::int FROM audit.event WHERE organization_id = $1) AS audit_legacy_count`,
+          [organizationId],
+        );
+        expect(ownershipAfterFailure.rows[0]).toEqual(ownershipBefore.rows[0]);
+
+        const ownershipRecovered = await app.getHttpAdapter().getInstance().inject(ownershipRequest);
+        expect(ownershipRecovered.statusCode).toBe(201);
+        expect(PostgresCustomerController.executions).toBe(1);
+        await expect(recoveryRepository.withTransaction((client) => recoveryRepository.statusByKey(client, { actorId, organizationId, operationId: 'createCustomer', idempotencyKey: ownershipKey }))).resolves.toMatchObject({ state: 'SUCCEEDED', httpStatus: 201 });
+      } finally {
+        repositoryWithFence.fenceOwner = originalFenceOwner;
+      }
     } finally {
       PostgresCustomerController.temporaryFailure = false;
       await app.close();
@@ -394,7 +439,7 @@ describe.skipIf(databaseUrl === undefined)('PostgreSQL idempotency protocol', ()
   it.each([502, 503] as const)('keeps controller dependency HTTP %s recoverable until a later owner can complete the command', async (status) => {
     PostgresCustomerController.executions = 0;
     PostgresCustomerController.dependencyFailure = status;
-    const recoveryRepository = new PostgresIdempotencyRepository(pool, { leaseDurationMs: 5 });
+    const recoveryRepository = new PostgresIdempotencyRepository(pool, { leaseDurationMs: 1_000 });
     const contract = parse(await readFile(new URL('../../packages/contracts/openapi/openapi.yaml', import.meta.url), 'utf8')) as Record<string, unknown>;
     const validator = createContractValidator(contract);
     const app = await NestFactory.create<NestFastifyApplication>(PostgresCustomerModule, new FastifyAdapter({ logger: false }));
